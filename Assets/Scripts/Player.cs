@@ -5,8 +5,7 @@ using System;
 public class Player : MonoBehaviour
 {
     private PlayerInputActions playerInputActions;
-
-
+    [SerializeField] private float moveSpeed = 7f;
 
     private void Awake()
     {
@@ -32,9 +31,42 @@ public class Player : MonoBehaviour
     {
         Vector2 inputVector = GetMovementVectorNormalized(); //sets the input vector to the normalized movement vector
 
-        Vector3 moveDir = new Vector3(inputVector.x, 0, inputVector.y);
+        Vector3 moveDir = new Vector3(inputVector.x, 0, inputVector.y); //MAIN MOVEMENT VECTOR,
+        float moveDistance = moveSpeed * Time.deltaTime; //Sets for the raycast
+        float playerRadius = .3f;//Set for the raycast
+        float playerHeight = 3.5f; //Set for the raycast
 
-        print(inputVector);
+        bool canMove = !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDir, moveDistance );
+
+        if (canMove)
+        {
+            transform.position += moveDir * moveDistance; //position += direction * speed * time
+        }
+
+        if (!canMove)
+        {
+            Vector3 moveDirX = new Vector3(moveDir.x, 0, 0).normalized; //new vector for the x dir
+            canMove = moveDir.x < -.5f || moveDir.x > +.5f && !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDirX, moveDistance); //tryna move in x dir
+            if (canMove)
+            {
+                moveDir = moveDirX; //sets the move dir to the x dir if can move in x dir
+            }
+            else
+            {
+                Vector3 moveDirZ = new Vector3(0, 0, moveDir.z).normalized; //new vector for the z dir
+                canMove = moveDir.z < -.5f || moveDir.z > +.5f && !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDirZ, moveDistance);//tryna move in z dir
+                if (canMove)
+                {
+                    moveDir = moveDirZ; //sets the move dir to the z dir if can move in z dir
+                }
+                else
+                {
+                    //cant move anywhere bc y axis not applicable
+                }
+            }
+        }
+
+        
 
     }
 }
