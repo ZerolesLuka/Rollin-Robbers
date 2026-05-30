@@ -6,16 +6,21 @@ public class Player : MonoBehaviour
 {
     private PlayerInputActions playerInputActions;
     [SerializeField] private float moveSpeed = 7f;
+    [SerializeField] private Transform playerCamera;
+    [SerializeField] private float mouseSensitivity = 0.5f;
+    private float xRotation = 0f;
 
     private void Awake()
     {
         playerInputActions = new PlayerInputActions(); //creates new inputaction
         playerInputActions.Player.Enable();
+        Cursor.lockState = CursorLockMode.Locked;
     }
 
     private void Update()
     {
         HandleMovement();
+        HandleLook();
     }
 
     public Vector2 GetMovementVectorNormalized() //ensure same speed 
@@ -68,6 +73,18 @@ public class Player : MonoBehaviour
 
         
 
+    }
+    private void HandleLook()
+    {
+        Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
+
+        // Rotate player body left/right
+        transform.Rotate(Vector3.up * lookInput.x * mouseSensitivity);
+
+        // Rotate camera up/down, clamped
+        xRotation -= lookInput.y * mouseSensitivity;
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+        playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
     }
 }
 
