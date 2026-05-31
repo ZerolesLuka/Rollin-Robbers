@@ -8,6 +8,7 @@ public class Player : MonoBehaviour
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private Transform playerCamera;
     [SerializeField] private float mouseSensitivity = 0.5f;
+    [SerializeField] private CharacterController characterController;
     private float xRotation = 0f;
 
     private void Awake()
@@ -36,10 +37,10 @@ public class Player : MonoBehaviour
     {
         Vector2 inputVector = GetMovementVectorNormalized(); //sets the input vector to the normalized movement vector
 
-        Vector3 moveDir = new Vector3(inputVector.x, 0, inputVector.y); //MAIN MOVEMENT VECTOR,
+        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //converts the 2d input vector to a 3d movement direction based on the player's orientation
         float moveDistance = moveSpeed * Time.deltaTime; //Sets for the raycast
         float playerRadius = .3f;//Set for the raycast
-        float playerHeight = 3.5f; //Set for the raycast
+        float playerHeight = 2f; //Set for the raycast
 
         bool canMove = !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDir, moveDistance );
 
