@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using System;
+using System.Runtime.CompilerServices;
 
 public class Player : MonoBehaviour
 {
@@ -10,6 +11,8 @@ public class Player : MonoBehaviour
     [SerializeField] private float mouseSensitivity = 0.5f;
     [SerializeField] private CharacterController characterController;
     private float xRotation = 0f;
+    private float gravity = 9.81f;
+    private float verticalVelocity = 0f;
 
     private void Awake()
     {
@@ -22,6 +25,7 @@ public class Player : MonoBehaviour
     {
         HandleMovement();
         HandleLook();
+        PlayerGravity();
     }
 
     public Vector2 GetMovementVectorNormalized() //ensure same speed 
@@ -46,7 +50,7 @@ public class Player : MonoBehaviour
 
         if (canMove)
         {
-            transform.position += moveDir * moveDistance; //position += direction * speed * time
+            characterController.Move(moveDir * moveDistance);
         }
 
         if (!canMove)
@@ -86,6 +90,18 @@ public class Player : MonoBehaviour
         xRotation -= lookInput.y * mouseSensitivity;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
         playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+    }
+
+    private void PlayerGravity()
+    {
+        if (characterController.isGrounded && verticalVelocity < 0) //if player is on the ground and velocity is negative, reset velocity to a small negative value
+        {
+            verticalVelocity = -2f; // small negative keeps player grounded
+        }
+
+        verticalVelocity -= gravity * Time.deltaTime; // velocity grows more negative each frame
+
+        characterController.Move(Vector3.up * verticalVelocity * Time.deltaTime); // move player by velocity
     }
 }
 
