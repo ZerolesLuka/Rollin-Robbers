@@ -1,9 +1,10 @@
-using UnityEngine;
-using UnityEngine.InputSystem;
+using Fusion;
 using System;
 using System.Runtime.CompilerServices;
+using UnityEngine;
+using UnityEngine.InputSystem;
 
-public class Player : MonoBehaviour
+public class Player : NetworkBehaviour
 {
     private PlayerInputActions playerInputActions;
     [SerializeField] private float moveSpeed = 7f;
@@ -97,7 +98,8 @@ public class Player : MonoBehaviour
         }
 
         verticalVelocity -= gravity * Time.deltaTime; // velocity grows more negative each frame
-        print (verticalVelocity);
+        verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
+        print(verticalVelocity);
     }
 }
 
