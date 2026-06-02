@@ -48,10 +48,6 @@ public class Player : MonoBehaviour
 
         bool canMove = !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDir, moveDistance );
 
-        if (canMove)
-        {
-            characterController.Move(moveDir * moveDistance);
-        }
 
         if (!canMove)
         {
@@ -72,11 +68,12 @@ public class Player : MonoBehaviour
                 else
                 {
                     //cant move anywhere bc y axis not applicable
+                    moveDir = Vector3.zero;
                 }
             }
         }
 
-        
+        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Time.deltaTime);
 
     }
     private void HandleLook()
@@ -100,8 +97,7 @@ public class Player : MonoBehaviour
         }
 
         verticalVelocity -= gravity * Time.deltaTime; // velocity grows more negative each frame
-
-        characterController.Move(Vector3.up * verticalVelocity * Time.deltaTime); // move player by velocity
+        print (verticalVelocity);
     }
 }
 
