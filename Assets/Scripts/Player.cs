@@ -1,6 +1,4 @@
 using Fusion;
-using System;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -8,25 +6,50 @@ public class Player : NetworkBehaviour
 {
     private PlayerInputActions playerInputActions;
     [SerializeField] private float moveSpeed = 7f;
-    [SerializeField] private Transform playerCamera;
-    [SerializeField] private float mouseSensitivity = 0.5f;
-    [SerializeField] private CharacterController characterController;
+    [SerializeField] private Transform playerCamera; //simple camera ref
+    [SerializeField] private float mouseSensitivity = 0.5f; //DOES NOT WORK
+    [SerializeField] private CharacterController characterController; //charcontroller
+
+    [Networked] public Vector3 NetworkedPosition { get; set; } //networked property to sync player position across the network, automatically updated by fusion and can be accessed by all clients
     private float xRotation = 0f;
     private float gravity = 9.81f;
     private float verticalVelocity = 0f;
-
+    public override void Spawned()
+    {
+        Debug.Log("Player Spawned!");
+    }
     private void Awake()
     {
         playerInputActions = new PlayerInputActions(); //creates new inputaction
-        playerInputActions.Player.Enable();
-        Cursor.lockState = CursorLockMode.Locked;
+        playerInputActions.Player.Enable(); //allow movement
+        Cursor.lockState = CursorLockMode.Locked; //cursor dont fly around when moving
     }
 
+    public override void FixedUpdateNetwork() //doesnt call by frame but by network tick, constant speed not effected by frame rate, good for physics and movement
+    {
+        print("HasInputAuthority: " + HasInputAuthority);
+       // if (HasInputAuthority)checks if this player instance is controlled by the local player, only allows movement and input handling for the local player to prevent conflicts in multiplayer
+        
+
+
+    }
     private void Update()
     {
-        HandleMovement();
-        HandleLook();
-        PlayerGravity();
+        if (HasInputAuthority)
+        {
+            HandleMovement();
+            PlayerGravity();
+            HandleLook();
+        }
+    }
+
+    /*public override void FixedUpdateNetwork()
+    {
+        // sync logic goes here later
+    }*/
+    public override void Render() //called every frame, good for visual updates and camera movement, not for physics or movement
+    {
+        NetworkedPosition = transform.position;
     }
 
     public Vector2 GetMovementVectorNormalized() //ensure same speed 
@@ -34,8 +57,7 @@ public class Player : NetworkBehaviour
         Vector2 inputVector = playerInputActions.Player.Move.ReadValue<Vector2>();// Handle movement logic here using movementInput
         inputVector = inputVector.normalized; // Normalize the movement vector to ensure consistent speed in all directions
 
-        return inputVector;
-
+        return inputVector; //gives the var input vector back to the caller
     }
 
     private void HandleMovement()
@@ -43,7 +65,7 @@ public class Player : NetworkBehaviour
         Vector2 inputVector = GetMovementVectorNormalized(); //sets the input vector to the normalized movement vector
 
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //converts the 2d input vector to a 3d movement direction based on the player's orientation
-        float moveDistance = moveSpeed * Time.deltaTime; //Sets for the raycast
+        float moveDistance = moveSpeed * Runner.DeltaTime; //Sets for the raycast
         float playerRadius = .3f;//Set for the raycast
         float playerHeight = 2f; //Set for the raycast
 
@@ -74,7 +96,7 @@ public class Player : NetworkBehaviour
             }
         }
 
-        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Time.deltaTime);
+        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
 
     }
     private void HandleLook()
@@ -82,7 +104,7 @@ public class Player : NetworkBehaviour
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
 
         // Rotate player body left/right
-        transform.Rotate(Vector3.up * lookInput.x * mouseSensitivity);
+        transform.Rotate(Vector3.up * lookInput.x * mouseSensitivity); // Rotate the player around the y-axis based on horizontal mouse movement
 
         // Rotate camera up/down, clamped
         xRotation -= lookInput.y * mouseSensitivity;
@@ -94,12 +116,12 @@ public class Player : NetworkBehaviour
     {
         if (characterController.isGrounded && verticalVelocity < 0) //if player is on the ground and velocity is negative, reset velocity to a small negative value
         {
-            verticalVelocity = -2f; // small negative keeps player grounded
+            verticalVelocity = -2f; //small negative keeps player grounded
         }
 
-        verticalVelocity -= gravity * Time.deltaTime; // velocity grows more negative each frame
+        verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
-        print(verticalVelocity);
     }
+
 }
 

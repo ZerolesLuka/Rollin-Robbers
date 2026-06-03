@@ -110,9 +110,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Cinemachine::Cinemachine.CinemachineBasicMultiChannelPerlin
   m_NoiseProfile: {fileID: 11400000, guid: 8608ec81ee27a15488d33f9dad239e91, type: 2}
   m_PivotOffset: {x: 0, y: 0, z: 0}
-  m_AmplitudeGain: 1
-  m_FrequencyGain: 1
-  mNoiseOffsets: {x: 0, y: 0, z: 0}
+  m_AmplitudeGain: 0.8
+  m_FrequencyGain: 0.8
+  mNoiseOffsets: {x: 110.263214, y: 597.54395, z: -528.8456}
 --- !u!1 &2020982582522420744
 GameObject:
   m_ObjectHideFlags: 0
@@ -214,6 +214,7 @@ GameObject:
   - component: {fileID: 6299906569282450994}
   - component: {fileID: 9217368174738856113}
   - component: {fileID: 3332511634651341915}
+  - component: {fileID: 5495341527976074065}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -230,9 +231,9 @@ Transform:
   m_GameObject: {fileID: 5464379920807862808}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.25, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_LocalPosition: {x: 7.88, y: -2.252, z: 10.99}
+  m_LocalScale: {x: 1.5, y: 1.5, z: 1.5}
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 4127994732517883691}
   - {fileID: 5076446015636629998}
@@ -251,10 +252,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e855a3344e2f3504e9f3a7fa338461b1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
-  moveSpeed: 7
+  moveSpeed: 4
   playerCamera: {fileID: 1528983954450414190}
   mouseSensitivity: 0.5
   characterController: {fileID: 3332511634651341915}
+  _NetworkedPosition: {x: 0, y: 0, z: 0}
 --- !u!143 &3332511634651341915
 CharacterController:
   m_ObjectHideFlags: 0
@@ -280,6 +282,25 @@ CharacterController:
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &5495341527976074065
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5464379920807862808}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 2676238503
+  ObjectInterest: 1
+  Flags: 262145
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 9217368174738856113}
+  ForceRemoteRenderTimeframe: 0
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0
@@ -365,6 +386,7 @@ GameObject:
   - component: {fileID: 9153923266279504416}
   - component: {fileID: 7820702708037025530}
   - component: {fileID: 7197504784945012433}
+  - component: {fileID: 7087962944639259332}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -380,8 +402,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: -1, z: 0, w: -0.00000035762784}
-  m_LocalPosition: {x: 0, y: 0.559, z: -0.262}
+  m_LocalRotation: {x: 0.000056600464, y: -0.9999064, z: -0.0043635326, w: -0.012970034}
+  m_LocalPosition: {x: 0, y: 0.559, z: -0.2619998}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -524,3 +546,19 @@ MonoBehaviour:
   m_CameraActivatedEvent:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &7087962944639259332
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9146868429791103059}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d73b0a95be81246699cf0d9ecdc01863, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Unity::Fusion.EnableOnSingleRunner
+  PreferredRunner: 0
+  Components:
+  - {fileID: 9153923266279504416}
+  _guid: 205a1338-f432-409f-
