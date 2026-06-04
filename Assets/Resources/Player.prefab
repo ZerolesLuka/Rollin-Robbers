@@ -215,6 +215,7 @@ GameObject:
   - component: {fileID: 9217368174738856113}
   - component: {fileID: 3332511634651341915}
   - component: {fileID: 5495341527976074065}
+  - component: {fileID: 248663069062544384}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -300,7 +301,25 @@ MonoBehaviour:
   NestedObjects: []
   NetworkedBehaviours:
   - {fileID: 9217368174738856113}
+  - {fileID: 248663069062544384}
   ForceRemoteRenderTimeframe: 0
+--- !u!114 &248663069062544384
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5464379920807862808}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkTransform
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 1
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0
@@ -402,8 +421,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.000056600464, y: -0.9999064, z: -0.0043635326, w: -0.012970034}
-  m_LocalPosition: {x: 0, y: 0.559, z: -0.2619998}
+  m_LocalRotation: {x: -0.6967642, y: 0.0005632256, z: -0.0005798254, w: 0.7172999}
+  m_LocalPosition: {x: -6.0979147, y: 2.0603335, z: -6.3982882}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
