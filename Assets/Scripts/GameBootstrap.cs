@@ -16,6 +16,9 @@ public class GameBootstrap : MonoBehaviour
             GameMode = GameMode.Shared,
             SessionName = "TestRoom",
         });
-        var spawnedPlayer = networkRunner.Spawn(playerPrefab, Vector3.zero, Quaternion.identity, networkRunner.LocalPlayer);
+        Vector3 spawnPos = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0f, UnityEngine.Random.Range(-3f, 3f));
+        var spawnedPlayer = networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer);
+
+        Debug.Log(spawnPos);
     }
 }

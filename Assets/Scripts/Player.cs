@@ -1,4 +1,6 @@
+using Cinemachine;
 using Fusion;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -16,42 +18,36 @@ public class Player : NetworkBehaviour
     private float verticalVelocity = 0f;
     public override void Spawned()
     {
-        Debug.Log("Player Spawned!");
-    }
-    private void Awake()
-    {
-        playerInputActions = new PlayerInputActions(); //creates new inputaction
-        playerInputActions.Player.Enable(); //allow movement
-        Cursor.lockState = CursorLockMode.Locked; //cursor dont fly around when moving
-    }
+        Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
+        CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
 
-    public override void FixedUpdateNetwork() //doesnt call by frame but by network tick, constant speed not effected by frame rate, good for physics and movement
-    {
-        print("HasInputAuthority: " + HasInputAuthority);
-       // if (HasInputAuthority)checks if this player instance is controlled by the local player, only allows movement and input handling for the local player to prevent conflicts in multiplayer
-        
-
-
+        if (HasInputAuthority) //if our player
+        {
+            mainCam.enabled = true; //this our camera
+            playerCamera = virtualCam.transform; //set the player camera to the virtual cam's transform, which is used for looking up and down
+            playerInputActions = new PlayerInputActions(); //our input actions
+            playerInputActions.Player.Enable(); //our input actions enabled
+            Cursor.lockState = CursorLockMode.Locked; //our cursor locked
+        }
+        else
+        {
+            mainCam.enabled = false; //any other player's camera is disabled for us
+            virtualCam.enabled = false;// any other player's camera is disabled for us
+        }
     }
     private void Update()
     {
-        if (HasInputAuthority)
-        {
-            HandleMovement();
-            PlayerGravity();
-            HandleLook();
-        }
+        if (!HasInputAuthority) return;
+        HandleMovement();
+        PlayerGravity();
+        HandleLook();
     }
+
 
     /*public override void FixedUpdateNetwork()
     {
         // sync logic goes here later
     }*/
-    public override void Render() //called every frame, good for visual updates and camera movement, not for physics or movement
-    {
-        NetworkedPosition = transform.position;
-    }
-
     public Vector2 GetMovementVectorNormalized() //ensure same speed 
     {
         Vector2 inputVector = playerInputActions.Player.Move.ReadValue<Vector2>();// Handle movement logic here using movementInput
