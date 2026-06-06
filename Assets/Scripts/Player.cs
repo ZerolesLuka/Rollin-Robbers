@@ -6,7 +6,8 @@ using UnityEngine.InputSystem;
 
 public class Player : NetworkBehaviour
 {
-    private PlayerInputActions playerInputActions;
+    public PlayerInputActions playerInputActions;
+    public static Player LocalPlayer;
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private Transform playerCamera; //simple camera ref
     [SerializeField] private float mouseSensitivity = 0.5f; //DOES NOT WORK
@@ -16,6 +17,7 @@ public class Player : NetworkBehaviour
     private float xRotation = 0f;
     private float gravity = 9.81f;
     private float verticalVelocity = 0f;
+    private float yRotation = 0f;
     public override void Spawned()
     {
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -23,6 +25,7 @@ public class Player : NetworkBehaviour
 
         if (HasInputAuthority) //if our player
         {
+            LocalPlayer = this; //set the local player to this instance of the player script
             mainCam.enabled = true; //this our camera
             playerCamera = virtualCam.transform; //set the player camera to the virtual cam's transform, which is used for looking up and down
             playerInputActions = new PlayerInputActions(); //our input actions
@@ -38,16 +41,23 @@ public class Player : NetworkBehaviour
     private void Update()
     {
         if (!HasInputAuthority) return;
-        HandleMovement();
-        PlayerGravity();
         HandleLook();
     }
-
-
-    /*public override void FixedUpdateNetwork()
+    private void LateUpdate()
     {
-        // sync logic goes here later
-    }*/
+        if (!HasInputAuthority) return;
+        transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
+    }
+
+    public override void FixedUpdateNetwork()
+    {
+        PlayerGravity();
+        if (GetInput(out NetworkInputData networkInputData))
+        {
+            HandleMovement(networkInputData.movementInput);
+            
+        }
+    }
     public Vector2 GetMovementVectorNormalized() //ensure same speed 
     {
         Vector2 inputVector = playerInputActions.Player.Move.ReadValue<Vector2>();// Handle movement logic here using movementInput
@@ -56,9 +66,8 @@ public class Player : NetworkBehaviour
         return inputVector; //gives the var input vector back to the caller
     }
 
-    private void HandleMovement()
-    {
-        Vector2 inputVector = GetMovementVectorNormalized(); //sets the input vector to the normalized movement vector
+    private void HandleMovement(Vector2 inputVector)
+    { 
 
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //converts the 2d input vector to a 3d movement direction based on the player's orientation
         float moveDistance = moveSpeed * Runner.DeltaTime; //Sets for the raycast
@@ -99,14 +108,16 @@ public class Player : NetworkBehaviour
     {
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
 
-        // Rotate player body left/right
-        transform.Rotate(Vector3.up * lookInput.x * mouseSensitivity); // Rotate the player around the y-axis based on horizontal mouse movement
-
-        // Rotate camera up/down, clamped
+        // Vertical camera pitch
         xRotation -= lookInput.y * mouseSensitivity;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
         playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+
+        // Horizontal player body yaw
+        yRotation += lookInput.x * mouseSensitivity;
+        transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
+
 
     private void PlayerGravity()
     {

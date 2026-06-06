@@ -253,7 +253,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e855a3344e2f3504e9f3a7fa338461b1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
-  moveSpeed: 1
+  moveSpeed: 7
   playerCamera: {fileID: 1528983954450414190}
   mouseSensitivity: 0.5
   characterController: {fileID: 3332511634651341915}
@@ -319,7 +319,7 @@ MonoBehaviour:
   SyncScale: 0
   SyncParent: 0
   _autoAOIOverride: 1
-  DisableSharedModeInterpolation: 1
+  DisableSharedModeInterpolation: 0
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0
@@ -421,8 +421,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.6967642, y: 0.0005632256, z: -0.0005798254, w: 0.7172999}
-  m_LocalPosition: {x: -6.0979147, y: 2.0603335, z: -6.3982882}
+  m_LocalRotation: {x: 0, y: -1, z: 0, w: -0.00000035762784}
+  m_LocalPosition: {x: 0, y: 0.559, z: -0.2619998}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

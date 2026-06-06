@@ -3,22 +3,124 @@ using UnityEngine;
 using static Unity.Collections.Unicode;
 using System.Threading.Tasks;
 using System;
+using Fusion.Sockets;
+using System.Collections.Generic;
 
-public class GameBootstrap : MonoBehaviour
+public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 {
     private NetworkRunner networkRunner;
-    [SerializeField] private NetworkObject playerPrefab;    
+    [SerializeField] private NetworkObject playerPrefab;
+
+    public void OnConnectedToServer(NetworkRunner runner)
+    {
+        
+    }
+
+    public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason)
+    {
+        
+    }
+
+    public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token)
+    {
+        
+    }
+
+    public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data)
+    {
+        
+    }
+
+    public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason)
+    {
+       
+    }
+
+    public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken)
+    {
+       
+    }
+
+    public void OnInput(NetworkRunner runner, NetworkInput input)
+    {
+        //Every tick will read the players input and look, store in struct and send to the network
+        NetworkInputData networkInputData = new NetworkInputData(); //create a new instance of the struct that holds player input
+        networkInputData.movementInput = Player.LocalPlayer.playerInputActions.Player.Move.ReadValue<Vector2>(); //read the movement input from the player and store it in the struct 
+        networkInputData.lookInput = Player.LocalPlayer.playerInputActions.Player.Look.ReadValue<Vector2>(); //read the look input from the player and store it in the struct
+        input.Set(networkInputData); //set the network input to the struct
+    }
+
+    public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input)
+    {
+        
+    }
+
+    public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player)
+    {
+        
+    }
+
+    public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player)
+    {
+        
+    }
+
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
+    {
+        
+    }
+
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
+    {
+       
+    }
+
+    public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress)
+    {
+        
+    }
+
+    public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data)
+    {
+        
+    }
+
+    public void OnSceneLoadDone(NetworkRunner runner)
+    {
+        
+    }
+
+    public void OnSceneLoadStart(NetworkRunner runner)
+    {
+        
+    }
+
+    public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
+    {
+        
+    }
+
+    public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
+    {
+        
+    }
+
+    public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message)
+    {
+        
+    }
+
     private async void Start() //async means that the method can run asynchronously, allowing for non-blocking operations such as waiting for the network runner to start the game without freezing
     {
         networkRunner = gameObject.AddComponent<NetworkRunner>(); //creates a new component of the network
+        networkRunner.AddCallbacks(this); //tells the Network Runner to use this script for its callbacks, which are functions that are called in response to certain events in the network
         await networkRunner.StartGame(new StartGameArgs()
         {
             GameMode = GameMode.Shared,
             SessionName = "TestRoom",
         });
-        Vector3 spawnPos = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0f, UnityEngine.Random.Range(-3f, 3f));
+        Vector3 spawnPos = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0f, UnityEngine.Random.Range(-3f, 3f)); //random spawn pos
         var spawnedPlayer = networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer);
 
-        Debug.Log(spawnPos);
     }
 }
