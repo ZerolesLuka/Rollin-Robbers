@@ -12,12 +12,12 @@ public class Player : NetworkBehaviour
     [SerializeField] private Transform playerCamera; //simple camera ref
     [SerializeField] private float mouseSensitivity = 0.5f; //DOES NOT WORK
     [SerializeField] private CharacterController characterController; //charcontroller
-
     [Networked] public Vector3 NetworkedPosition { get; set; } //networked property to sync player position across the network, automatically updated by fusion and can be accessed by all clients
-    private float xRotation = 0f;
-    private float gravity = 9.81f;
+
+    private float gravity = 9.81f; //regular gravity lol
     private float verticalVelocity = 0f;
     private float yRotation = 0f;
+    private float xRotation = 0f;
     public override void Spawned()
     {
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -40,8 +40,8 @@ public class Player : NetworkBehaviour
     }
     private void Update()
     {
-        if (!HasInputAuthority) return;
-        HandleLook();
+        if (!HasInputAuthority) return; //stop here if not our instance of player
+        HandleLook(); //our player only
     }
     private void LateUpdate()
     {
@@ -54,8 +54,8 @@ public class Player : NetworkBehaviour
         PlayerGravity();
         if (GetInput(out NetworkInputData networkInputData))
         {
-            HandleMovement(networkInputData.movementInput);
-            
+            HandleMovement(networkInputData.movementInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
+
         }
     }
     public Vector2 GetMovementVectorNormalized() //ensure same speed 
@@ -110,10 +110,10 @@ public class Player : NetworkBehaviour
 
         // Vertical camera pitch
         xRotation -= lookInput.y * mouseSensitivity;
-        xRotation = Mathf.Clamp(xRotation, -90f, 90f);
+        xRotation = Mathf.Clamp(xRotation, -90f, 90f); //clamp to prevent flipping over
         playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
-        // Horizontal player body yaw
+        // Horizontal player body 
         yRotation += lookInput.x * mouseSensitivity;
         transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
