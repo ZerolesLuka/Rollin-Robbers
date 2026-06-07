@@ -6,4 +6,5 @@ public struct NetworkInputData : INetworkInput //A struct holds input of the pla
     //A INetworkInput struct retains values of the player and sends it to some sort of network
     public Vector2 movementInput;
     public Vector2 lookInput;
+    public bool crouchInput;
 }

@@ -1,5 +1,6 @@
 using Cinemachine;
 using Fusion;
+using System.Runtime.CompilerServices;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -12,12 +13,20 @@ public class Player : NetworkBehaviour
     [SerializeField] private Transform playerCamera; //simple camera ref
     [SerializeField] private float mouseSensitivity = 0.5f; //DOES NOT WORK
     [SerializeField] private CharacterController characterController; //charcontroller
-    [Networked] public Vector3 NetworkedPosition { get; set; } //networked property to sync player position across the network, automatically updated by fusion and can be accessed by all clients
+    [SerializeField] private float standCamHeight = 0.559f; //set this to the camera's current local Y
+    [SerializeField] private float crouchCamHeight = 0.1f;  //lower, tune to taste
 
     private float gravity = 9.81f; //regular gravity lol
-    private float verticalVelocity = 0f;
+    public float verticalVelocity = 0f;
     private float yRotation = 0f;
     private float xRotation = 0f;
+
+    private float standingHeight = 2f;
+    private float crouchingHeight = 1f;
+    private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
+
+
+
     public override void Spawned()
     {
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -55,15 +64,8 @@ public class Player : NetworkBehaviour
         if (GetInput(out NetworkInputData networkInputData))
         {
             HandleMovement(networkInputData.movementInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
-
+            HandleCrouch(networkInputData.crouchInput); //hands off crouch input from the network to handle crouching
         }
-    }
-    public Vector2 GetMovementVectorNormalized() //ensure same speed 
-    {
-        Vector2 inputVector = playerInputActions.Player.Move.ReadValue<Vector2>();// Handle movement logic here using movementInput
-        inputVector = inputVector.normalized; // Normalize the movement vector to ensure consistent speed in all directions
-
-        return inputVector; //gives the var input vector back to the caller
     }
 
     private void HandleMovement(Vector2 inputVector)
@@ -72,7 +74,7 @@ public class Player : NetworkBehaviour
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //converts the 2d input vector to a 3d movement direction based on the player's orientation
         float moveDistance = moveSpeed * Runner.DeltaTime; //Sets for the raycast
         float playerRadius = .3f;//Set for the raycast
-        float playerHeight = 2f; //Set for the raycast
+        float playerHeight = characterController.height; //Set for the raycast
 
         bool canMove = !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDir, moveDistance );
 
@@ -103,6 +105,23 @@ public class Player : NetworkBehaviour
 
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
 
+    }
+    private void HandleCrouch(bool crouching)
+    {
+        //pick the height we want based on if the crouch key is held
+        float targetHeight = crouching ? crouchingHeight : standingHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
+
+        //ease the controller height toward the target so it doesnt snap instantly
+        characterController.height = Mathf.Lerp(characterController.height, targetHeight, crouchSpeed * Runner.DeltaTime); //height transitions smoothly to the target height based on crouchSpeed
+
+        //as the capsule shrinks, drop the center by half the shrink so feet stay planted instead of floating up
+        characterController.center = new Vector3(0f, (characterController.height - standingHeight) / 2f, 0f);
+
+        //ease the camera down to crouch eye level and back up to match the body
+        float targetCamY = crouching ? crouchCamHeight : standCamHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
+        Vector3 camPos = playerCamera.localPosition;
+        camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Runner.DeltaTime); //camera y transitions smoothly to the target cam height based on crouchSpeed
+        playerCamera.localPosition = camPos;
     }
     private void HandleLook()
     {
