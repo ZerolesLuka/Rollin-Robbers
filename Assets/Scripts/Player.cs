@@ -15,6 +15,7 @@ public class Player : NetworkBehaviour
     [SerializeField] private CharacterController characterController; //charcontroller
     [SerializeField] private float standCamHeight = 0.559f; //set this to the camera's current local Y
     [SerializeField] private float crouchCamHeight = 0.1f;  //lower, tune to taste
+    [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
 
     private float gravity = 9.81f; //regular gravity lol
     public float verticalVelocity = 0f;
@@ -64,52 +65,31 @@ public class Player : NetworkBehaviour
         if (GetInput(out NetworkInputData networkInputData))
         {
             HandleMovement(networkInputData.movementInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
-            HandleCrouch(networkInputData.crouchInput); //hands off crouch input from the network to handle crouching
+            HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
         }
     }
 
     private void HandleMovement(Vector2 inputVector)
-    { 
-
-        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //converts the 2d input vector to a 3d movement direction based on the player's orientation
-        float moveDistance = moveSpeed * Runner.DeltaTime; //Sets for the raycast
-        float playerRadius = .3f;//Set for the raycast
-        float playerHeight = characterController.height; //Set for the raycast
-
-        bool canMove = !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDir, moveDistance );
-
-
-        if (!canMove)
-        {
-            Vector3 moveDirX = new Vector3(moveDir.x, 0, 0).normalized; //new vector for the x dir
-            canMove = moveDir.x < -.5f || moveDir.x > +.5f && !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDirX, moveDistance); //tryna move in x dir
-            if (canMove)
-            {
-                moveDir = moveDirX; //sets the move dir to the x dir if can move in x dir
-            }
-            else
-            {
-                Vector3 moveDirZ = new Vector3(0, 0, moveDir.z).normalized; //new vector for the z dir
-                canMove = moveDir.z < -.5f || moveDir.z > +.5f && !Physics.CapsuleCast(transform.position, transform.position + Vector3.up * playerHeight, playerRadius, moveDirZ, moveDistance);//tryna move in z dir
-                if (canMove)
-                {
-                    moveDir = moveDirZ; //sets the move dir to the z dir if can move in z dir
-                }
-                else
-                {
-                    //cant move anywhere bc y axis not applicable
-                    moveDir = Vector3.zero;
-                }
-            }
-        }
-
+    {
+        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y;
+        float moveDistance = moveSpeed * Runner.DeltaTime;
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
-
+    }
+    private bool BlockedAbove()
+    {
+        float radius = characterController.radius;
+        //top hemisphere center of the capsule AS IT IS RIGHT NOW, in world space
+        Vector3 capsuleTop = transform.position + characterController.center + Vector3.up * (characterController.height / 2f - radius);
+        //how much more we'd grow to reach full standing
+        float distance = standingHeight - characterController.height + 0.05f;
+        return Physics.SphereCast(capsuleTop, radius, Vector3.up, out _, distance, ceilingMask);
     }
     private void HandleCrouch(bool crouching)
     {
         //pick the height we want based on if the crouch key is held
-        float targetHeight = crouching ? crouchingHeight : standingHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
+        bool staysCrouched = crouching || BlockedAbove(); //if crouch held OR no room to stand, stay down
+        float targetHeight = staysCrouched ? crouchingHeight : standingHeight;
+        float targetCamY = staysCrouched ? crouchCamHeight : standCamHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
 
         //ease the controller height toward the target so it doesnt snap instantly
         characterController.height = Mathf.Lerp(characterController.height, targetHeight, crouchSpeed * Runner.DeltaTime); //height transitions smoothly to the target height based on crouchSpeed
@@ -118,7 +98,6 @@ public class Player : NetworkBehaviour
         characterController.center = new Vector3(0f, (characterController.height - standingHeight) / 2f, 0f);
 
         //ease the camera down to crouch eye level and back up to match the body
-        float targetCamY = crouching ? crouchCamHeight : standCamHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
         Vector3 camPos = playerCamera.localPosition;
         camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Runner.DeltaTime); //camera y transitions smoothly to the target cam height based on crouchSpeed
         playerCamera.localPosition = camPos;

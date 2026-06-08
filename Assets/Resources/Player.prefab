@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 422981128725570224}
   - component: {fileID: 1403060912711104355}
   - component: {fileID: 1483661804593365644}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: cm
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -124,7 +124,7 @@ GameObject:
   - component: {fileID: 4127994732517883691}
   - component: {fileID: 5865588826224125327}
   - component: {fileID: 2594136944393427522}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: PlayerVisual
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -216,7 +216,7 @@ GameObject:
   - component: {fileID: 3332511634651341915}
   - component: {fileID: 5495341527976074065}
   - component: {fileID: 248663069062544384}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -257,7 +257,12 @@ MonoBehaviour:
   playerCamera: {fileID: 1528983954450414190}
   mouseSensitivity: 0.5
   characterController: {fileID: 3332511634651341915}
-  _NetworkedPosition: {x: 0, y: 0, z: 0}
+  standCamHeight: 0.559
+  crouchCamHeight: 0.1
+  ceilingMask:
+    serializedVersion: 2
+    m_Bits: 1
+  verticalVelocity: 0
 --- !u!143 &3332511634651341915
 CharacterController:
   m_ObjectHideFlags: 0
@@ -330,7 +335,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1528983954450414190}
   - component: {fileID: 6592911803526693714}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Virtual Camera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -406,7 +411,7 @@ GameObject:
   - component: {fileID: 7820702708037025530}
   - component: {fileID: 7197504784945012433}
   - component: {fileID: 7087962944639259332}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Main Camera
   m_TagString: MainCamera
   m_Icon: {fileID: 0}
