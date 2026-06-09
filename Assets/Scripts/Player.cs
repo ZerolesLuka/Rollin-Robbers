@@ -25,9 +25,6 @@ public class Player : NetworkBehaviour
     private float standingHeight = 2f;
     private float crouchingHeight = 1f;
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
-
-
-
     public override void Spawned()
     {
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -68,7 +65,6 @@ public class Player : NetworkBehaviour
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
         }
     }
-
     private void HandleMovement(Vector2 inputVector)
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y;
@@ -115,8 +111,6 @@ public class Player : NetworkBehaviour
         yRotation += lookInput.x * mouseSensitivity;
         transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
-
-
     private void PlayerGravity()
     {
         if (characterController.isGrounded && verticalVelocity < 0) //if player is on the ground and velocity is negative, reset velocity to a small negative value
@@ -127,6 +121,5 @@ public class Player : NetworkBehaviour
         verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
     }
-
 }
 
