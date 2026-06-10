@@ -2718,7 +2718,7 @@ Transform:
   m_GameObject: {fileID: 164538300}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -1.7999, y: -5.92, z: 5.2195}
+  m_LocalPosition: {x: -1.7999, y: -15.09, z: 5.2195}
   m_LocalScale: {x: 4.979823, y: 1, z: 4.66937}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -7458,7 +7458,7 @@ Transform:
   m_GameObject: {fileID: 460018582}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7071064, y: -0, z: -0, w: 0.7071072}
-  m_LocalPosition: {x: 1.1014, y: -4.21, z: 8.03}
+  m_LocalPosition: {x: 1.1014, y: 2.78, z: 8.03}
   m_LocalScale: {x: 2.9109294, y: 3.4011, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -15625,7 +15625,7 @@ Transform:
   m_GameObject: {fileID: 714110645}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7071064, y: -0, z: -0, w: 0.7071072}
-  m_LocalPosition: {x: 1.1014, y: -3.712, z: 11.32}
+  m_LocalPosition: {x: 1.1014, y: 2.78, z: 11.32}
   m_LocalScale: {x: 2.9109294, y: 3.4011, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -16627,7 +16627,7 @@ Transform:
   m_GameObject: {fileID: 763538730}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7071064, y: -0, z: -0, w: 0.7071072}
-  m_LocalPosition: {x: 1.1014, y: -3.03, z: 17.3}
+  m_LocalPosition: {x: 1.1014, y: 2.78, z: 17.3}
   m_LocalScale: {x: 2.9109294, y: 3.4011, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -39437,7 +39437,7 @@ Transform:
   m_GameObject: {fileID: 1681486622}
   serializedVersion: 2
   m_LocalRotation: {x: -0.7071064, y: -0, z: -0, w: 0.7071072}
-  m_LocalPosition: {x: 1.1014, y: -3.207, z: 14.596}
+  m_LocalPosition: {x: 1.1014, y: 2.78, z: 14.596}
   m_LocalScale: {x: 2.9109294, y: 3.4011, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -46782,7 +46782,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5acb4d7e1062897448bb5d10b7d2294b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameBootstrap
-  playerPrefab: {fileID: 5495341527976074065, guid: a02458f7eb514ea44b82b3ad874d103e, type: 3}
+  playerPrefab: {fileID: 5495341527976074065, guid: f60b23dac240add4cbd180f10f3fabd8, type: 3}
   lobbyCamera: {fileID: 489425027}
 --- !u!1 &1959771822
 GameObject:

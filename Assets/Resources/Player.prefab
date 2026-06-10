@@ -217,8 +217,9 @@ GameObject:
   - component: {fileID: 5495341527976074065}
   - component: {fileID: 248663069062544384}
   - component: {fileID: -1691889112300188819}
+  - component: {fileID: -606685323809471342}
   m_Layer: 3
-  m_Name: Player 1
+  m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -308,6 +309,7 @@ MonoBehaviour:
   NetworkedBehaviours:
   - {fileID: 9217368174738856113}
   - {fileID: 248663069062544384}
+  - {fileID: -606685323809471342}
   ForceRemoteRenderTimeframe: 0
 --- !u!114 &248663069062544384
 MonoBehaviour:
@@ -423,6 +425,23 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &-606685323809471342
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5464379920807862808}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cedf08c98ef603f46af826d0205cacc8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerFootsteps
+  audioSource: {fileID: -1691889112300188819}
+  footstepClips:
+  - {fileID: 8300000, guid: 16890b5b9c0f8cd4699fa6c0509667c3, type: 3}
+  characterController: {fileID: 3332511634651341915}
+  strideLength: 2
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0

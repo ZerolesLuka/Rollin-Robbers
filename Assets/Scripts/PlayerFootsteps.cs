@@ -1,5 +1,6 @@
 using UnityEngine;
 using Fusion;
+using UnityEngine.InputSystem.Controls;
 
 public class PlayerFootsteps : NetworkBehaviour
 {
@@ -13,14 +14,33 @@ public class PlayerFootsteps : NetworkBehaviour
 
     public override void Spawned()
     {
-        
+        lastPosition = transform.position; // Initialize last position when the player spawns
     }
     public override void FixedUpdateNetwork()
     {
-        
+        if(!HasInputAuthority) return; // Only run for the local player
+
+        Vector3 delta = transform.position - lastPosition; // Calculate the distance moved since the last update
+
+        delta.y = 0f; // Ignore vertical movement for footstep sounds
+        float distance = delta.magnitude; // Get the horizontal distance moved
+
+        lastPosition = transform.position; // Update last position for the next frame
+
+        if (characterController.isGrounded)
+        {
+            stepAccumulator += distance;
+        }
+        if(stepAccumulator >= strideLength)
+        {
+            stepAccumulator -= strideLength; // Reset the accumulator after playing a footstep sound
+            PlayFootstep();
+        }
     }
     private void PlayFootstep()
     {
-
+        AudioClip clip = footstepClips[Random.Range(0, footstepClips.Length)]; // Randomly select a footstep clip
+        audioSource.pitch = Random.Range(0.9f, 1.1f); // Slightly randomize the pitch for variety
+        audioSource.PlayOneShot(clip); // Play the selected footstep clip
     }
 }
