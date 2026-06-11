@@ -23,7 +23,7 @@ public class PlayerFootsteps : NetworkBehaviour
         Vector3 delta = transform.position - lastPosition; // Calculate the distance moved since the last update
 
         delta.y = 0f; // Ignore vertical movement for footstep sounds
-        float distance = delta.magnitude; // Get the horizontal distance moved
+        float distance = delta.magnitude; // Get the horizontal distance moved, magnitude is the length of the vector
 
         lastPosition = transform.position; // Update last position for the next frame
 
@@ -34,10 +34,11 @@ public class PlayerFootsteps : NetworkBehaviour
         if(stepAccumulator >= strideLength)
         {
             stepAccumulator -= strideLength; // Reset the accumulator after playing a footstep sound
-            PlayFootstep();
+            RPC_PlayFootstep();
         }
     }
-    private void PlayFootstep()
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)] //basically means source comes from my input authority of the local, rpc targets all means it will play for everyone
+    private void RPC_PlayFootstep()
     {
         AudioClip clip = footstepClips[Random.Range(0, footstepClips.Length)]; // Randomly select a footstep clip
         audioSource.pitch = Random.Range(0.9f, 1.1f); // Slightly randomize the pitch for variety
