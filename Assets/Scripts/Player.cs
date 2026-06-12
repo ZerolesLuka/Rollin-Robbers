@@ -41,8 +41,9 @@ public class Player : NetworkBehaviour
         }
         else
         {
-            mainCam.enabled = false; //any other player's camera is disabled for us
-            virtualCam.enabled = false;// any other player's camera is disabled for us
+            mainCam.enabled = false;
+            virtualCam.enabled = false;
+            GetComponentInChildren<AudioListener>().enabled = false; // only local player keeps active ears
         }
     }
     private void Update()

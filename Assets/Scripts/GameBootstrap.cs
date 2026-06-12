@@ -129,7 +129,11 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     private async void ConnectToRoom() //async so the game doesnt freeze while waiting to connect
     {
-        networkRunner = gameObject.AddComponent<NetworkRunner>(); //creates a new component of the network
+        networkRunner = GetComponent<NetworkRunner>();
+        if (networkRunner == null)
+        {
+            networkRunner = gameObject.AddComponent<NetworkRunner>();
+        }
         networkRunner.AddCallbacks(this); //tells the Network Runner to use this script for its callbacks, which are functions that are called in response to certain events in the network
         await networkRunner.StartGame(new StartGameArgs()
         {
