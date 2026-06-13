@@ -11,7 +11,9 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     private NetworkRunner networkRunner;
     [SerializeField] private NetworkObject playerPrefab;
     [SerializeField] private Transform lobbyCamera; //camera where room code happens for now
+    [SerializeField] private Transform playerSpawn;
     private string roomCode = ""; //the code players type in to join the same game, acts as the session name
+
  
 
     public void OnConnectedToServer(NetworkRunner runner)
@@ -140,7 +142,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             GameMode = GameMode.Shared,
             SessionName = roomCode, //whoever uses the same code lands in the same game, first one in becomes the host
         });
-        Vector3 spawnPos = new Vector3(UnityEngine.Random.Range(-3f, 3f), 0f, UnityEngine.Random.Range(-3f, 3f)); //random spawn pos
+        Vector3 spawnPos = playerSpawn.gameObject.transform.position; //where the player spawns in the world, can be changed to an array of spawn points later for more variety
         networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer);
         lobbyCamera.gameObject.SetActive(false); //turn off the lobby camera once we're in game    
     }
