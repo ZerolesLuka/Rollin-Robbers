@@ -18,7 +18,7 @@ public class GuardPatrol : MonoBehaviour
     {
         if (!agent.pathPending && agent.remainingDistance <= reachDistance)
         {
-            currentWaypoint = (currentWaypoint + 1) % waypoints.Length;
+            currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //add to the waypoint % means dont go over the lenght of waypoints, will reset to 0
             agent.SetDestination(waypoints[currentWaypoint].position);
         }
     }

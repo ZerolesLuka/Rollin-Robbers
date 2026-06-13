@@ -68,17 +68,17 @@ public class Player : NetworkBehaviour
     }
     private void HandleMovement(Vector2 inputVector)
     {
-        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y;
-        float moveDistance = moveSpeed * Runner.DeltaTime;
-        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
+        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
+        float moveDistance = moveSpeed * Runner.DeltaTime; //how far we move per frame
+        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime); //
     }
     private bool BlockedAbove()
     {
-        float radius = characterController.radius;
+        float radius = characterController.radius; //radius of our capsule
         //top hemisphere center of the capsule AS IT IS RIGHT NOW, in world space
-        Vector3 capsuleTop = transform.position + characterController.center + Vector3.up * (characterController.height / 2f - radius);
+        Vector3 capsuleTop = transform.position + characterController.center + Vector3.up * (characterController.height / 2f - radius); 
         //how much more we'd grow to reach full standing
-        float distance = standingHeight - characterController.height + 0.05f;
+        float distance = standingHeight - characterController.height + 0.05f; //add a small buffer so we dont have to be perfectly flush with the ceiling to crouch
         return Physics.SphereCast(capsuleTop, radius, Vector3.up, out _, distance, ceilingMask);
     }
     private void HandleCrouch(bool crouching)
