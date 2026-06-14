@@ -43,7 +43,10 @@ public class Player : NetworkBehaviour
         {
             mainCam.enabled = false;
             virtualCam.enabled = false;
-            GetComponentInChildren<AudioListener>().enabled = false; // only local player keeps active ears
+            foreach (var listener in GetComponentsInChildren<AudioListener>())
+            {
+                listener.enabled = false; //turn off other ears if not our player
+            }
         }
     }
     private void Update()
