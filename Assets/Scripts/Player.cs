@@ -27,6 +27,8 @@ public class Player : NetworkBehaviour
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
     public override void Spawned()
     {
+        characterController.enabled = false;
+        characterController.enabled = true;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
 

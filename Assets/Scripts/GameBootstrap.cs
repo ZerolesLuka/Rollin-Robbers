@@ -12,9 +12,12 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private NetworkObject playerPrefab;
     [SerializeField] private Transform lobbyCamera; //camera where room code happens for now
     [SerializeField] private Transform playerSpawn;
-    private string roomCode = ""; //the code players type in to join the same game, acts as the session name
 
- 
+    [SerializeField] private NetworkObject guardPrefab;
+    [SerializeField] private Transform guardSpawn;
+    [SerializeField] private Transform[] guardWaypoints;
+
+    private string roomCode = ""; //the code players type in to join the same game, acts as the session name
 
     public void OnConnectedToServer(NetworkRunner runner)
     {
@@ -103,7 +106,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
     {
-        
+
     }
 
     public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
@@ -145,6 +148,16 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         Vector3 spawnPos = playerSpawn.gameObject.transform.position; //where the player spawns in the world, can be changed to an array of spawn points later for more variety
         networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer);
         lobbyCamera.gameObject.SetActive(false); //turn off the lobby camera once we're in game    
+
+        if(networkRunner.IsSharedModeMasterClient) //only spawn the guard if we're the host, since its shared mode, we all run the same code but only the host should spawn things
+        {
+            networkRunner.Spawn(guardPrefab, //since this is not .LocalPlayer we have to specifiy the rotation and position, it is also 
+                guardSpawn.position,
+                Quaternion.identity,
+                PlayerRef.None,
+                (runner, obj) => obj.GetComponent<GuardPatrol>().SetWaypoints(guardWaypoints)
+                ); //spawn the guard at the guard spawn point
+        }
     }
     //
 }
