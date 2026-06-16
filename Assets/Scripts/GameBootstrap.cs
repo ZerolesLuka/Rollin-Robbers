@@ -135,24 +135,24 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     private async void ConnectToRoom() //async so the game doesnt freeze while waiting to connect
     {
         networkRunner = GetComponent<NetworkRunner>();
-        if (networkRunner == null)
+        if (networkRunner == null) //if there isnt a runner, add one
         {
             networkRunner = gameObject.AddComponent<NetworkRunner>();
         }
         networkRunner.AddCallbacks(this); //tells the Network Runner to use this script for its callbacks, which are functions that are called in response to certain events in the network
-        await networkRunner.StartGame(new StartGameArgs()
+        await networkRunner.StartGame(new StartGameArgs() //wait to start game before calling this code
         {
-            GameMode = GameMode.Shared,
+            GameMode = GameMode.Shared, //Gamemode runs of a server, not a home
             SessionName = roomCode, //whoever uses the same code lands in the same game, first one in becomes the host
         });
         Vector3 spawnPos = playerSpawn.gameObject.transform.position; //where the player spawns in the world, can be changed to an array of spawn points later for more variety
-        networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer);
+        networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer); //spawns player prefab on spawnpos
         lobbyCamera.gameObject.SetActive(false); //turn off the lobby camera once we're in game    
 
         if(networkRunner.IsSharedModeMasterClient) //only spawn the guard if we're the host, since its shared mode, we all run the same code but only the host should spawn things
         {
             networkRunner.Spawn(guardPrefab, //since this is not .LocalPlayer we have to specifiy the rotation and position, it is also 
-                guardSpawn.position,
+                guardSpawn.position, //spawns where I want
                 Quaternion.identity,
                 PlayerRef.None,
                 (runner, obj) => obj.GetComponent<GuardPatrol>().SetWaypoints(guardWaypoints)
