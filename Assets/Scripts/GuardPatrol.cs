@@ -18,7 +18,7 @@ public class GuardPatrol : NetworkBehaviour
 
     public override void Spawned()
     {
-        if (!HasStateAuthority)
+        if (!HasStateAuthority) 
         {
             agent.enabled = false;
             return;
@@ -43,7 +43,7 @@ public class GuardPatrol : NetworkBehaviour
         waypoints = points; //set the waypoints from the spawner, since we cant set them in the inspector for the guard prefab
     }
 
-    private bool CanSeePlayer(Player target)
+    private bool CanSeePlayer(Player target)//bool with the parameter of a player, passed in by whoever calling
     {
         Vector3 eyePos = transform.position + Vector3.up * eyeHeight; //where the guard sees from
         Vector3 targetPos = target.transform.position + Vector3.up * 1f; //where the player is, we can adjust this if we want the guard to see the player's head or body
