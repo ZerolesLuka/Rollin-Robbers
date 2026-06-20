@@ -16,7 +16,9 @@ public class Player : NetworkBehaviour
     [SerializeField] private float standCamHeight = 0.559f; //set this to the camera's current local Y
     [SerializeField] private float crouchCamHeight = 0.1f;  //lower, tune to taste
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
+    [SerializeField] private float crouchSpeedMultiplier = 0.5f;
 
+    private bool isCrouching;
     private float gravity = 9.81f; //regular gravity lol
     public float verticalVelocity = 0f;
     private float yRotation = 0f;
@@ -74,7 +76,8 @@ public class Player : NetworkBehaviour
     private void HandleMovement(Vector2 inputVector)
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
-        float moveDistance = moveSpeed * Runner.DeltaTime; //how far we move per frame
+        float speed = isCrouching ? moveSpeed * crouchSpeedMultiplier : moveSpeed; //if crouching we multiply by multiplier, if not we leave it
+        float moveDistance = speed * Runner.DeltaTime;
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime); //
     }
     private bool BlockedAbove()
@@ -90,6 +93,7 @@ public class Player : NetworkBehaviour
     {
         //pick the height we want based on if the crouch key is held
         bool staysCrouched = crouching || BlockedAbove(); //if crouch held OR no room to stand, stay down
+        isCrouching = staysCrouched;
         float targetHeight = staysCrouched ? crouchingHeight : standingHeight;
         float targetCamY = staysCrouched ? crouchCamHeight : standCamHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
 
