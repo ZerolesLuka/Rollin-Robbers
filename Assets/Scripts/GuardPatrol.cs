@@ -8,10 +8,14 @@ public class GuardPatrol : NetworkBehaviour
 
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
+    [SerializeField] private float suspiciousDuration = 3f;
     [SerializeField] private float noiseRange = 4f; //how close a noise registers
-    private int noiseThreshold;
+    [SerializeField] private int noiseThreshold;
+    [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
     private int noiseCounter;
     private float noiseTickTimer;
+    private float suspicionTimer;
+    private float searchTimer;
 
     [SerializeField] private NavMeshAgent agent;
     [SerializeField] private Transform[] waypoints;
@@ -59,8 +63,44 @@ public class GuardPatrol : NetworkBehaviour
 
                 }
             break;
-            case GuardState.Suspicious: 
-
+            case GuardState.Suspicious:
+                suspicionTimer += Runner.DeltaTime; //start the suspicion timer
+                if (HearsNoise())
+                {
+                    Debug.Log("Guard: Who's There?");
+                    State = GuardState.Searching;
+                    suspicionTimer = 0;
+                }
+                else if(suspicionTimer >= suspiciousDuration) //if we were suspicious for too long, go back to sleep
+                {
+                    Debug.Log("Guard: False Alarm.");
+                    State = GuardState.Asleep;
+                    noiseCounter = 0; //reset noise counter when going back to sleep
+                }
+            break;
+            case GuardState.Searching:
+                //Move
+                if (!agent.pathPending && agent.remainingDistance <= reachDistance) //if theres no path pending and we got to our destination
+                {
+                    currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //add to the waypoint % means dont go over the lenght of waypoints, will reset to 0
+                    agent.SetDestination(waypoints[currentWaypoint].position); //agents destination is the current waypoints position
+                }
+                foreach (Player p in FindObjectsByType<Player>(FindObjectsSortMode.None)) //for each player, if we can see them, log we see them
+                    if (CanSeePlayer(p))
+                    {
+                        Debug.Log($"Guard sees {p.name}!");
+                        State = GuardState.Chasing;
+                        break; //break out of the loop if we see a player, we dont need to check the rest
+                    }
+                searchTimer += Runner.DeltaTime; //start the search timer
+                if(searchTimer >= searchDuration) //if we searched for too long, go back to sleep
+                {
+                    Debug.Log("Guard: Must have been nothing...");
+                    State = GuardState.Asleep; //Should switch to relaxed instead of asleep, for now this
+                    searchTimer = 0f; //reset search timer
+                }
+                
+                break;
 
         }
 
@@ -92,18 +132,6 @@ public class GuardPatrol : NetworkBehaviour
           if(Vector3.Distance(transform.position, p.transform.position) <= noiseRange) 
              return true;
         return false;
-    }
-
-    private void KeepCodeHere()
-    {
-        if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
-        if (!agent.pathPending && agent.remainingDistance <= reachDistance) //if theres no path pending and we got to our destination
-        {
-            currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //add to the waypoint % means dont go over the lenght of waypoints, will reset to 0
-            agent.SetDestination(waypoints[currentWaypoint].position); //agents destination is the current waypoints position
-        }
-        foreach (Player p in FindObjectsByType<Player>(FindObjectsSortMode.None)) //for each player, if we can see them, log we see them
-            if (CanSeePlayer(p)) Debug.Log($"Guard sees {p.name}");
     }
 
 }
