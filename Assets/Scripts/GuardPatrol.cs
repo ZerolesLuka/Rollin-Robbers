@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using Fusion;
 using UnityEngine.AI;
 
@@ -12,16 +12,19 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float noiseRange = 4f; //how close a noise registers
     [SerializeField] private int noiseThreshold;
     [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
-    private int noiseCounter;
-    private float noiseTickTimer;
-    private float suspicionTimer;
-    private float searchTimer;
+    [SerializeField] private float catchRange = 1.5f;
+    private int noiseCounter; //how many times the guard tolerat
+    private float noiseTickTimer; //tracks how long weve heard a noise
+    private float suspicionTimer; //how long the guard is sus after in suspicion state
+    private float searchTimer;//how long guard searches
+    private Player chaseTarget;//last seen player
+    private Vector3 lastKnownPos; //playerpos
 
-    [SerializeField] private NavMeshAgent agent;
-    [SerializeField] private Transform[] waypoints;
+    [SerializeField] private NavMeshAgent agent; //guard
+    [SerializeField] private Transform[] waypoints; //guard patrol
     [SerializeField] private float reachDistance = 0.5f; //distance of which the guard consider it has reached waypoint
 
-    [SerializeField] private float sightRange = 10f;
+    [SerializeField] private float sightRange = 10f; //howfarsee
     [SerializeField] private float fovAngle = 120f; //field of view angle for the guard to see the player
     [SerializeField] private float eyeHeight = 1.6f; //where the guard sees
     [SerializeField] private LayerMask obstacleMask; //to check if there are obstacles between the guard and the player
@@ -50,7 +53,7 @@ public class GuardPatrol : NetworkBehaviour
                 if(HearsNoise())
                 {
                     noiseTickTimer += Runner.DeltaTime; //if we heard noise, start the timer
-                    if (noiseTickTimer >= 1f) //if we heard noise for 1 second, increase the noise counter
+                    if (noiseTickTimer >= .3f) //if we heard noise for 1 second, increase the noise counter
                     {
                         noiseTickTimer = 0f; //reset timer
                         noiseCounter++;
@@ -89,8 +92,9 @@ public class GuardPatrol : NetworkBehaviour
                     if (CanSeePlayer(p))
                     {
                         Debug.Log($"Guard sees {p.name}!");
+                        chaseTarget = p;                 // ← HERE, where p exists
                         State = GuardState.Chasing;
-                        break; //break out of the loop if we see a player, we dont need to check the rest
+                        break;
                     }
                 searchTimer += Runner.DeltaTime; //start the search timer
                 if(searchTimer >= searchDuration) //if we searched for too long, go back to sleep
@@ -99,12 +103,26 @@ public class GuardPatrol : NetworkBehaviour
                     State = GuardState.Asleep; //Should switch to relaxed instead of asleep, for now this
                     searchTimer = 0f; //reset search timer
                 }
-                
+
+
                 break;
+            case GuardState.Chasing:
+                if (CanSeePlayer(chaseTarget))
+                    lastKnownPos = chaseTarget.transform.position;   // refresh ONLY while in sight
+                agent.SetDestination(lastKnownPos);
 
+                if (Vector3.Distance(transform.position, chaseTarget.transform.position) < catchRange)
+                {
+                    Debug.Log("CAUGHT!");
+                    State = GuardState.Caught;
+                }
+                else if (!CanSeePlayer(chaseTarget) && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                {
+                    Debug.Log("Guard: lost 'em...");
+                    State = GuardState.Searching;
+                }
+                break;
         }
-
-
     }
     public void SetWaypoints(Transform[] points)
     {
@@ -132,6 +150,29 @@ public class GuardPatrol : NetworkBehaviour
           if(Vector3.Distance(transform.position, p.transform.position) <= noiseRange) 
              return true;
         return false;
+    }
+
+    private void OnDrawGizmos() //used to draw lines fro the guards view, honestly had no idea how to do this so watched some videos and used AI
+    {
+        Vector3 eye = transform.position + Vector3.up * eyeHeight;
+
+        // red while actually seeing a player, yellow otherwise
+        bool sees = false;
+        if (Application.isPlaying)
+            foreach (Player pl in FindObjectsByType<Player>(FindObjectsSortMode.None))
+                if (CanSeePlayer(pl)) { sees = true; break; }
+        Gizmos.color = sees ? new Color(1f, 0.2f, 0.2f) : new Color(1f, 0.9f, 0.2f);
+
+        int rays = 10;
+        Vector3 prev = Vector3.zero;
+        for (int i = 0; i <= rays; i++)
+        {
+            float ang = Mathf.Lerp(-fovAngle * 0.5f, fovAngle * 0.5f, (float)i / rays);
+            Vector3 end = eye + (Quaternion.Euler(0, ang, 0) * transform.forward) * sightRange;
+            Gizmos.DrawLine(eye, end);              // ray from the eye to the edge of range
+            if (i > 0) Gizmos.DrawLine(prev, end);  // connect tips → forms the far arc
+            prev = end;
+        }
     }
 
 }

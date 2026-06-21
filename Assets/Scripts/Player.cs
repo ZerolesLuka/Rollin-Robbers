@@ -7,6 +7,8 @@ using UnityEngine.InputSystem;
 
 public class Player : NetworkBehaviour
 {
+    public Player Instance { get; private set; }
+
     public PlayerInputActions playerInputActions;
     public static Player LocalPlayer;
     [SerializeField] private float moveSpeed = 7f;
@@ -29,6 +31,7 @@ public class Player : NetworkBehaviour
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
     public override void Spawned()
     {
+        Instance = this;
         characterController.enabled = false;
         characterController.enabled = true;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -130,6 +133,12 @@ public class Player : NetworkBehaviour
 
         verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
+    }
+
+    public Vector3 PlayerPosition()
+    {
+        return transform.position;
+
     }
 }
 
