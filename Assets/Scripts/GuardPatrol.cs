@@ -62,7 +62,7 @@ public class GuardPatrol : NetworkBehaviour
                         if(noiseCounter >= noiseThreshold) //if we heard enough noise, wake up
                         {
                             Debug.Log("Guard woke up!");
-                            State = GuardState.Suspicious;
+                            ChangeState(GuardState.Suspicious);
                         }
                     }
 
@@ -73,14 +73,12 @@ public class GuardPatrol : NetworkBehaviour
                 if (HearsNoise())
                 {
                     Debug.Log("Guard: Who's There?");
-                    State = GuardState.Searching;
-                    suspicionTimer = 0;
+                    ChangeState(GuardState.Searching);
                 }
                 else if(suspicionTimer >= suspiciousDuration) //if we were suspicious for too long, go back to sleep
                 {
                     Debug.Log("Guard: False Alarm.");
-                    State = GuardState.Asleep;
-                    noiseCounter = 0; //reset noise counter when going back to sleep
+                    ChangeState(GuardState.Asleep);
                 }
             break;
             case GuardState.Searching:
@@ -95,15 +93,14 @@ public class GuardPatrol : NetworkBehaviour
                     {
                         Debug.Log($"Guard sees {p.name}!");
                         chaseTarget = p;                 // ← HERE, where p exists
-                        State = GuardState.Chasing;
+                        ChangeState(GuardState.Chasing);
                         break;
                     }
                 searchTimer += Runner.DeltaTime; //start the search timer
                 if(searchTimer >= searchDuration) //if we searched for too long, go back to sleep
                 {
                     Debug.Log("Guard: Must have been nothing...");
-                    State = GuardState.Asleep; //Should switch to relaxed instead of asleep, for now this
-                    searchTimer = 0f; //reset search timer
+                    ChangeState(GuardState.Asleep); //Should switch to relaxed instead of asleep, for now this
                 }
 
 
@@ -121,17 +118,17 @@ public class GuardPatrol : NetworkBehaviour
                 if (distanceToTarget < catchRange)
                 {
                     Debug.Log("CAUGHT!");
-                    State = GuardState.Caught;
+                    ChangeState(GuardState.Caught);
                 }
                 else if (!CanSeePlayer(chaseTarget) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
                     Debug.Log("Guard: lost 'em...");
-                    State = GuardState.Searching;
+                    ChangeState(GuardState.Searching);
                 }
                 break;
             case GuardState.Caught:
                 chaseTarget.GetCaught();
-                State = GuardState.Asleep;
+                ChangeState(GuardState.Asleep);
 
                 break;
 
@@ -140,6 +137,25 @@ public class GuardPatrol : NetworkBehaviour
     public void SetWaypoints(Transform[] points)
     {
         waypoints = points; //set the waypoints from the spawner, since we cant set them in the inspector for the guard prefab
+    }
+
+    private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry
+    {
+        State = newState;
+        switch (newState)
+        {
+            case GuardState.Asleep:
+                noiseCounter = 0;    //clear accumulated noise so he actually sleeps until FRESH noise wakes him again
+                noiseTickTimer = 0f;
+                agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
+                break;
+            case GuardState.Suspicious:
+                suspicionTimer = 0f; //fresh "huh?" buffer every time he gets suspicious
+                break;
+            case GuardState.Searching:
+                searchTimer = 0f;    //fresh search window every time, even when re-entering after losing a chase
+                break;
+        }
     }
 
     private bool CanSeePlayer(Player target)//bool with the parameter of a player, passed in by whoever calling
