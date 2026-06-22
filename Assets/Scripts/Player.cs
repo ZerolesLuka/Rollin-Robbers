@@ -11,6 +11,7 @@ public class Player : NetworkBehaviour
 
     public PlayerInputActions playerInputActions;
     public static Player LocalPlayer;
+    [Networked] public float NoiseLevel { get; private set; }
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private Transform playerCamera; //simple camera ref
     [SerializeField] private float mouseSensitivity = 0.5f; //DOES NOT WORK
@@ -82,6 +83,9 @@ public class Player : NetworkBehaviour
         float speed = isCrouching ? moveSpeed * crouchSpeedMultiplier : moveSpeed; //if crouching we multiply by multiplier, if not we leave it
         float moveDistance = speed * Runner.DeltaTime;
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime); //
+        Vector3 horizontalVelocity = characterController.velocity;
+        horizontalVelocity.y = 0f;
+        NoiseLevel = horizontalVelocity.magnitude;
     }
     private bool BlockedAbove()
     {
@@ -133,12 +137,6 @@ public class Player : NetworkBehaviour
 
         verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
-    }
-
-    public Vector3 PlayerPosition()
-    {
-        return transform.position;
-
     }
 }
 

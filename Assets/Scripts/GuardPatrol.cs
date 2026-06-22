@@ -13,6 +13,8 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private int noiseThreshold;
     [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
     [SerializeField] private float catchRange = 1.5f;
+    [SerializeField] private float chaseSenseRange = 5f;
+    [SerializeField] private float noiseSpeedThreshold = 5f;
     private int noiseCounter; //how many times the guard tolerat
     private float noiseTickTimer; //tracks how long weve heard a noise
     private float suspicionTimer; //how long the guard is sus after in suspicion state
@@ -53,7 +55,7 @@ public class GuardPatrol : NetworkBehaviour
                 if(HearsNoise())
                 {
                     noiseTickTimer += Runner.DeltaTime; //if we heard noise, start the timer
-                    if (noiseTickTimer >= .3f) //if we heard noise for 1 second, increase the noise counter
+                    if (noiseTickTimer >= .3f) //if we heard noise for x seconds, increase the noise counter
                     {
                         noiseTickTimer = 0f; //reset timer
                         noiseCounter++;
@@ -107,16 +109,18 @@ public class GuardPatrol : NetworkBehaviour
 
                 break;
             case GuardState.Chasing:
-                if (CanSeePlayer(chaseTarget))
-                    lastKnownPos = chaseTarget.transform.position;   // refresh ONLY while in sight
+                float dist = Vector3.Distance(transform.position, chaseTarget.transform.position);
+
+                if (CanSeePlayer(chaseTarget) || dist < chaseSenseRange)   // sees them OR they're right on him
+                    lastKnownPos = chaseTarget.transform.position;
                 agent.SetDestination(lastKnownPos);
 
-                if (Vector3.Distance(transform.position, chaseTarget.transform.position) < catchRange)
+                if (dist < catchRange)
                 {
                     Debug.Log("CAUGHT!");
                     State = GuardState.Caught;
                 }
-                else if (!CanSeePlayer(chaseTarget) && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                else if (!CanSeePlayer(chaseTarget) && dist > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
                     Debug.Log("Guard: lost 'em...");
                     State = GuardState.Searching;
@@ -145,15 +149,21 @@ public class GuardPatrol : NetworkBehaviour
     }
     private bool HearsNoise()
     {
-        //STUB until hearing, any player within noiseRange will count as a noise, we can replace this with actual noise events later
-        foreach(Player p in FindObjectsByType<Player>(FindObjectsSortMode.None)) //for each player, if they're within noise range, count it as a noise
-          if(Vector3.Distance(transform.position, p.transform.position) <= noiseRange) 
-             return true;
+        foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
+        {
+            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
+            if (distanceToPlayer <= noiseRange)   // only log when actually near, cuts the spam
+            {
+                bool loudEnough = player.NoiseLevel >= noiseSpeedThreshold;
+                Debug.Log($"HEARS — distance {distanceToPlayer:F1}/{noiseRange}, noise {player.NoiseLevel:F1}/{noiseSpeedThreshold}, loud? {loudEnough}");
+                if (loudEnough) return true;
+            }
+        }
         return false;
     }
 
     private void OnDrawGizmos() //used to draw lines fro the guards view, honestly had no idea how to do this so watched some videos and used AI
-    {
+    { //NO IDEA HOW THIS WORKS
         Vector3 eye = transform.position + Vector3.up * eyeHeight;
 
         // red while actually seeing a player, yellow otherwise
