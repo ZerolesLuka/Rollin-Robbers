@@ -5,14 +5,14 @@ using UnityEngine.AI;
 public class GuardPatrol : NetworkBehaviour
 {
     public enum GuardState { Asleep, Relaxed, Suspicious, Searching, Chasing, Caught }
-
+    //
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
     [SerializeField] private float suspiciousDuration = 3f;
     [SerializeField] private float noiseRange = 4f; //how close a noise registers
     [SerializeField] private int noiseThreshold;
     [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
-    [SerializeField] private float catchRange = 1.5f;
+    [SerializeField] private float catchRange = 2f;
     [SerializeField] private float chaseSenseRange = 5f;
     [SerializeField] private float noiseSpeedThreshold = 5f;
     private int noiseCounter; //how many times the guard tolerat
@@ -109,23 +109,32 @@ public class GuardPatrol : NetworkBehaviour
 
                 break;
             case GuardState.Chasing:
-                float dist = Vector3.Distance(transform.position, chaseTarget.transform.position);
+                Vector3 toTarget = chaseTarget.transform.position - transform.position;
+                toTarget.y = 0f;                                   // ignore height difference
+                float distanceToTarget = toTarget.magnitude;
 
-                if (CanSeePlayer(chaseTarget) || dist < chaseSenseRange)   // sees them OR they're right on him
+                if (CanSeePlayer(chaseTarget) || distanceToTarget < chaseSenseRange)
+                {
                     lastKnownPos = chaseTarget.transform.position;
-                agent.SetDestination(lastKnownPos);
-
-                if (dist < catchRange)
+                    agent.SetDestination(lastKnownPos);
+                }
+                if (distanceToTarget < catchRange)
                 {
                     Debug.Log("CAUGHT!");
                     State = GuardState.Caught;
                 }
-                else if (!CanSeePlayer(chaseTarget) && dist > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                else if (!CanSeePlayer(chaseTarget) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
                     Debug.Log("Guard: lost 'em...");
                     State = GuardState.Searching;
                 }
                 break;
+            case GuardState.Caught:
+                chaseTarget.GetCaught();
+                State = GuardState.Asleep;
+
+                break;
+
         }
     }
     public void SetWaypoints(Transform[] points)
@@ -184,5 +193,6 @@ public class GuardPatrol : NetworkBehaviour
             prev = end;
         }
     }
+
 
 }

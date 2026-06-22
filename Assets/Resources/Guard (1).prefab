@@ -226,7 +226,9 @@ MonoBehaviour:
   noiseRange: 4
   noiseThreshold: 0
   searchDuration: 8
-  catchRange: 1.5
+  catchRange: 2
+  chaseSenseRange: 5
+  noiseSpeedThreshold: 5
   agent: {fileID: 7421286642146426288}
   waypoints:
   - {fileID: 0}

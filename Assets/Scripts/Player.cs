@@ -30,11 +30,15 @@ public class Player : NetworkBehaviour
     private float standingHeight = 2f;
     private float crouchingHeight = 1f;
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
+
+    private Vector3 respawnPosition;
+
     public override void Spawned()
     {
         Instance = this;
         characterController.enabled = false;
         characterController.enabled = true;
+        respawnPosition = transform.position;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
 
@@ -83,9 +87,7 @@ public class Player : NetworkBehaviour
         float speed = isCrouching ? moveSpeed * crouchSpeedMultiplier : moveSpeed; //if crouching we multiply by multiplier, if not we leave it
         float moveDistance = speed * Runner.DeltaTime;
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime); //
-        Vector3 horizontalVelocity = characterController.velocity;
-        horizontalVelocity.y = 0f;
-        NoiseLevel = horizontalVelocity.magnitude;
+        NoiseLevel = (inputVector.magnitude > 0.1f) ? speed : 0f;
     }
     private bool BlockedAbove()
     {
@@ -137,6 +139,12 @@ public class Player : NetworkBehaviour
 
         verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
+    }
+    public void GetCaught()
+    {
+        characterController.enabled = false;
+        transform.position = respawnPosition;
+        characterController.enabled = true;
     }
 }
 
