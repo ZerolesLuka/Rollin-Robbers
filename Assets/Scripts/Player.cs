@@ -140,11 +140,12 @@ public class Player : NetworkBehaviour
         verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
     }
-    public void GetCaught()
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
+    public void RPC_GetCaught()
     {
-        characterController.enabled = false;
-        transform.position = respawnPosition;
-        characterController.enabled = true;
+        characterController.enabled = false;   // CC overrides transform.position, so toggle it off to teleport
+        transform.position = respawnPosition;  // this machine's own spawn point, captured in Spawned()
+        characterController.enabled = true;     // back on, the player's NetworkTransform replicates the new position out
     }
 }
 
