@@ -127,7 +127,7 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Caught:
-                chaseTarget.GetCaught();
+                chaseTarget.RPC_GetCaught();
                 ChangeState(GuardState.Asleep);
 
                 break;

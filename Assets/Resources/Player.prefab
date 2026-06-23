@@ -256,6 +256,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e855a3344e2f3504e9f3a7fa338461b1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
+  _NoiseLevel: 0
   moveSpeed: 7
   playerCamera: {fileID: 1528983954450414190}
   mouseSensitivity: 0.5
@@ -265,6 +266,7 @@ MonoBehaviour:
   ceilingMask:
     serializedVersion: 2
     m_Bits: 1
+  crouchSpeedMultiplier: 0.5
   verticalVelocity: 0
 --- !u!143 &3332511634651341915
 CharacterController:
