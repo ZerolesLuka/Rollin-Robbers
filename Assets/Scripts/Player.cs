@@ -20,6 +20,7 @@ public class Player : NetworkBehaviour
     [SerializeField] private float crouchCamHeight = 0.1f;  //lower, tune to taste
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
+    [SerializeField] private float sprintSpeedMultiplier = 1.5f;
 
     private bool isCrouching;
     private float gravity = 9.81f; //regular gravity lol
@@ -77,14 +78,23 @@ public class Player : NetworkBehaviour
         PlayerGravity();
         if (GetInput(out NetworkInputData networkInputData))
         {
-            HandleMovement(networkInputData.movementInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
+            HandleMovement(networkInputData.movementInput, networkInputData.sprintInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
         }
     }
-    private void HandleMovement(Vector2 inputVector)
+    private void HandleMovement(Vector2 inputVector, bool sprinting)
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
-        float speed = isCrouching ? moveSpeed * crouchSpeedMultiplier : moveSpeed; //if crouching we multiply by multiplier, if not we leave it
+        float speed = moveSpeed;
+        if (isCrouching)
+        {
+            speed = moveSpeed * crouchSpeedMultiplier;
+        }
+        else if (sprinting)
+        {
+            speed = moveSpeed * sprintSpeedMultiplier;
+        }
+
         float moveDistance = speed * Runner.DeltaTime;
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime); //
         NoiseLevel = (inputVector.magnitude > 0.1f) ? speed : 0f;
