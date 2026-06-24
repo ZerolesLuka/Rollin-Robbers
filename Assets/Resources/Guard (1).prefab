@@ -197,7 +197,7 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 30
+  m_Speed: 40
   m_Acceleration: 30
   avoidancePriority: 50
   m_AngularSpeed: 400
@@ -223,12 +223,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GuardPatrol
   _State: 0
   suspiciousDuration: 3
-  noiseRange: 4
+  noiseRange: 10
   noiseThreshold: 0
   searchDuration: 8
   catchRange: 2
   chaseSenseRange: 5
   noiseSpeedThreshold: 5
+  wakeThreshold: 0
+  noiseDrainRate: 1.5
   agent: {fileID: 7421286642146426288}
   waypoints:
   - {fileID: 0}
@@ -240,4 +242,4 @@ MonoBehaviour:
   eyeHeight: 1.6
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 8

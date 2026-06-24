@@ -10,17 +10,18 @@ public class GuardPatrol : NetworkBehaviour
 
     [SerializeField] private float suspiciousDuration = 3f;
     [SerializeField] private float noiseRange = 4f; //how close a noise registers
-    [SerializeField] private int noiseThreshold;
+    [SerializeField] private float noiseThreshold;
     [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
     [SerializeField] private float catchRange = 2f;
     [SerializeField] private float chaseSenseRange = 5f;
     [SerializeField] private float noiseSpeedThreshold = 5f;
-    private int noiseCounter; //how many times the guard tolerat
-    private float noiseTickTimer; //tracks how long weve heard a noise
+    [SerializeField] private float wakeThreshold;
+    [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
+    private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
     private float searchTimer;//how long guard searches
     private Player chaseTarget;//last seen player
-    private Vector3 lastKnownPos; //playerpos
+    private Vector3 lastKnownPosition; //playerpos
 
     [SerializeField] private NavMeshAgent agent; //guard
     [SerializeField] private Transform[] waypoints; //guard patrol
@@ -30,6 +31,9 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float fovAngle = 120f; //field of view angle for the guard to see the player
     [SerializeField] private float eyeHeight = 1.6f; //where the guard sees
     [SerializeField] private LayerMask obstacleMask; //to check if there are obstacles between the guard and the player
+
+ 
+
 
     private int currentWaypoint = 0; //used in modulo
 
@@ -52,22 +56,22 @@ public class GuardPatrol : NetworkBehaviour
         switch(State)
         {
             case GuardState.Asleep:
-                if(HearsNoise())
+                float perceivedNoise = LoudestPerceivedNoise(); //float between 0 and 1
+                if (perceivedNoise > 0f)
                 {
-                    noiseTickTimer += Runner.DeltaTime; //if we heard noise, start the timer
-                    if (noiseTickTimer >= .3f) //if we heard noise for x seconds, increase the noise counter
+                    noiseAccumulator += perceivedNoise * Runner.DeltaTime; //runs faster if the noise was louder
+                    if (noiseAccumulator >= noiseThreshold)
                     {
-                        noiseTickTimer = 0f; //reset timer
-                        noiseCounter++;
-                        if(noiseCounter >= noiseThreshold) //if we heard enough noise, wake up
-                        {
-                            Debug.Log("Guard woke up!");
-                            ChangeState(GuardState.Suspicious);
-                        }
+                        Debug.Log("Guard woke up!");
+                        ChangeState(GuardState.Suspicious);
                     }
-
                 }
-            break;
+                else
+                {
+                    noiseAccumulator = Mathf.Max(0f, noiseAccumulator - noiseDrainRate * Runner.DeltaTime);
+                }
+                
+                break;
             case GuardState.Suspicious:
                 suspicionTimer += Runner.DeltaTime; //start the suspicion timer
                 if (HearsNoise())
@@ -88,14 +92,21 @@ public class GuardPatrol : NetworkBehaviour
                     currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //add to the waypoint % means dont go over the lenght of waypoints, will reset to 0
                     agent.SetDestination(waypoints[currentWaypoint].position); //agents destination is the current waypoints position
                 }
-                foreach (Player p in FindObjectsByType<Player>(FindObjectsSortMode.None)) //for each player, if we can see them, log we see them
-                    if (CanSeePlayer(p))
+                Player loudestVisiblePlayer = null;
+                float loudestNoiseHeard = -1f; //start below zero so he can still see a silent player
+                foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
+                {
+                    if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //if we can see this player and they are louder then the loudest noise
                     {
-                        Debug.Log($"Guard sees {p.name}!");
-                        chaseTarget = p;                 // ← HERE, where p exists
-                        ChangeState(GuardState.Chasing);
-                        break;
+                        loudestNoiseHeard = player.NoiseLevel; //loudest noise heard goes to that player
+                        loudestVisiblePlayer = player;
                     }
+                }
+                if (loudestVisiblePlayer != null)
+                {
+                    chaseTarget = loudestVisiblePlayer;
+                    ChangeState(GuardState.Chasing);
+                }
                 searchTimer += Runner.DeltaTime; //start the search timer
                 if(searchTimer >= searchDuration) //if we searched for too long, go back to sleep
                 {
@@ -107,13 +118,13 @@ public class GuardPatrol : NetworkBehaviour
                 break;
             case GuardState.Chasing:
                 Vector3 toTarget = chaseTarget.transform.position - transform.position;
-                toTarget.y = 0f;                                   // ignore height difference
+                toTarget.y = 0f; // ignore height difference
                 float distanceToTarget = toTarget.magnitude;
 
-                if (CanSeePlayer(chaseTarget) || distanceToTarget < chaseSenseRange)
+                if (CanSeePlayer(chaseTarget) || distanceToTarget < chaseSenseRange) //if we see our target or we are within chaserange
                 {
-                    lastKnownPos = chaseTarget.transform.position;
-                    agent.SetDestination(lastKnownPos);
+                    lastKnownPosition = chaseTarget.transform.position;
+                    agent.SetDestination(lastKnownPosition);
                 }
                 if (distanceToTarget < catchRange)
                 {
@@ -145,8 +156,6 @@ public class GuardPatrol : NetworkBehaviour
         switch (newState)
         {
             case GuardState.Asleep:
-                noiseCounter = 0;    //clear accumulated noise so he actually sleeps until FRESH noise wakes him again
-                noiseTickTimer = 0f;
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
                 break;
             case GuardState.Suspicious:
@@ -180,7 +189,6 @@ public class GuardPatrol : NetworkBehaviour
             if (distanceToPlayer <= noiseRange)   // only log when actually near, cuts the spam
             {
                 bool loudEnough = player.NoiseLevel >= noiseSpeedThreshold;
-                Debug.Log($"HEARS — distance {distanceToPlayer:F1}/{noiseRange}, noise {player.NoiseLevel:F1}/{noiseSpeedThreshold}, loud? {loudEnough}");
                 if (loudEnough) return true;
             }
         }
@@ -209,6 +217,21 @@ public class GuardPatrol : NetworkBehaviour
             prev = end;
         }
     }
-
+    private float LoudestPerceivedNoise() //strongest noise he perceives, factoring loudness AND distance
+    {
+        float loudest = 0f;
+        foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
+        {
+            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
+            float distanceFactor = Mathf.Clamp01((noiseRange - distanceToPlayer) / noiseRange);
+            float audibleLoudness = Mathf.Max(0f, player.NoiseLevel - noiseSpeedThreshold); //below the floor (crouch) = silent
+            float perceived = audibleLoudness * distanceFactor;                           //loud+close = big, loud+far = ~0
+            if (perceived > loudest) //if noise we just picked up is louder than previous replace
+            {
+                loudest = perceived;
+            }
+        }
+        return loudest;
+    }
 
 }
