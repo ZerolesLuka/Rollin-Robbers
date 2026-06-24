@@ -16,6 +16,7 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float chaseSenseRange = 5f;
     [SerializeField] private float noiseSpeedThreshold = 5f;
     [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
+    [SerializeField] private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
     private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
     private float searchTimer;//how long guard searches
@@ -72,18 +73,18 @@ public class GuardPatrol : NetworkBehaviour
                 
                 break;
             case GuardState.Suspicious:
-                suspicionTimer += Runner.DeltaTime; //start the suspicion timer
-                if (HearsNoise())
+                suspicionTimer += Runner.DeltaTime;
+                if (HearsNoise() && suspicionTimer >= alertConfirmTime)   // still noisy AND he's had a beat
                 {
                     Debug.Log("Guard: Who's There?");
                     ChangeState(GuardState.Searching);
                 }
-                else if(suspicionTimer >= suspiciousDuration) //if we were suspicious for too long, go back to sleep
+                else if (suspicionTimer >= suspiciousDuration)            // quiet long enough -> false alarm
                 {
                     Debug.Log("Guard: False Alarm.");
                     ChangeState(GuardState.Asleep);
                 }
-            break;
+                break;  
             case GuardState.Searching:
                 //Move
                 if (!agent.pathPending && agent.remainingDistance <= reachDistance) //if theres no path pending and we got to our destination
