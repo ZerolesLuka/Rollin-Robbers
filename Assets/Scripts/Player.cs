@@ -1,9 +1,9 @@
 using Cinemachine;
 using Fusion;
-using System.Runtime.CompilerServices;
-using Unity.VisualScripting;
 using UnityEngine;
+using System;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class Player : NetworkBehaviour
 {
@@ -21,7 +21,13 @@ public class Player : NetworkBehaviour
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
-    [SerializeField] private float voiceNoiseScale = 10f; 
+    [SerializeField] private float voiceNoiseScale = 10f;
+    [SerializeField] private float maxStamina = 3f;        //seconds of sprint you get
+    [SerializeField] private float staminaRegenRate = 1f;  //stamina back per second when not sprinting
+    public float StaminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
+
+    private float stamina;                                 //current
+    private bool exhausted;                                //hit empty -> must recover before sprinting again
 
     private bool isCrouching;
     private float gravity = 9.81f; //regular gravity lol
@@ -43,6 +49,7 @@ public class Player : NetworkBehaviour
         respawnPosition = transform.position;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
+        stamina = maxStamina;
 
         if (HasInputAuthority) //if our player
         {
@@ -87,12 +94,31 @@ public class Player : NetworkBehaviour
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
+        bool isSprinting = sprinting && !isCrouching && !exhausted && stamina > 0f;
+        if (isSprinting)
+        {
+            stamina -= Runner.DeltaTime; //sprinting burns stamina
+            if (stamina <= 0f)
+            {
+                stamina = 0f;
+                exhausted = true; //gassed out, locked until recovered
+            }
+        }
+        else
+        {
+            stamina = Mathf.Min(maxStamina, stamina + staminaRegenRate * Runner.DeltaTime); //recover when not sprinting
+            if (exhausted && stamina >= maxStamina * 0.3f)
+            {
+                exhausted = false; //recovered enough to sprint again
+            }
+        }
+
         float speed = moveSpeed;
         if (isCrouching)
         {
-            speed = moveSpeed * crouchSpeedMultiplier; //crouch wins - no sprinting while crouched
+            speed = moveSpeed * crouchSpeedMultiplier; //crouch wins
         }
-        else if (sprinting)
+        else if (isSprinting)
         {
             speed = moveSpeed * sprintSpeedMultiplier;
         }
