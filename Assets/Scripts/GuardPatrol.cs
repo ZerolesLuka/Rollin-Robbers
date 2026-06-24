@@ -56,7 +56,8 @@ public class GuardPatrol : NetworkBehaviour
         }
         State = GuardState.Asleep; //guard starts asleep
         noiseThreshold = Random.Range(3f, 6f); //guard is triggered randomly (float overload, not whole-number ints)
-        agent.Warp(transform.position);
+        agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
+        agent.Warp(transform.position); 
     }
 
     public override void FixedUpdateNetwork()
@@ -157,6 +158,7 @@ public class GuardPatrol : NetworkBehaviour
                 ChangeState(GuardState.Relaxed);
                 break;
         }
+        transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
     }
     public void SetWaypoints(Transform[] points)
     {

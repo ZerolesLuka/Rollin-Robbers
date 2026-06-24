@@ -123,10 +123,10 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 6392009772190246705}
-  - component: {fileID: 7115558204843602652}
   - component: {fileID: 3837652101745290742}
   - component: {fileID: 7421286642146426288}
   - component: {fileID: 304236841041207335}
+  - component: {fileID: 9012763324479585337}
   m_Layer: 0
   m_Name: Guard (1)
   m_TagString: Untagged
@@ -150,23 +150,6 @@ Transform:
   - {fileID: 10845770624768560}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &7115558204843602652
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2371217306020104725}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkTransform
-  _stateAuthorityChangeErrorCorrectionDelta: 0
-  SyncScale: 0
-  SyncParent: 0
-  _autoAOIOverride: 1
-  DisableSharedModeInterpolation: 0
 --- !u!114 &3837652101745290742
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -184,8 +167,8 @@ MonoBehaviour:
   Flags: 262145
   NestedObjects: []
   NetworkedBehaviours:
-  - {fileID: 7115558204843602652}
   - {fileID: 304236841041207335}
+  - {fileID: 9012763324479585337}
   ForceRemoteRenderTimeframe: 0
 --- !u!195 &7421286642146426288
 NavMeshAgent:
@@ -238,3 +221,20 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
+--- !u!114 &9012763324479585337
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2371217306020104725}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkTransform
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 0
