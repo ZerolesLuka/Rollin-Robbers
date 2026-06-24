@@ -40,6 +40,13 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float eyeHeight = 1.6f; //where the guard sees
     [SerializeField] private LayerMask obstacleMask; //to check if there are obstacles between the guard and the player
 
+    [SerializeField] private AudioSource voiceSource;     //3D source on the guard
+    [SerializeField] private AudioClip[] suspiciousSounds; //"huh? who's there?"
+    [SerializeField] private AudioClip[] searchingSounds;  //"I know you're in here"
+    [SerializeField] private AudioClip[] chasingSounds;    //"HEY! GET OUT!"
+    [SerializeField] private AudioClip[] caughtSounds;     //"GOTCHA!"
+    [SerializeField] private AudioClip[] asleepSounds;     //"musta been nothin'" (false alarm / give up)
+
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 8f;
@@ -55,7 +62,7 @@ public class GuardPatrol : NetworkBehaviour
             return;
         }
         State = GuardState.Asleep; //guard starts asleep
-        noiseThreshold = Random.Range(3f, 6f); //guard is triggered randomly (float overload, not whole-number ints)
+        noiseThreshold = Random.Range(3f, 6 ); //guard is triggered randomly (float overload, not whole-number ints)
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
         agent.Warp(transform.position); 
     }
@@ -156,6 +163,7 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Caught:
                 chaseTarget.RPC_GetCaught();
                 ChangeState(GuardState.Relaxed);
+
                 break;
         }
         transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
@@ -174,23 +182,32 @@ public class GuardPatrol : NetworkBehaviour
                 noiseAccumulator = 0f; //empty the bucket on every trip to sleep so he needs FRESH noise to wake
                 quietTimer = 0f; //reset the quiet clock too
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
+                PlayStateSound(newState); //bark whenever he changes state
+
                 break;
             case GuardState.Relaxed:
                 agent.speed = relaxSpeed;
                 noiseAccumulator = 0f;
                 quietTimer = 0f;
+                PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Suspicious:
                 suspicionTimer = alertConfirmTime * 0.5f;   // wakes up already half upset
+                PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Searching:
                 agent.speed = searchSpeed;
                 agent.SetDestination(lastKnownPosition);
                 searchTimer = 0f;    //fresh search window every time, even when re-entering after losing a chase
+                PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;
+                PlayStateSound(newState); //bark whenever he changes state
                 break;
+            case GuardState.Caught:
+                PlayStateSound(newState); //bark whenever he changes state
+                break; 
         }
     }
 
@@ -277,6 +294,38 @@ public class GuardPatrol : NetworkBehaviour
             {
                 noiseAccumulator = Mathf.Max(0f, noiseAccumulator - noiseDrainRate * Runner.DeltaTime);
             }
+        }
+    }
+    private AudioClip[] ClipsFor(GuardState state)
+    {
+        switch (state)
+        { //returns the state were at and plays those sounds
+            case GuardState.Suspicious: return suspiciousSounds;
+            case GuardState.Searching: return searchingSounds;
+            case GuardState.Chasing: return chasingSounds;
+            case GuardState.Caught: return caughtSounds;
+            case GuardState.Asleep: return asleepSounds;
+            default: return null; //Relaxed = no bark for now
+        }
+
+    }
+    private void PlayStateSound(GuardState state)
+    {
+        AudioClip[] clips = ClipsFor(state);
+        if (clips != null && clips.Length > 0)
+        {
+            int index = Random.Range(0, clips.Length); //chosen once on the host
+            RPC_PlayStateSound(index, state);
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)] //host fires it, everyone hears it
+    private void RPC_PlayStateSound(int index, GuardState state)
+    {
+        AudioClip[] clips = ClipsFor(state);
+        if (voiceSource != null && clips != null && index >= 0 && index < clips.Length)
+        {
+            voiceSource.PlayOneShot(clips[index]);
         }
     }
 }
