@@ -21,6 +21,7 @@ public class Player : NetworkBehaviour
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
+    [SerializeField] private float voiceNoiseScale = 10f; 
 
     private bool isCrouching;
     private float gravity = 9.81f; //regular gravity lol
@@ -85,10 +86,11 @@ public class Player : NetworkBehaviour
     private void HandleMovement(Vector2 inputVector, bool sprinting)
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
+
         float speed = moveSpeed;
         if (isCrouching)
         {
-            speed = moveSpeed * crouchSpeedMultiplier;
+            speed = moveSpeed * crouchSpeedMultiplier; //crouch wins - no sprinting while crouched
         }
         else if (sprinting)
         {
@@ -96,8 +98,12 @@ public class Player : NetworkBehaviour
         }
 
         float moveDistance = speed * Runner.DeltaTime;
-        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime); //
-        NoiseLevel = (inputVector.magnitude > 0.1f) ? speed : 0f;
+        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
+
+        //noise comes AFTER speed is finalized
+        float movementNoise = (inputVector.magnitude > 0.1f) ? speed : 0f; //moving = your speed, still = 0
+        float voiceNoise = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
+        NoiseLevel = Mathf.Max(movementNoise, voiceNoise); //loudest of moving vs talking, set ONCE
     }
     private bool BlockedAbove()
     {

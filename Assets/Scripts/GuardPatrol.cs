@@ -15,7 +15,6 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float catchRange = 2f;
     [SerializeField] private float chaseSenseRange = 5f;
     [SerializeField] private float noiseSpeedThreshold = 5f;
-    [SerializeField] private float wakeThreshold;
     [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
@@ -45,7 +44,7 @@ public class GuardPatrol : NetworkBehaviour
             return;
         }
         State = GuardState.Asleep; //guard starts asleep
-        noiseThreshold = Random.Range(2, 5); //guard is triggered randomly
+        noiseThreshold = Random.Range(3f, 6f); //guard is triggered randomly (float overload, not whole-number ints)
         agent.Warp(transform.position);
     }
 
@@ -56,7 +55,7 @@ public class GuardPatrol : NetworkBehaviour
         switch(State)
         {
             case GuardState.Asleep:
-                float perceivedNoise = LoudestPerceivedNoise(); //float between 0 and 1
+                float perceivedNoise = LoudestPerceivedNoise(); //0 = silent, higher = louder/closer
                 if (perceivedNoise > 0f)
                 {
                     noiseAccumulator += perceivedNoise * Runner.DeltaTime; //runs faster if the noise was louder
@@ -156,6 +155,7 @@ public class GuardPatrol : NetworkBehaviour
         switch (newState)
         {
             case GuardState.Asleep:
+                noiseAccumulator = 0f; //empty the bucket on every trip to sleep so he needs FRESH noise to wake
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
                 break;
             case GuardState.Suspicious:
@@ -181,18 +181,9 @@ public class GuardPatrol : NetworkBehaviour
 
         return true; //if we passed all the checks, we can see the player
     }
-    private bool HearsNoise()
+    private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)
     {
-        foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
-        {
-            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
-            if (distanceToPlayer <= noiseRange)   // only log when actually near, cuts the spam
-            {
-                bool loudEnough = player.NoiseLevel >= noiseSpeedThreshold;
-                if (loudEnough) return true;
-            }
-        }
-        return false;
+        return LoudestPerceivedNoise() > 0f;
     }
 
     private void OnDrawGizmos() //used to draw lines fro the guards view, honestly had no idea how to do this so watched some videos and used AI

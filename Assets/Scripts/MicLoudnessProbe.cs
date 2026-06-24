@@ -1,9 +1,10 @@
 using UnityEngine;
 using Photon.Voice.Unity;
-using NUnit.Framework.Constraints;
 
 public class MicLoudnessProbe : MonoBehaviour
 {
+    public static MicLoudnessProbe Instance;
+
     [SerializeField] private float loudThreshold = 0.6f;    // mic peak is 0..1; above this counts as "loud"
     [SerializeField] private float mustStayLoudFor = 0.2f;  // seconds it must stay loud to trigger
 
@@ -14,7 +15,12 @@ public class MicLoudnessProbe : MonoBehaviour
 
     private void Awake()
     {
+        Instance = this;
         recorder = GetComponent<Recorder>();
+    }
+    public float VoiceLoudness
+    {
+        get {return peakAmplitude;}
     }
 
     private void Update()
