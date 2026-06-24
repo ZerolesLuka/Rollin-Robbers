@@ -268,6 +268,7 @@ MonoBehaviour:
     m_Bits: 1
   crouchSpeedMultiplier: 0.5
   sprintSpeedMultiplier: 1.5
+  voiceNoiseScale: 20
   verticalVelocity: 0
 --- !u!143 &3332511634651341915
 CharacterController:

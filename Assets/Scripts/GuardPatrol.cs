@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using Fusion;
 using UnityEngine.AI;
+using System.Runtime.CompilerServices;
 
 public class GuardPatrol : NetworkBehaviour
 {
@@ -9,13 +10,15 @@ public class GuardPatrol : NetworkBehaviour
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
     [SerializeField] private float suspiciousDuration = 3f;
-    [SerializeField] private float noiseRange = 4f; //how close a noise registers
+    [SerializeField] private float noiseRange = 30f; //how close a noise registers
     [SerializeField] private float noiseThreshold;
     [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
     [SerializeField] private float catchRange = 2f;
     private float chaseSenseRange = 5f;
     private float noiseSpeedThreshold = 5f;
-    private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
+    [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
+    [SerializeField] private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
+    private float quietTimer; //how long it's been quiet since the last noise
     private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
     private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
@@ -24,6 +27,9 @@ public class GuardPatrol : NetworkBehaviour
     private Vector3 lastKnownPosition; //playerpos
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
     private int asleepChancesMax = 3;
+    private float relaxPatrolTimer;
+    [SerializeField] private float relaxIdleMin = 3f;
+    [SerializeField] private float relaxIdleMax = 8f;
 
     private NavMeshAgent agent; //guard
     private Transform[] waypoints; //guard patrol
@@ -34,8 +40,9 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float eyeHeight = 1.6f; //where the guard sees
     [SerializeField] private LayerMask obstacleMask; //to check if there are obstacles between the guard and the player
 
- 
-
+    private float relaxSpeed = 1.5f;
+    private float searchSpeed = 3.5f;
+    private float chaseSpeed = 8f;
 
     private int currentWaypoint = 0; //used in modulo
 
@@ -59,27 +66,17 @@ public class GuardPatrol : NetworkBehaviour
         switch(State)
         {
             case GuardState.Asleep:
-                float perceivedNoise = LoudestPerceivedNoise(); //0 = silent, higher = louder/closer
-                if (perceivedNoise > 0f)
-                {
-                    noiseAccumulator += perceivedNoise * Runner.DeltaTime; //runs faster if the noise was louder
-                    if (noiseAccumulator >= noiseThreshold)
-                    {
-                        Debug.Log("Guard woke up!");
-                        ChangeState(GuardState.Suspicious);
-                    }
-                }
-                else
-                {
-                    noiseAccumulator = Mathf.Max(0f, noiseAccumulator - noiseDrainRate * Runner.DeltaTime);
-                }
+                ListenForNoise();
                 break;
             case GuardState.Relaxed:
-                //fetch snack/water mechanism randomness
-
-
-
-
+                ListenForNoise();
+                relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
+                if (relaxPatrolTimer <= 0f && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                {
+                    currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //modulo that cycles patrols
+                    agent.SetDestination(waypoints[currentWaypoint].position); //cycles waypoints
+                    relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit, then move again
+                }
                 break;
             case GuardState.Suspicious:
                 if (HearsNoise())
@@ -97,7 +94,7 @@ public class GuardPatrol : NetworkBehaviour
                     if(suspicionTimer <= 0f)
                     {
                         asleepChances++;
-                        if (asleepChances >= asleepChancesMax)
+                        if (asleepChances < asleepChancesMax)
                         {
                             Debug.Log("Guard : False Alarm");
                             ChangeState(GuardState.Asleep);
@@ -108,16 +105,10 @@ public class GuardPatrol : NetworkBehaviour
                             ChangeState(GuardState.Relaxed);
                         }
                     }
-
                 }
                     break;  
             case GuardState.Searching:
-                //Move
-                if (!agent.pathPending && agent.remainingDistance <= reachDistance) //if theres no path pending and we got to our destination
-                {
-                    currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //add to the waypoint % means dont go over the lenght of waypoints, will reset to 0
-                    agent.SetDestination(waypoints[currentWaypoint].position); //agents destination is the current waypoints position
-                }
+                //he heads to lastKnownPosition (set on entry) and scans there - no waypoint patrol, that's Relaxed's job
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so he can still see a silent player
                 foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
@@ -139,8 +130,6 @@ public class GuardPatrol : NetworkBehaviour
                     Debug.Log("Guard: Must have been nothing...");
                     ChangeState(GuardState.Asleep); //Should switch to relaxed instead of asleep, for now this
                 }
-
-
                 break;
             case GuardState.Chasing:
                 Vector3 toTarget = chaseTarget.transform.position - transform.position;
@@ -167,7 +156,6 @@ public class GuardPatrol : NetworkBehaviour
                 chaseTarget.RPC_GetCaught();
                 ChangeState(GuardState.Relaxed);
                 break;
-
         }
     }
     public void SetWaypoints(Transform[] points)
@@ -182,13 +170,24 @@ public class GuardPatrol : NetworkBehaviour
         {
             case GuardState.Asleep:
                 noiseAccumulator = 0f; //empty the bucket on every trip to sleep so he needs FRESH noise to wake
+                quietTimer = 0f; //reset the quiet clock too
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
+                break;
+            case GuardState.Relaxed:
+                agent.speed = relaxSpeed;
+                noiseAccumulator = 0f;
+                quietTimer = 0f;
                 break;
             case GuardState.Suspicious:
                 suspicionTimer = alertConfirmTime * 0.5f;   // wakes up already half upset
                 break;
             case GuardState.Searching:
+                agent.speed = searchSpeed;
+                agent.SetDestination(lastKnownPosition);
                 searchTimer = 0f;    //fresh search window every time, even when re-entering after losing a chase
+                break;
+            case GuardState.Chasing:
+                agent.speed = chaseSpeed;
                 break;
         }
     }
@@ -206,9 +205,9 @@ public class GuardPatrol : NetworkBehaviour
         // cone is horizontal only — up/down stairs no longer kicks you out
         Vector3 flatToTarget = Vector3.ProjectOnPlane(toTarget, Vector3.up);
         Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
-        if (Vector3.Angle(flatForward, flatToTarget) > fovAngle * 0.5f) return false;
+        if (Vector3.Angle(flatForward, flatToTarget) > fovAngle * 0.5f) return false; //flat plane check
 
-        if (Physics.Raycast(eyePos, dir, distance, obstacleMask)) return false;
+        if (Physics.Raycast(eyePos, dir, distance, obstacleMask)) return false; //hits object
 
         return true;
     }
@@ -251,9 +250,31 @@ public class GuardPatrol : NetworkBehaviour
             if (perceived > loudest) //if noise we just picked up is louder than previous replace
             {
                 loudest = perceived;
+                lastKnownPosition = player.transform.position; //remember WHERE the loudest noise came from
             }
         }
         return loudest;
     }
-
+    private void ListenForNoise() //shared ears for Asleep + Relaxed
+    {
+        float perceivedNoise = LoudestPerceivedNoise(); //use loudest thing closest relative to guard
+        if (perceivedNoise > 0f)
+        {
+            quietTimer = 0f;
+            noiseAccumulator += perceivedNoise * Runner.DeltaTime;
+            if (noiseAccumulator >= noiseThreshold)
+            {
+                Debug.Log("Guard heard something!");
+                ChangeState(GuardState.Suspicious);
+            }
+        }
+        else
+        {
+            quietTimer += Runner.DeltaTime;
+            if (quietTimer >= noiseMemoryTime)
+            {
+                noiseAccumulator = Mathf.Max(0f, noiseAccumulator - noiseDrainRate * Runner.DeltaTime);
+            }
+        }
+    }
 }
