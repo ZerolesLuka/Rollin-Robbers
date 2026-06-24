@@ -47,6 +47,9 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private AudioClip[] caughtSounds;     //"GOTCHA!"
     [SerializeField] private AudioClip[] asleepSounds;     //"musta been nothin'" (false alarm / give up)
 
+    [SerializeField] private float barkCooldown = 1.5f; //min seconds between barks
+    private float barkCooldownTimer;
+
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 8f;
@@ -69,7 +72,11 @@ public class GuardPatrol : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
-        if(!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
+        if (barkCooldownTimer > 0f)
+        {
+            barkCooldownTimer -= Runner.DeltaTime;
+        }
+        if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
 
         switch(State)
         {
@@ -311,21 +318,28 @@ public class GuardPatrol : NetworkBehaviour
     }
     private void PlayStateSound(GuardState state)
     {
+        if(barkCooldownTimer > 0f)
+        {
+            return;
+        }
         AudioClip[] clips = ClipsFor(state);
         if (clips != null && clips.Length > 0)
         {
             int index = Random.Range(0, clips.Length); //chosen once on the host
+            barkCooldownTimer = barkCooldown;
             RPC_PlayStateSound(index, state);
         }
     }
 
-    [Rpc(RpcSources.StateAuthority, RpcTargets.All)] //host fires it, everyone hears it
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_PlayStateSound(int index, GuardState state)
     {
-        AudioClip[] clips = ClipsFor(state);
+        AudioClip[] clips = ClipsFor(state); //clips from the state being active
         if (voiceSource != null && clips != null && index >= 0 && index < clips.Length)
         {
-            voiceSource.PlayOneShot(clips[index]);
+            voiceSource.Stop();          //cut any bark still playing so two voices never overlap
+            voiceSource.clip = clips[index];
+            voiceSource.Play();
         }
     }
 }
