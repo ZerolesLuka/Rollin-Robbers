@@ -13,18 +13,20 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float noiseThreshold;
     [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
     [SerializeField] private float catchRange = 2f;
-    [SerializeField] private float chaseSenseRange = 5f;
-    [SerializeField] private float noiseSpeedThreshold = 5f;
-    [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
-    [SerializeField] private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
+    private float chaseSenseRange = 5f;
+    private float noiseSpeedThreshold = 5f;
+    private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
+    private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
     private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
     private float searchTimer;//how long guard searches
     private Player chaseTarget;//last seen player
     private Vector3 lastKnownPosition; //playerpos
+    private int asleepChances; //how many times the guard relaxes before he perma suspicious
+    private int asleepChancesMax = 3;
 
-    [SerializeField] private NavMeshAgent agent; //guard
-    [SerializeField] private Transform[] waypoints; //guard patrol
+    private NavMeshAgent agent; //guard
+    private Transform[] waypoints; //guard patrol
     [SerializeField] private float reachDistance = 0.5f; //distance of which the guard consider it has reached waypoint
 
     [SerializeField] private float sightRange = 10f; //howfarsee
@@ -39,7 +41,8 @@ public class GuardPatrol : NetworkBehaviour
 
     public override void Spawned()
     {
-        if (!HasStateAuthority) 
+        agent = GetComponent<NavMeshAgent>(); //grab it from our own GameObject so it's never null 
+        if (!HasStateAuthority)
         {
             agent.enabled = false;
             return;
@@ -70,21 +73,44 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     noiseAccumulator = Mathf.Max(0f, noiseAccumulator - noiseDrainRate * Runner.DeltaTime);
                 }
-                
+                break;
+            case GuardState.Relaxed:
+                //fetch snack/water mechanism randomness
+
+
+
+
                 break;
             case GuardState.Suspicious:
-                suspicionTimer += Runner.DeltaTime;
-                if (HearsNoise() && suspicionTimer >= alertConfirmTime)   // still noisy AND he's had a beat
+                if (HearsNoise())
                 {
-                    Debug.Log("Guard: Who's There?");
-                    ChangeState(GuardState.Searching);
+                    suspicionTimer += Runner.DeltaTime;
+                    if(suspicionTimer > alertConfirmTime)
+                    {
+                        Debug.Log("Guard searching");
+                        ChangeState(GuardState.Searching);
+                    }
                 }
-                else if (suspicionTimer >= suspiciousDuration)            // quiet long enough -> false alarm
+                else
                 {
-                    Debug.Log("Guard: False Alarm.");
-                    ChangeState(GuardState.Asleep);
+                    suspicionTimer -= Runner.DeltaTime;
+                    if(suspicionTimer <= 0f)
+                    {
+                        asleepChances++;
+                        if (asleepChances >= asleepChancesMax)
+                        {
+                            Debug.Log("Guard : False Alarm");
+                            ChangeState(GuardState.Asleep);
+                        }
+                        else
+                        {
+                            Debug.Log("Guard Mild Alerted");
+                            ChangeState(GuardState.Relaxed);
+                        }
+                    }
+
                 }
-                break;  
+                    break;  
             case GuardState.Searching:
                 //Move
                 if (!agent.pathPending && agent.remainingDistance <= reachDistance) //if theres no path pending and we got to our destination
@@ -139,8 +165,7 @@ public class GuardPatrol : NetworkBehaviour
                 break;
             case GuardState.Caught:
                 chaseTarget.RPC_GetCaught();
-                ChangeState(GuardState.Asleep);
-
+                ChangeState(GuardState.Relaxed);
                 break;
 
         }
@@ -160,7 +185,7 @@ public class GuardPatrol : NetworkBehaviour
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
                 break;
             case GuardState.Suspicious:
-                suspicionTimer = 0f; //fresh "huh?" buffer every time he gets suspicious
+                suspicionTimer = alertConfirmTime * 0.5f;   // wakes up already half upset
                 break;
             case GuardState.Searching:
                 searchTimer = 0f;    //fresh search window every time, even when re-entering after losing a chase
@@ -177,10 +202,15 @@ public class GuardPatrol : NetworkBehaviour
 
         if(distance > sightRange) return false; //In sight?
         Vector3 dir = toTarget.normalized; //direction from guard to player normalized
-        if(Vector3.Angle(transform.forward, dir) > fovAngle * 0.5f) return false; //in the cone?
-        if (Physics.Raycast(eyePos, dir, distance, obstacleMask)) return false; //if there's an obstacle between the guard and the player, return false
 
-        return true; //if we passed all the checks, we can see the player
+        // cone is horizontal only — up/down stairs no longer kicks you out
+        Vector3 flatToTarget = Vector3.ProjectOnPlane(toTarget, Vector3.up);
+        Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        if (Vector3.Angle(flatForward, flatToTarget) > fovAngle * 0.5f) return false;
+
+        if (Physics.Raycast(eyePos, dir, distance, obstacleMask)) return false;
+
+        return true;
     }
     private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)
     {
