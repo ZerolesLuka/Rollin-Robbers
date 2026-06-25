@@ -1,7 +1,6 @@
 ﻿using UnityEngine;
 using Fusion;
 using UnityEngine.AI;
-using System.Runtime.CompilerServices;
 
 public class GuardPatrol : NetworkBehaviour
 {
@@ -47,6 +46,10 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private AudioClip[] caughtSounds;     //"GOTCHA!"
     [SerializeField] private AudioClip[] asleepSounds;     //"musta been nothin'" (false alarm / give up)
 
+    [SerializeField] private float searchNoiseReactThreshold = 1.5f;
+    [SerializeField] private float searchNoiseReactionCooldown = 2f;
+    private float searchNoiseReactionTimer;
+
     [SerializeField] private Vector3 spawnPosition;
 
     private float barkCooldown = 1.5f; //min seconds between barks
@@ -68,7 +71,7 @@ public class GuardPatrol : NetworkBehaviour
         }
         spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
-        noiseThreshold = Random.Range(3f, 6 ); //guard is triggered randomly (float overload, not whole-number ints)
+        noiseThreshold = Random.Range(3f, 6f); //random wake threshold so players cant memorize the exact amount
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
         agent.Warp(transform.position); 
     }
@@ -78,6 +81,10 @@ public class GuardPatrol : NetworkBehaviour
         if (barkCooldownTimer > 0f)
         {
             barkCooldownTimer -= Runner.DeltaTime;
+        }
+        if (searchNoiseReactionTimer > 0f)
+        {
+            searchNoiseReactionTimer -= Runner.DeltaTime;
         }
         if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
 
@@ -89,18 +96,17 @@ public class GuardPatrol : NetworkBehaviour
 
                 if(!agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    agent.ResetPath();
+                    agent.ResetPath(); //arrived at bed, stop
                 }
-                Debug.Log("SleepingNow");
                 break;
             case GuardState.Relaxed:
                 ListenForNoise();
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
-                if (relaxPatrolTimer <= 0f && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                if (relaxPatrolTimer <= 0f && waypoints != null && waypoints.Length > 0 && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //modulo that cycles patrols
-                    agent.SetDestination(waypoints[currentWaypoint].position); //cycles waypoints
-                    relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit, then move again
+                    currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //cycle to next waypoint, wraps with modulo
+                    agent.SetDestination(waypoints[currentWaypoint].position);
+                    relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit then move again
                 }
                 break;
             case GuardState.Suspicious:
@@ -133,48 +139,50 @@ public class GuardPatrol : NetworkBehaviour
                 }
                     break;  
             case GuardState.Searching:
-                //he heads to lastKnownPosition (set on entry) and scans there - no waypoint patrol, that's Relaxed's job
+                searchNoiseReactionTimer = 0f;
                 Player loudestVisiblePlayer = null;
-                float loudestNoiseHeard = -1f; //start below zero so he can still see a silent player
+                float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
+                float perceivedNoise = LoudestPerceivedNoise();
                 foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
                 {
-                    if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //if we can see this player and they are louder then the loudest noise
+                    if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
                     {
-
-                        loudestNoiseHeard = player.NoiseLevel; //loudest noise heard goes to that player
+                        loudestNoiseHeard = player.NoiseLevel;
                         loudestVisiblePlayer = player;
                     }
-                    /*if (LoudestPerceivedNoise() > 0.1f)
-                    {
-                        agent.SetDestination(lastKnownPosition);
-                        searchTimer = 0f;
-                    }*/
-
                 }
                 if (loudestVisiblePlayer != null)
                 {
                     chaseTarget = loudestVisiblePlayer;
                     ChangeState(GuardState.Chasing);
                 }
-                searchTimer += Runner.DeltaTime; //start the search timer
-                if(searchTimer >= searchDuration) //if we searched for too long, go back to sleep
+                if (perceivedNoise >= searchNoiseReactThreshold && searchNoiseReactionTimer <= 0f)
+                {
+                    agent.SetDestination(lastKnownPosition);
+                    searchTimer = 0f;
+                    searchNoiseReactionTimer = searchNoiseReactionCooldown;
+                }
+                searchTimer += Runner.DeltaTime; //count up the give up timer
+                if(searchTimer >= searchDuration) //searched too long, give up
                 {
                     Debug.Log("Guard: Must have been nothing...");
-                    ChangeState(GuardState.Asleep); //Should switch to relaxed instead of asleep, for now this
-
+                    ChangeState(GuardState.Asleep);
                 }
                 break;
             case GuardState.Chasing:
-
+                if (chaseTarget == null) //target left mid chase, fall back to searching
+                {
+                    ChangeState(GuardState.Searching);
+                    break;
+                }
                 Vector3 toTarget = chaseTarget.transform.position - transform.position;
-                toTarget.y = 0f; // ignore height difference
+                toTarget.y = 0f; //ignore height difference
                 float distanceToTarget = toTarget.magnitude;
 
-                if (CanSeePlayer(chaseTarget) || distanceToTarget < chaseSenseRange) //if we see our target or we are within chaserange
+                if (CanSeePlayer(chaseTarget) || distanceToTarget < chaseSenseRange) //see the target or close enough to sense them
                 {
                     lastKnownPosition = chaseTarget.transform.position;
                     agent.SetDestination(lastKnownPosition);
-                    Debug.Log("chasing now!");
                 }
                 if (distanceToTarget < catchRange)
                 {
@@ -188,7 +196,10 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Caught:
-                chaseTarget.RPC_GetCaught();
+                if (chaseTarget != null) //target might have left before we grabbed them
+                {
+                    chaseTarget.RPC_GetCaught();
+                }
                 ChangeState(GuardState.Relaxed);
                 break;
         }
@@ -266,12 +277,9 @@ public class GuardPatrol : NetworkBehaviour
     }
     private void ReturnToSleep()
     {
-        if (!IsAtSpawn())
+        if (!IsAtSpawn() && !agent.hasPath) //walk home only if not there and not already heading somewhere
         {
-            if (agent.destination != spawnPosition)
-            {
-                agent.SetDestination(spawnPosition);
-            }
+            agent.SetDestination(spawnPosition);
         }
     }
 
@@ -303,7 +311,7 @@ public class GuardPatrol : NetworkBehaviour
         foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
         {
             float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
-            float distanceFactor = Mathf.Clamp01((noiseRange - distanceToPlayer) / noiseRange);
+            float distanceFactor = Mathf.Clamp01((noiseRange - distanceToPlayer) / noiseRange); //either in range or not
             float audibleLoudness = Mathf.Max(0f, player.NoiseLevel - noiseSpeedThreshold); //below the floor (crouch) = silent
             float perceived = audibleLoudness * distanceFactor;                           //loud+close = big, loud+far = ~0
             if (perceived > loudest) //if noise we just picked up is louder than previous replace

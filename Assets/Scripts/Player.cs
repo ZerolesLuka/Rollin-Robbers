@@ -21,7 +21,7 @@ public class Player : NetworkBehaviour
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
-    [SerializeField] private float voiceNoiseScale = 10f;
+    [SerializeField] private float voiceNoiseScale = 16f;
     [SerializeField] private float maxStamina = 3f;        //seconds of sprint you get
     [SerializeField] private float staminaRegenRate = 1f;  //stamina back per second when not sprinting
     public float staminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
