@@ -9,7 +9,7 @@ public class HUD : MonoBehaviour
     {
         if (Player.LocalPlayer != null)
         {
-            staminaImage.fillAmount = Player.LocalPlayer.StaminaNormalized;
+            staminaImage.fillAmount = Player.LocalPlayer.staminaNormalized;
         }
     }
 

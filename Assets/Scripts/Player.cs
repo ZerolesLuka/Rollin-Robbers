@@ -24,7 +24,7 @@ public class Player : NetworkBehaviour
     [SerializeField] private float voiceNoiseScale = 10f;
     [SerializeField] private float maxStamina = 3f;        //seconds of sprint you get
     [SerializeField] private float staminaRegenRate = 1f;  //stamina back per second when not sprinting
-    public float StaminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
+    public float staminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
 
     private float stamina;                                 //current
     private bool exhausted;                                //hit empty -> must recover before sprinting again

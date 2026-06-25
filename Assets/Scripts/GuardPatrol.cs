@@ -47,12 +47,14 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private AudioClip[] caughtSounds;     //"GOTCHA!"
     [SerializeField] private AudioClip[] asleepSounds;     //"musta been nothin'" (false alarm / give up)
 
-    [SerializeField] private float barkCooldown = 1.5f; //min seconds between barks
+    [SerializeField] private Vector3 spawnPosition;
+
+    private float barkCooldown = 1.5f; //min seconds between barks
     private float barkCooldownTimer;
 
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
-    private float chaseSpeed = 8f;
+    private float chaseSpeed = 6.5f;
 
     private int currentWaypoint = 0; //used in modulo
 
@@ -64,6 +66,7 @@ public class GuardPatrol : NetworkBehaviour
             agent.enabled = false;
             return;
         }
+        spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
         noiseThreshold = Random.Range(3f, 6 ); //guard is triggered randomly (float overload, not whole-number ints)
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
@@ -82,6 +85,13 @@ public class GuardPatrol : NetworkBehaviour
         {
             case GuardState.Asleep:
                 ListenForNoise();
+                ReturnToSleep();
+
+                if(!agent.pathPending && agent.remainingDistance <= reachDistance)
+                {
+                    agent.ResetPath();
+                }
+                Debug.Log("SleepingNow");
                 break;
             case GuardState.Relaxed:
                 ListenForNoise();
@@ -130,9 +140,16 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //if we can see this player and they are louder then the loudest noise
                     {
+
                         loudestNoiseHeard = player.NoiseLevel; //loudest noise heard goes to that player
                         loudestVisiblePlayer = player;
                     }
+                    /*if (LoudestPerceivedNoise() > 0.1f)
+                    {
+                        agent.SetDestination(lastKnownPosition);
+                        searchTimer = 0f;
+                    }*/
+
                 }
                 if (loudestVisiblePlayer != null)
                 {
@@ -144,9 +161,11 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     Debug.Log("Guard: Must have been nothing...");
                     ChangeState(GuardState.Asleep); //Should switch to relaxed instead of asleep, for now this
+
                 }
                 break;
             case GuardState.Chasing:
+
                 Vector3 toTarget = chaseTarget.transform.position - transform.position;
                 toTarget.y = 0f; // ignore height difference
                 float distanceToTarget = toTarget.magnitude;
@@ -155,6 +174,7 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     lastKnownPosition = chaseTarget.transform.position;
                     agent.SetDestination(lastKnownPosition);
+                    Debug.Log("chasing now!");
                 }
                 if (distanceToTarget < catchRange)
                 {
@@ -170,7 +190,6 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Caught:
                 chaseTarget.RPC_GetCaught();
                 ChangeState(GuardState.Relaxed);
-
                 break;
         }
         transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
@@ -240,6 +259,20 @@ public class GuardPatrol : NetworkBehaviour
     private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)
     {
         return LoudestPerceivedNoise() > 0f;
+    }
+    private bool IsAtSpawn()
+    {
+        return Vector3.Distance(transform.position, spawnPosition) < 0.3f;
+    }
+    private void ReturnToSleep()
+    {
+        if (!IsAtSpawn())
+        {
+            if (agent.destination != spawnPosition)
+            {
+                agent.SetDestination(spawnPosition);
+            }
+        }
     }
 
     private void OnDrawGizmos() //used to draw lines fro the guards view, honestly had no idea how to do this so watched some videos and used AI

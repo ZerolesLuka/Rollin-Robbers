@@ -180,7 +180,7 @@ NavMeshAgent:
   m_GameObject: {fileID: 2371217306020104725}
   m_Enabled: 1
   m_AgentTypeID: 0
-  m_Radius: 0.5
+  m_Radius: 1
   m_Speed: 40
   m_Acceleration: 30
   avoidancePriority: 50
@@ -243,6 +243,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 93ed2d64f785d5a4e9df5053ba652052, type: 3}
   - {fileID: 8300000, guid: 2b50c06a003df8b48bec860f528afbcf, type: 3}
   - {fileID: 8300000, guid: f78cfea7950667f479ce068c35a95870, type: 3}
+  spawnPosition: {x: 0, y: 0, z: 0}
 --- !u!114 &9012763324479585337
 MonoBehaviour:
   m_ObjectHideFlags: 0
