@@ -97,6 +97,7 @@ public class GuardPatrol : NetworkBehaviour
         switch(State)
         {
             case GuardState.Asleep:
+                Debug.Log("State = Asleep");
                 ListenForNoise();
                 ReturnToSleep();
 
@@ -106,6 +107,7 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Relaxed:
+                Debug.Log("State = Relaxed");
                 ListenForNoise();
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
                 if (relaxPatrolTimer <= 0f && waypoints != null && waypoints.Length > 0 && !agent.pathPending && agent.remainingDistance <= reachDistance)
@@ -116,12 +118,12 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Suspicious:
+                Debug.Log("State = Suspicious");
                 if (HearsNoise())
                 {
                     suspicionTimer += Runner.DeltaTime;
                     if(suspicionTimer > alertConfirmTime)
                     {
-                        Debug.Log("Guard searching");
                         ChangeState(GuardState.Searching);
                     }
                 }
@@ -133,18 +135,19 @@ public class GuardPatrol : NetworkBehaviour
                         asleepChances++;
                         if (asleepChances < asleepChancesMax)
                         {
-                            Debug.Log("Guard : False Alarm");
+
                             ChangeState(GuardState.Asleep);
                         }
                         else
                         {
-                            Debug.Log("Guard Mild Alerted");
+
                             ChangeState(GuardState.Relaxed);
                         }
                     }
                 }
                     break;  
             case GuardState.Searching:
+                Debug.Log("State = Searching");
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
                 float perceivedNoise = LoudestPerceivedNoise();
@@ -183,13 +186,14 @@ public class GuardPatrol : NetworkBehaviour
                         }
                         else
                         {
-                            PickRandomSearchPoint();
+                            PickRandomSearchPoint(transform.position);
                             Debug.Log("Picked tracking point");
                         }
                     }
                 }
                 break;
             case GuardState.Chasing:
+                Debug.Log("State = Chasing");
                 if (chaseTarget == null) //target left mid chase, fall back to searching
                 {
                     ChangeState(GuardState.Searching);
@@ -408,10 +412,10 @@ public class GuardPatrol : NetworkBehaviour
             voiceSource.Play(); //play sound
         }
     }
-    private void PickRandomSearchPoint()
+    private void PickRandomSearchPoint(Vector3 searchCenter)
     {
         Vector2 randomCircle = Random.insideUnitCircle * searchSweepRadius;
-        Vector3 randomPosition = lastKnownPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
+        Vector3 randomPosition = searchCenter + new Vector3(randomCircle.x, 0f, randomCircle.y);
 
         if(NavMesh.SamplePosition(randomPosition, out NavMeshHit hit, searchSweepRadius, NavMesh.AllAreas))
         {

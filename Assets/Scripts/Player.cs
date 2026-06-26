@@ -21,9 +21,13 @@ public class Player : NetworkBehaviour
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
-    [SerializeField] private float voiceNoiseScale = 16f;
+    [SerializeField] private float voiceNoiseScale = 16f; //higher = more sensitive guard
     [SerializeField] private float maxStamina = 3f;        //seconds of sprint you get
     [SerializeField] private float staminaRegenRate = 1f;  //stamina back per second when not sprinting
+    [SerializeField] private float jumpHeight = 1.5f; //jump
+
+    [SerializeField] private float fallGravityMultiplier = 2.2f;
+    [SerializeField] private float lowJumpGravityMultiplier = 1.6f;
     public float staminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
 
     private float stamina;                                 //current
@@ -86,11 +90,11 @@ public class Player : NetworkBehaviour
         PlayerGravity();
         if (GetInput(out NetworkInputData networkInputData))
         {
-            HandleMovement(networkInputData.movementInput, networkInputData.sprintInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
+            HandleMovement(networkInputData.movementInput, networkInputData.sprintInput, networkInputData.jumpInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
         }
     }
-    private void HandleMovement(Vector2 inputVector, bool sprinting)
+    private void HandleMovement(Vector2 inputVector, bool sprinting, bool jumpInput)
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
@@ -124,6 +128,11 @@ public class Player : NetworkBehaviour
         }
 
         float moveDistance = speed * Runner.DeltaTime;
+        if (jumpInput && characterController.isGrounded && !isCrouching) //if jumping and we on da floor and not crouching
+         {
+             verticalVelocity = Mathf.Sqrt(jumpHeight * 2f * gravity);
+             Debug.Log("jump");
+         }
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
 
         //noise comes AFTER speed is finalized
@@ -174,12 +183,18 @@ public class Player : NetworkBehaviour
     }
     private void PlayerGravity()
     {
-        if (characterController.isGrounded && verticalVelocity < 0) //if player is on the ground and velocity is negative, reset velocity to a small negative value
+        float gravityMultiplier = 1f;
+
+        if (verticalVelocity < 0f)
         {
-            verticalVelocity = -2f; //small negative keeps player grounded
+            gravityMultiplier = fallGravityMultiplier;
+        }
+        else if (verticalVelocity > 0f)
+        {
+            gravityMultiplier = lowJumpGravityMultiplier;
         }
 
-        verticalVelocity -= gravity * Runner.DeltaTime; ; // velocity grows more negative each frame
+        verticalVelocity -= gravity * gravityMultiplier * Runner.DeltaTime;
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
     }
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
