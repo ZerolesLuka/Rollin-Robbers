@@ -21,7 +21,6 @@ public class GuardPatrol : NetworkBehaviour
     private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
     private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
-    private float searchTimer;//how long guard searches
     private Player chaseTarget;//last seen player
     private Vector3 lastKnownPosition; //playerpos
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
@@ -45,6 +44,13 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private AudioClip[] chasingSounds;    //"HEY! GET OUT!"
     [SerializeField] private AudioClip[] caughtSounds;     //"GOTCHA!"
     [SerializeField] private AudioClip[] asleepSounds;     //"musta been nothin'" (false alarm / give up)
+
+    [SerializeField] private float searchSweepRadius = 6f;
+    [SerializeField] private int maximumSearchSweepPoints = 3;
+    [SerializeField] private float searchSweepWaitTime = 1.25f;
+
+    private int searchSweepPointsChecked;
+    private float searchSweepWaitTimer;
 
     [SerializeField] private float searchNoiseReactThreshold = 1.5f;
     [SerializeField] private float searchNoiseReactionCooldown = 2f;
@@ -139,7 +145,6 @@ public class GuardPatrol : NetworkBehaviour
                 }
                     break;  
             case GuardState.Searching:
-                searchNoiseReactionTimer = 0f;
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
                 float perceivedNoise = LoudestPerceivedNoise();
@@ -159,14 +164,29 @@ public class GuardPatrol : NetworkBehaviour
                 if (perceivedNoise >= searchNoiseReactThreshold && searchNoiseReactionTimer <= 0f)
                 {
                     agent.SetDestination(lastKnownPosition);
-                    searchTimer = 0f;
                     searchNoiseReactionTimer = searchNoiseReactionCooldown;
                 }
-                searchTimer += Runner.DeltaTime; //count up the give up timer
-                if(searchTimer >= searchDuration) //searched too long, give up
+
+                if (!agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    Debug.Log("Guard: Must have been nothing...");
-                    ChangeState(GuardState.Asleep);
+                    searchSweepWaitTimer += Runner.DeltaTime;
+
+                    if (searchSweepWaitTimer >= searchSweepWaitTime)
+                    {
+                        searchSweepWaitTimer = 0f;
+                        searchSweepPointsChecked++;
+
+                        if (searchSweepPointsChecked >= maximumSearchSweepPoints)
+                        {
+                            Debug.Log("Guard: Must have been nothing...");
+                            ChangeState(GuardState.Relaxed);
+                        }
+                        else
+                        {
+                            PickRandomSearchPoint();
+                            Debug.Log("Picked tracking point");
+                        }
+                    }
                 }
                 break;
             case GuardState.Chasing:
@@ -223,19 +243,24 @@ public class GuardPatrol : NetworkBehaviour
 
                 break;
             case GuardState.Relaxed:
-                agent.speed = relaxSpeed;
+                agent.speed = relaxSpeed; 
                 noiseAccumulator = 0f;
                 quietTimer = 0f;
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Suspicious:
+                searchSweepWaitTimer = 0f;
+                searchSweepPointsChecked = 0;
                 suspicionTimer = alertConfirmTime * 0.5f;   // wakes up already half upset
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Searching:
+
                 agent.speed = searchSpeed;
                 agent.SetDestination(lastKnownPosition);
-                searchTimer = 0f;    //fresh search window every time, even when re-entering after losing a chase
+                searchNoiseReactionTimer = 0f;
+                searchSweepWaitTimer = 0f;
+                searchSweepPointsChecked = 0;
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Chasing:
@@ -376,11 +401,21 @@ public class GuardPatrol : NetworkBehaviour
     private void RPC_PlayStateSound(int index, GuardState state)
     {
         AudioClip[] clips = ClipsFor(state); //clips from the state being active
-        if (voiceSource != null && clips != null && index >= 0 && index < clips.Length)
+        if (voiceSource != null && clips != null && index >= 0 && index < clips.Length) //if voice not nll and we have clips with an index of clips, 
         {
             voiceSource.Stop();          //cut any bark still playing so two voices never overlap
-            voiceSource.clip = clips[index];
-            voiceSource.Play();
+            voiceSource.clip = clips[index]; //choose a clip to play based off index
+            voiceSource.Play(); //play sound
+        }
+    }
+    private void PickRandomSearchPoint()
+    {
+        Vector2 randomCircle = Random.insideUnitCircle * searchSweepRadius;
+        Vector3 randomPosition = lastKnownPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
+
+        if(NavMesh.SamplePosition(randomPosition, out NavMeshHit hit, searchSweepRadius, NavMesh.AllAreas))
+        {
+            agent.SetDestination(hit.position);
         }
     }
 }
