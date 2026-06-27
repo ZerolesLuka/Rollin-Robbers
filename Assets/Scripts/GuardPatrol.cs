@@ -155,8 +155,8 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
                     {
-                        loudestNoiseHeard = player.NoiseLevel;
-                        loudestVisiblePlayer = player;
+                        loudestNoiseHeard = player.NoiseLevel;//set only if we hear a noise louder then the previous loudest noise
+                        loudestVisiblePlayer = player; 
                     }
                 }
                 if (loudestVisiblePlayer != null)
@@ -417,9 +417,9 @@ public class GuardPatrol : NetworkBehaviour
         Vector2 randomCircle = Random.insideUnitCircle * searchSweepRadius;
         Vector3 randomPosition = searchCenter + new Vector3(randomCircle.x, 0f, randomCircle.y);
 
-        if(NavMesh.SamplePosition(randomPosition, out NavMeshHit hit, searchSweepRadius, NavMesh.AllAreas))
+        if(NavMesh.SamplePosition(randomPosition, out NavMeshHit hit, searchSweepRadius, NavMesh.AllAreas)) // if that position hits the mesh
         {
-            agent.SetDestination(hit.position);
+            agent.SetDestination(hit.position); //position the guard chose on the random circle
         }
     }
 }
