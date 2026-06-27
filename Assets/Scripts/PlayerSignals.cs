@@ -27,6 +27,18 @@ public class PlayerSignals : NetworkBehaviour
         {
             RPC_ShowSignal(3);
         }
+        else if (player.playerInputActions.Player.Signal4.WasPressedThisFrame()) //point
+        {
+            RPC_ShowSignal(4);
+        }
+        else if (player.playerInputActions.Player.Signal5.WasPressedThisFrame()) //stop
+        {
+            RPC_ShowSignal(5);
+        }
+        else if (player.playerInputActions.Player.Signal6.WasPressedThisFrame()) //middle finger
+        {
+            RPC_ShowSignal(6);
+        }
     }
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)] //I press it, everyone runs this
     private void RPC_ShowSignal(int id)
