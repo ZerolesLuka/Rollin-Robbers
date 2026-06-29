@@ -21,6 +21,7 @@ public class GuardPatrol : NetworkBehaviour
     private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
     private float noiseAccumulator;                 
     private float suspicionTimer; //how long the guard is sus after in suspicion state
+    private Player[] cachedPlayers; //cached once at spawn instead of searching every tick
     private Player chaseTarget;//last seen player
     private Vector3 lastKnownPosition; //playerpos
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
@@ -75,6 +76,7 @@ public class GuardPatrol : NetworkBehaviour
             agent.enabled = false;
             return;
         }
+        cachedPlayers = FindObjectsByType<Player>(FindObjectsSortMode.None);
         spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
         noiseThreshold = Random.Range(3f, 6f); //random wake threshold so players cant memorize the exact amount
@@ -97,7 +99,6 @@ public class GuardPatrol : NetworkBehaviour
         switch(State)
         {
             case GuardState.Asleep:
-                Debug.Log("State = Asleep");
                 ListenForNoise();
                 ReturnToSleep();
 
@@ -107,7 +108,6 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Relaxed:
-                Debug.Log("State = Relaxed");
                 ListenForNoise();
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
                 if (relaxPatrolTimer <= 0f && waypoints != null && waypoints.Length > 0 && !agent.pathPending && agent.remainingDistance <= reachDistance)
@@ -118,7 +118,6 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Suspicious:
-                Debug.Log("State = Suspicious");
                 if (HearsNoise())
                 {
                     suspicionTimer += Runner.DeltaTime;
@@ -147,11 +146,10 @@ public class GuardPatrol : NetworkBehaviour
                 }
                     break;  
             case GuardState.Searching:
-                Debug.Log("State = Searching");
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
                 float perceivedNoise = LoudestPerceivedNoise();
-                foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
+                foreach (Player player in cachedPlayers)
                 {
                     if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
                     {
@@ -193,7 +191,6 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Chasing:
-                Debug.Log("State = Chasing");
                 if (chaseTarget == null) //target left mid chase, fall back to searching
                 {
                     ChangeState(GuardState.Searching);
@@ -337,7 +334,7 @@ public class GuardPatrol : NetworkBehaviour
     private float LoudestPerceivedNoise() //strongest noise he perceives, factoring loudness AND distance
     {
         float loudest = 0f;
-        foreach (Player player in FindObjectsByType<Player>(FindObjectsSortMode.None))
+        foreach (Player player in cachedPlayers)
         {
             float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
             float distanceFactor = Mathf.Clamp01((noiseRange - distanceToPlayer) / noiseRange); //either in range or not

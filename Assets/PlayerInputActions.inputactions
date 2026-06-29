@@ -77,6 +77,33 @@
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
+                },
+                {
+                    "name": "Signal4",
+                    "type": "Button",
+                    "id": "2d24e50a-8496-4c72-9382-5977c2f6b6c8",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Signal5",
+                    "type": "Button",
+                    "id": "d419a392-ee57-447f-b2ef-22bbb04cc1c2",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "Signal6",
+                    "type": "Button",
+                    "id": "3136383b-6e22-46b2-b54b-302c84441fcb",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
                 }
             ],
             "bindings": [
@@ -198,6 +225,39 @@
                     "processors": "",
                     "groups": "",
                     "action": "Signal3",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "3a68848b-7168-45b6-bfd3-b13e8c49a9a7",
+                    "path": "<Keyboard>/4",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Signal4",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "6eec937d-6c45-4f74-a5e4-c4608733ddde",
+                    "path": "<Keyboard>/5",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Signal5",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "a7dbe042-c3b7-4cc8-9abc-6ebc2acc94c2",
+                    "path": "<Keyboard>/6",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Signal6",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

@@ -163,6 +163,33 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Signal4"",
+                    ""type"": ""Button"",
+                    ""id"": ""2d24e50a-8496-4c72-9382-5977c2f6b6c8"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Signal5"",
+                    ""type"": ""Button"",
+                    ""id"": ""d419a392-ee57-447f-b2ef-22bbb04cc1c2"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Signal6"",
+                    ""type"": ""Button"",
+                    ""id"": ""3136383b-6e22-46b2-b54b-302c84441fcb"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -284,6 +311,39 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""Signal3"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""3a68848b-7168-45b6-bfd3-b13e8c49a9a7"",
+                    ""path"": ""<Keyboard>/4"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Signal4"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""6eec937d-6c45-4f74-a5e4-c4608733ddde"",
+                    ""path"": ""<Keyboard>/5"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Signal5"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""a7dbe042-c3b7-4cc8-9abc-6ebc2acc94c2"",
+                    ""path"": ""<Keyboard>/6"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Signal6"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 },
@@ -890,6 +950,9 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
         m_Player_Signal1 = m_Player.FindAction("Signal1", throwIfNotFound: true);
         m_Player_Signal2 = m_Player.FindAction("Signal2", throwIfNotFound: true);
         m_Player_Signal3 = m_Player.FindAction("Signal3", throwIfNotFound: true);
+        m_Player_Signal4 = m_Player.FindAction("Signal4", throwIfNotFound: true);
+        m_Player_Signal5 = m_Player.FindAction("Signal5", throwIfNotFound: true);
+        m_Player_Signal6 = m_Player.FindAction("Signal6", throwIfNotFound: true);
         // UI
         m_UI = asset.FindActionMap("UI", throwIfNotFound: true);
         m_UI_Navigate = m_UI.FindAction("Navigate", throwIfNotFound: true);
@@ -991,6 +1054,9 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Signal1;
     private readonly InputAction m_Player_Signal2;
     private readonly InputAction m_Player_Signal3;
+    private readonly InputAction m_Player_Signal4;
+    private readonly InputAction m_Player_Signal5;
+    private readonly InputAction m_Player_Signal6;
     /// <summary>
     /// Provides access to input actions defined in input action map "Player".
     /// </summary>
@@ -1034,6 +1100,18 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/Signal3".
         /// </summary>
         public InputAction @Signal3 => m_Wrapper.m_Player_Signal3;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Signal4".
+        /// </summary>
+        public InputAction @Signal4 => m_Wrapper.m_Player_Signal4;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Signal5".
+        /// </summary>
+        public InputAction @Signal5 => m_Wrapper.m_Player_Signal5;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/Signal6".
+        /// </summary>
+        public InputAction @Signal6 => m_Wrapper.m_Player_Signal6;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -1084,6 +1162,15 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
             @Signal3.started += instance.OnSignal3;
             @Signal3.performed += instance.OnSignal3;
             @Signal3.canceled += instance.OnSignal3;
+            @Signal4.started += instance.OnSignal4;
+            @Signal4.performed += instance.OnSignal4;
+            @Signal4.canceled += instance.OnSignal4;
+            @Signal5.started += instance.OnSignal5;
+            @Signal5.performed += instance.OnSignal5;
+            @Signal5.canceled += instance.OnSignal5;
+            @Signal6.started += instance.OnSignal6;
+            @Signal6.performed += instance.OnSignal6;
+            @Signal6.canceled += instance.OnSignal6;
         }
 
         /// <summary>
@@ -1119,6 +1206,15 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
             @Signal3.started -= instance.OnSignal3;
             @Signal3.performed -= instance.OnSignal3;
             @Signal3.canceled -= instance.OnSignal3;
+            @Signal4.started -= instance.OnSignal4;
+            @Signal4.performed -= instance.OnSignal4;
+            @Signal4.canceled -= instance.OnSignal4;
+            @Signal5.started -= instance.OnSignal5;
+            @Signal5.performed -= instance.OnSignal5;
+            @Signal5.canceled -= instance.OnSignal5;
+            @Signal6.started -= instance.OnSignal6;
+            @Signal6.performed -= instance.OnSignal6;
+            @Signal6.canceled -= instance.OnSignal6;
         }
 
         /// <summary>
@@ -1475,6 +1571,27 @@ public partial class @PlayerInputActions: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnSignal3(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Signal4" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnSignal4(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Signal5" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnSignal5(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Signal6" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnSignal6(InputAction.CallbackContext context);
     }
     /// <summary>
     /// Interface to implement callback methods for all input action callbacks associated with input actions defined by "UI" which allows adding and removing callbacks.
