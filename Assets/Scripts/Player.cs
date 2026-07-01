@@ -43,14 +43,13 @@ public class Player : NetworkBehaviour
     private float crouchingHeight = 1f;
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
 
-    private Vector3 respawnPosition;
+    [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
 
     public override void Spawned()
     {
         Instance = this;
         characterController.enabled = false;
         characterController.enabled = true;
-        respawnPosition = transform.position;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
         stamina = maxStamina;
@@ -89,6 +88,7 @@ public class Player : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
+        if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore
         PlayerGravity();
         if (GetInput(out NetworkInputData networkInputData))
         {
@@ -202,9 +202,8 @@ public class Player : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
     {
-        characterController.enabled = false;   // CC overrides transform.position, so toggle it off to teleport
-        transform.position = respawnPosition;  // this machine's own spawn point, captured in Spawned()
-        characterController.enabled = true;     // back on, the player's NetworkTransform replicates the new position out
+        IsEliminated = true;                 // out for the run - spectator handoff + visuals come later in Unity
+        characterController.enabled = false; // freeze them in place, no more moving or colliding
     }
 }
 

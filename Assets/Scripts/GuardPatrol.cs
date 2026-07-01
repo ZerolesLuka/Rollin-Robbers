@@ -151,6 +151,7 @@ public class GuardPatrol : NetworkBehaviour
                 float perceivedNoise = LoudestPerceivedNoise();
                 foreach (Player player in cachedPlayers)
                 {
+                    if (player.IsEliminated) continue; //don't hunt players who are already out
                     if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
                     {
                         loudestNoiseHeard = player.NoiseLevel;//set only if we hear a noise louder then the previous loudest noise
@@ -220,6 +221,7 @@ public class GuardPatrol : NetworkBehaviour
                 if (chaseTarget != null) //target might have left before we grabbed them
                 {
                     chaseTarget.RPC_GetCaught();
+                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(); //tell the run tracker one player is out
                 }
                 ChangeState(GuardState.Relaxed);
                 break;
@@ -336,6 +338,7 @@ public class GuardPatrol : NetworkBehaviour
         float loudest = 0f;
         foreach (Player player in cachedPlayers)
         {
+            if (player.IsEliminated) continue; //eliminated players make no noise the guard cares about
             float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
             float distanceFactor = Mathf.Clamp01((noiseRange - distanceToPlayer) / noiseRange); //either in range or not
             float audibleLoudness = Mathf.Max(0f, player.NoiseLevel - noiseSpeedThreshold); //below the floor (crouch) = silent
