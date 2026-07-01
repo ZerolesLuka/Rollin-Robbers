@@ -55,6 +55,8 @@ public class Player : NetworkBehaviour
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
         stamina = maxStamina;
 
+        if (RunManager.Instance != null) RunManager.Instance.RegisterPlayer();
+
         if (HasInputAuthority) //if our player
         {
             LocalPlayer = this; //set the local player to this instance of the player script

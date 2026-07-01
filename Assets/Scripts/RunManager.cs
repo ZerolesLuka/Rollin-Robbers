@@ -8,7 +8,7 @@ public class RunManager : NetworkBehaviour
     public enum RunState { InProgress, Success, Caught }
 
     [Networked] public RunState State { get; private set; }
-    [Networked] private int playersAlive { get; set; }
+    [Networked] public int playersAlive { get; set; }
 
     public override void Spawned()
     {

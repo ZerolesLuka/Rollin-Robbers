@@ -17,6 +17,8 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private Transform guardSpawn;
     [SerializeField] private Transform[] guardWaypoints;
 
+    [SerializeField] private NetworkObject runManagerPrefab;
+
     private string roomCode = ""; //the code players type in to join the same game, acts as the session name
 
     public void OnConnectedToServer(NetworkRunner runner)
@@ -153,12 +155,13 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
         if(networkRunner.IsSharedModeMasterClient) //only spawn the guard if we're the host, since its shared mode, we all run the same code but only the host should spawn things
         {
-            networkRunner.Spawn(guardPrefab, //since this is not .LocalPlayer we have to specifiy the rotation and position, it is also 
-                guardSpawn.position, //spawns where I want
+            networkRunner.Spawn(guardPrefab,
+                guardSpawn.position,
                 Quaternion.identity,
                 PlayerRef.None,
                 (runner, obj) => obj.GetComponent<GuardPatrol>().SetWaypoints(guardWaypoints)
                 ); //spawn the guard at the guard spawn point
+            networkRunner.Spawn(runManagerPrefab, Vector3.zero, Quaternion.identity, PlayerRef.None); //spawn the run manager, only one needed per session
         }
     }
     //
