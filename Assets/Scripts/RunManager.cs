@@ -29,6 +29,12 @@ public class RunManager : NetworkBehaviour
         if (playersAlive <= 0) ChangeState(RunState.Caught);
     }
 
+    public void OnPlayerLeft()
+    {
+        if (!HasStateAuthority) return;
+        playersAlive = Mathf.Max(0, playersAlive - 1); //a disconnect isn't a catch, just drop them from the count so the run can still resolve for the rest
+    }
+
     public void OnLootExtracted()
     {
         if (!HasStateAuthority || State != RunState.InProgress) return;

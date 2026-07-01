@@ -85,7 +85,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
     {
-       
+        if (RunManager.Instance != null) RunManager.Instance.OnPlayerLeft(); //keep the alive count honest when someone disconnects
     }
 
     public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress)
