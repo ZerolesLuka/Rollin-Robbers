@@ -66,6 +66,14 @@ public class GuardPatrol : NetworkBehaviour
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 6.5f;
 
+    [Header("Anger")]
+    [SerializeField] private float angerMax = 100f;
+    [SerializeField] private float angerPerAlert = 20f;           //bump each time he escalates to a fresh alert
+    [SerializeField] private float angerChaseRate = 12f;          //builds per second while actively chasing
+    [SerializeField] private float angerDecayRate = 5f;           //cools per second while calm
+    [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates instead of warns
+    [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
+
     private int currentWaypoint = 0; //used in modulo
 
     public override void Spawned()
@@ -95,6 +103,8 @@ public class GuardPatrol : NetworkBehaviour
             searchNoiseReactionTimer -= Runner.DeltaTime;
         }
         if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
+
+        TickAnger(); //rise while chasing, cool while calm
 
         switch(State)
         {
@@ -220,8 +230,11 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Caught:
                 if (chaseTarget != null) //target might have left before we grabbed them
                 {
-                    chaseTarget.RPC_GetCaught();
-                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(); //tell the run tracker one player is out
+                    if (Anger >= angerEliminateThreshold) //only eliminates once he's angry enough, otherwise it's just a warning
+                    {
+                        chaseTarget.RPC_GetCaught();
+                        if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(); //tell the run tracker one player is out
+                    }
                 }
                 ChangeState(GuardState.Relaxed);
                 break;
@@ -255,6 +268,7 @@ public class GuardPatrol : NetworkBehaviour
                 searchSweepWaitTimer = 0f;
                 searchSweepPointsChecked = 0;
                 suspicionTimer = alertConfirmTime * 0.5f;   // wakes up already half upset
+                Anger = Mathf.Min(angerMax, Anger + angerPerAlert); //every fresh alert winds him up
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Searching:
@@ -268,12 +282,21 @@ public class GuardPatrol : NetworkBehaviour
                 break;
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;
+                Anger = Mathf.Min(angerMax, Anger + angerPerAlert); //spotting a player really sets him off
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Caught:
                 PlayStateSound(newState); //bark whenever he changes state
                 break; 
         }
+    }
+
+    private void TickAnger() //anger builds while he's actively chasing and slowly cools while he's calm
+    {
+        if (State == GuardState.Chasing)
+            Anger = Mathf.Min(angerMax, Anger + angerChaseRate * Runner.DeltaTime);
+        else if (State == GuardState.Asleep || State == GuardState.Relaxed)
+            Anger = Mathf.Max(0f, Anger - angerDecayRate * Runner.DeltaTime);
     }
 
     private bool CanSeePlayer(Player target)//bool with the parameter of a player, passed in by whoever calling

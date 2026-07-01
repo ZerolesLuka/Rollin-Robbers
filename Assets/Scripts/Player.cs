@@ -7,8 +7,6 @@ using UnityEngine.UI;
 
 public class Player : NetworkBehaviour
 {
-    public Player Instance { get; private set; }
-
     public PlayerInputActions playerInputActions;
     public static Player LocalPlayer;
     [Networked] public float NoiseLevel { get; private set; }
@@ -47,7 +45,6 @@ public class Player : NetworkBehaviour
 
     public override void Spawned()
     {
-        Instance = this;
         characterController.enabled = false;
         characterController.enabled = true;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera

@@ -1,6 +1,5 @@
 using Fusion;
 using UnityEngine;
-using static Unity.Collections.Unicode;
 using System.Threading.Tasks;
 using System;
 using Fusion.Sockets;
