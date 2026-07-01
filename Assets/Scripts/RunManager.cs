@@ -8,6 +8,7 @@ public class RunManager : NetworkBehaviour
     public enum RunState { InProgress, Success, Caught }
 
     [Networked] public RunState State { get; private set; }
+    [Networked] private int playersAlive { get; set; }
 
     public override void Spawned()
     {
@@ -15,10 +16,17 @@ public class RunManager : NetworkBehaviour
         State = RunState.InProgress;
     }
 
+    public void RegisterPlayer()
+    {
+        if (!HasStateAuthority) return;
+        playersAlive++;
+    }
+
     public void OnPlayerCaught()
     {
         if (!HasStateAuthority || State != RunState.InProgress) return;
-        ChangeState(RunState.Caught);
+        playersAlive--;
+        if (playersAlive <= 0) ChangeState(RunState.Caught);
     }
 
     public void OnLootExtracted()
