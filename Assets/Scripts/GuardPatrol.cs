@@ -19,9 +19,8 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
     private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
-    private float noiseAccumulator;                 
+    private float noiseAccumulator;
     private float suspicionTimer; //how long the guard is sus after in suspicion state
-    private Player[] cachedPlayers; //cached once at spawn instead of searching every tick
     private Player chaseTarget;//last seen player
     private Vector3 lastKnownPosition; //playerpos
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
@@ -84,7 +83,6 @@ public class GuardPatrol : NetworkBehaviour
             agent.enabled = false;
             return;
         }
-        cachedPlayers = FindObjectsByType<Player>(FindObjectsSortMode.None);
         spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
         noiseThreshold = Random.Range(3f, 6f); //random wake threshold so players cant memorize the exact amount
@@ -159,7 +157,7 @@ public class GuardPatrol : NetworkBehaviour
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
                 float perceivedNoise = LoudestPerceivedNoise();
-                foreach (Player player in cachedPlayers)
+                foreach (Player player in Player.ActivePlayers) //live list, so players who joined after the guard spawned still count
                 {
                     if (player.IsEliminated) continue; //don't hunt players who are already out
                     if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
@@ -359,7 +357,7 @@ public class GuardPatrol : NetworkBehaviour
     private float LoudestPerceivedNoise() //strongest noise he perceives, factoring loudness AND distance
     {
         float loudest = 0f;
-        foreach (Player player in cachedPlayers)
+        foreach (Player player in Player.ActivePlayers) //live list, so players who joined after the guard spawned still count
         {
             if (player.IsEliminated) continue; //eliminated players make no noise the guard cares about
             float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);

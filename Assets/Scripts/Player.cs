@@ -2,6 +2,7 @@ using Cinemachine;
 using Fusion;
 using UnityEngine;
 using System;
+using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -9,6 +10,7 @@ public class Player : NetworkBehaviour
 {
     public PlayerInputActions playerInputActions;
     public static Player LocalPlayer;
+    public static readonly List<Player> ActivePlayers = new List<Player>(); //everyone currently in the session, AIs read this instead of scanning the scene once and going stale
     [Networked] public float NoiseLevel { get; private set; }
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private Transform playerCamera; //simple camera ref
@@ -45,6 +47,7 @@ public class Player : NetworkBehaviour
 
     public override void Spawned()
     {
+        ActivePlayers.Add(this); //join the list the moment we exist so guards hear late joiners too
         characterController.enabled = false;
         characterController.enabled = true;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -195,6 +198,10 @@ public class Player : NetworkBehaviour
 
         verticalVelocity -= gravity * gravityMultiplier * Runner.DeltaTime;
         verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
+    }
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        ActivePlayers.Remove(this); //leave the list on disconnect so nobody iterates a destroyed player
     }
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
