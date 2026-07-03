@@ -65,7 +65,6 @@ public class GuardPatrol : NetworkBehaviour
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 6.5f;
 
-    [Header("Anger")]
     [SerializeField] private float angerMax = 100f;
     [SerializeField] private float angerPerAlert = 20f;           //bump each time he escalates to a fresh alert
     [SerializeField] private float angerChaseRate = 12f;          //builds per second while actively chasing

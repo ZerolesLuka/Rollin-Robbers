@@ -1,3 +1,4 @@
+using System.Collections;
 using Fusion;
 using UnityEngine;
 
@@ -9,6 +10,9 @@ public class RunManager : NetworkBehaviour
 
     [Networked] public RunState State { get; private set; }
     [Networked] public int playersAlive { get; set; }
+
+    public int totalLootValue; //make a list and then calculate maybe?
+    public int gatheredLootValue; //make a list and then calculate maybe?
 
     public override void Spawned()
     {
@@ -46,4 +50,24 @@ public class RunManager : NetworkBehaviour
         State = newState;
         Debug.Log($"Run ended: {newState}"); // TEMP: trigger end screen / return to lobby here
     }
+    public override void FixedUpdateNetwork()
+    {
+    switch(State)
+     {
+        case RunState.InProgress:
+            //Maybe start calculating loot grabbed, pass it on to success case
+
+         break;
+        case RunState.Caught:
+            //When all players die
+
+         break;
+        case RunState.Success:
+            //Players deliberately chose to leave the house
+            //Some sort of ranking? who did the best, total value collect / total house value
+
+         break;
+     }
+    }
+
 }
