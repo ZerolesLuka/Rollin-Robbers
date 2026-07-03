@@ -71082,6 +71082,7 @@ MonoBehaviour:
   - {fileID: 578799530}
   - {fileID: 838602046}
   - {fileID: 1894370996}
+  runManagerPrefab: {fileID: 1268990276334212518, guid: 7bad668e987d1a2498d1d5007cd2559e, type: 3}
 --- !u!114 &1942719671
 MonoBehaviour:
   m_ObjectHideFlags: 0

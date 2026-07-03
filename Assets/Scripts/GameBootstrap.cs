@@ -148,10 +148,6 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             GameMode = GameMode.Shared, //Gamemode runs of a server, not a home
             SessionName = roomCode, //whoever uses the same code lands in the same game, first one in becomes the host
         });
-        Vector3 spawnPos = playerSpawn.gameObject.transform.position; //where the player spawns in the world, can be changed to an array of spawn points later for more variety
-        networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer); //spawns player prefab on spawnpos
-        lobbyCamera.gameObject.SetActive(false); //turn off the lobby camera once we're in game    
-
         if(networkRunner.IsSharedModeMasterClient) //only spawn the guard if we're the host, since its shared mode, we all run the same code but only the host should spawn things
         {
             networkRunner.Spawn(guardPrefab,
@@ -160,8 +156,12 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
                 PlayerRef.None,
                 (runner, obj) => obj.GetComponent<GuardPatrol>().SetWaypoints(guardWaypoints)
                 ); //spawn the guard at the guard spawn point
-            networkRunner.Spawn(runManagerPrefab, Vector3.zero, Quaternion.identity, PlayerRef.None); //spawn the run manager, only one needed per session
+            networkRunner.Spawn(runManagerPrefab, Vector3.zero, Quaternion.identity, PlayerRef.None); //spawn the run manager BEFORE the local player, so the master's own player registers into it (used to spawn after, so the host never counted itself)
         }
+
+        Vector3 spawnPos = playerSpawn.gameObject.transform.position; //where the player spawns in the world, can be changed to an array of spawn points later for more variety
+        networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer); //spawns player prefab on spawnpos
+        lobbyCamera.gameObject.SetActive(false); //turn off the lobby camera once we're in game
     }
     //
 }
