@@ -4,7 +4,7 @@ using UnityEngine.AI;
 
 public class GuardPatrol : NetworkBehaviour
 {
-    public enum GuardState { Asleep, Relaxed, Suspicious, Searching, Chasing, Caught }
+    public enum GuardState { Asleep, Relaxed, Suspicious, Searching, Chasing, Caught, Escorting }
     //
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
@@ -22,6 +22,7 @@ public class GuardPatrol : NetworkBehaviour
     private float noiseAccumulator;
     private float suspicionTimer; //how long the guard is sus after in suspicion state
     private Player chaseTarget;//last seen player
+    private Player escortTarget; //who he's currently dragging to the closet
     private Vector3 lastKnownPosition; //playerpos
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
     private int asleepChancesMax = 3;
@@ -32,6 +33,7 @@ public class GuardPatrol : NetworkBehaviour
     private NavMeshAgent agent; //guard
     private Transform[] waypoints; //guard patrol
     [SerializeField] private float reachDistance = 0.5f; //distance of which the guard consider it has reached waypoint
+    private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
 
     [SerializeField] private float sightRange = 10f; //howfarsee
     [SerializeField] private float fovAngle = 120f; //field of view angle for the guard to see the player
@@ -64,6 +66,7 @@ public class GuardPatrol : NetworkBehaviour
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 6.5f;
+    private float escortSpeed = 2.5f; //walk pace while hauling someone to the closet
 
     [SerializeField] private float angerMax = 100f;
     [SerializeField] private float angerPerAlert = 20f;           //bump each time he escalates to a fresh alert
@@ -225,15 +228,35 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Caught:
-                if (chaseTarget != null) //target might have left before we grabbed them
+                if (chaseTarget == null) //target left before we grabbed them, nothing to do
                 {
-                    if (Anger >= angerEliminateThreshold) //only eliminates once he's angry enough, otherwise it's just a warning
-                    {
-                        chaseTarget.RPC_GetCaught();
-                        if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(); //tell the run tracker one player is out
-                    }
+                    ChangeState(GuardState.Relaxed);
+                    break;
                 }
-                ChangeState(GuardState.Relaxed);
+                if (Anger >= angerEliminateThreshold) //furious enough to throw them out for the run
+                {
+                    chaseTarget.RPC_GetCaught();
+                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(); //tell the run tracker one player is out
+                    ChangeState(GuardState.Relaxed);
+                }
+                else //just annoyed - drag them off to the closet instead of eliminating
+                {
+                    escortTarget = chaseTarget;
+                    ChangeState(GuardState.Escorting);
+                }
+                break;
+            case GuardState.Escorting:
+                if (escortTarget == null) //they disconnected mid-drag, give up
+                {
+                    ChangeState(GuardState.Relaxed);
+                    break;
+                }
+                if (!agent.pathPending && agent.remainingDistance <= reachDistance) //reached the closet with them in tow
+                {
+                    escortTarget.RPC_GetLockedUp(closetSpot.position); //stuff them in and lock the door
+                    escortTarget = null;
+                    ChangeState(GuardState.Relaxed);
+                }
                 break;
         }
         transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
@@ -241,6 +264,11 @@ public class GuardPatrol : NetworkBehaviour
     public void SetWaypoints(Transform[] points)
     {
         waypoints = points; //set the waypoints from the spawner, since we cant set them in the inspector for the guard prefab
+    }
+
+    public void SetCloset(Transform spot)
+    {
+        closetSpot = spot; //closet lives in the scene, handed over by the spawner like the waypoints
     }
 
     private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry
@@ -284,7 +312,15 @@ public class GuardPatrol : NetworkBehaviour
                 break;
             case GuardState.Caught:
                 PlayStateSound(newState); //bark whenever he changes state
-                break; 
+                break;
+            case GuardState.Escorting:
+                agent.speed = escortSpeed;
+                agent.SetDestination(closetSpot.position); //head for the closet (Caught already barked "GOTCHA" on the way in)
+                if (escortTarget != null)
+                {
+                    escortTarget.RPC_GetDragged(this); //tell them they're being hauled off - they pin behind us until we arrive
+                }
+                break;
         }
     }
 

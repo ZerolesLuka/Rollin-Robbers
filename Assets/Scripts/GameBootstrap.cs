@@ -15,6 +15,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private NetworkObject guardPrefab;
     [SerializeField] private Transform guardSpawn;
     [SerializeField] private Transform[] guardWaypoints;
+    [SerializeField] private Transform closetSpot; //the empty inside the closet - lives in the scene, passed to the guard at spawn (a prefab can't reference a scene object)
 
     [SerializeField] private NetworkObject runManagerPrefab;
 
@@ -154,7 +155,12 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
                 guardSpawn.position,
                 Quaternion.identity,
                 PlayerRef.None,
-                (runner, obj) => obj.GetComponent<GuardPatrol>().SetWaypoints(guardWaypoints)
+                (runner, obj) =>
+                {
+                    GuardPatrol guard = obj.GetComponent<GuardPatrol>();
+                    guard.SetWaypoints(guardWaypoints); //waypoints and the closet both live in the scene, so hand them over at spawn
+                    guard.SetCloset(closetSpot);
+                }
                 ); //spawn the guard at the guard spawn point
             networkRunner.Spawn(runManagerPrefab, Vector3.zero, Quaternion.identity, PlayerRef.None); //spawn the run manager BEFORE the local player, so the master's own player registers into it (used to spawn after, so the host never counted itself)
         }

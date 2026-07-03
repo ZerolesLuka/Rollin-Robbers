@@ -44,6 +44,12 @@ public class Player : NetworkBehaviour
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
 
     [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
+    [Networked] public bool IsLockedUp { get; private set; } //temporarily stuffed in the closet - frozen but not out for the run
+    private bool isBeingDragged; //true while the guard is hauling us to the closet
+    private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
+    private float lockTimer; //seconds left in the closet
+    [SerializeField] private float lockDuration = 6f; //how long the closet holds you (later: a teammate frees you instead)
+    [SerializeField] private float dragFollowDistance = 1.2f; //how far behind the guard we trail while being dragged
 
     public override void Spawned()
     {
@@ -89,6 +95,31 @@ public class Player : NetworkBehaviour
     public override void FixedUpdateNetwork()
     {
         if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore
+
+        if (isBeingDragged) //the guard is hauling us to the closet - no control, just trail behind him
+        {
+            if (draggingGuard != null)
+            {
+                transform.position = draggingGuard.transform.position - draggingGuard.transform.forward * dragFollowDistance; //pin just behind the guard
+            }
+            NoiseLevel = 0f; //can't make useful noise while grabbed
+            return;
+        }
+
+        if (IsLockedUp) //stuffed in the closet, frozen until the timer runs out
+        {
+            if (HasStateAuthority) //only the owner ticks the timer and clears the flag
+            {
+                lockTimer -= Runner.DeltaTime;
+                if (lockTimer <= 0f)
+                {
+                    IsLockedUp = false; //door's open, back to normal
+                }
+                NoiseLevel = 0f;
+            }
+            return;
+        }
+
         PlayerGravity();
         if (GetInput(out NetworkInputData networkInputData))
         {
@@ -208,6 +239,27 @@ public class Player : NetworkBehaviour
     {
         IsEliminated = true;                 // out for the run - spectator handoff + visuals come later in Unity
         characterController.enabled = false; // freeze them in place, no more moving or colliding
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine, so we own the movement in Shared Mode
+    public void RPC_GetDragged(GuardPatrol guard)
+    {
+        draggingGuard = guard;
+        isBeingDragged = true;
+        verticalVelocity = 0f;               // don't bank fall velocity while pinned
+        characterController.enabled = false; // off so we can be teleported behind the guard each tick without the CC fighting it
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine
+    public void RPC_GetLockedUp(Vector3 closetPosition)
+    {
+        isBeingDragged = false;
+        draggingGuard = null;
+        characterController.enabled = false; // toggle the CC so it accepts the teleport 
+        transform.position = closetPosition;
+        characterController.enabled = true;
+        IsLockedUp = true;
+        lockTimer = lockDuration;
     }
 }
 
