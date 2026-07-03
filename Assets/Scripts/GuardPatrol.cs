@@ -8,13 +8,9 @@ public class GuardPatrol : NetworkBehaviour
     //
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
-    [SerializeField] private float suspiciousDuration = 3f;
-    [SerializeField] private float noiseRange = 30f; //how close a noise registers
-    [SerializeField] private float noiseThreshold;
-    [SerializeField] private float searchDuration = 8f; //how long the guard will search before giving up and change states
+    [SerializeField] private float noiseThreshold; //random wake threshold, rolled in Spawned
     [SerializeField] private float catchRange = 2f;
     private float chaseSenseRange = 5f;
-    private float noiseSpeedThreshold = 5f;
     [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     [SerializeField] private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
@@ -35,17 +31,10 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float reachDistance = 0.5f; //distance of which the guard consider it has reached waypoint
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
 
-    [SerializeField] private float sightRange = 10f; //howfarsee
-    [SerializeField] private float fovAngle = 120f; //field of view angle for the guard to see the player
-    [SerializeField] private float eyeHeight = 1.6f; //where the guard sees
-    [SerializeField] private LayerMask obstacleMask; //to check if there are obstacles between the guard and the player
+    private GuardVision vision; //reusable sight component on the same GameObject - config (range/fov/eye/mask) lives there now so the dog can reuse it
+    private GuardHearing hearing; //reusable ears component - noise perception config (range/threshold) lives there
 
-    [SerializeField] private AudioSource voiceSource;     //3D source on the guard
-    [SerializeField] private AudioClip[] suspiciousSounds; //"huh? who's there?"
-    [SerializeField] private AudioClip[] searchingSounds;  //"I know you're in here"
-    [SerializeField] private AudioClip[] chasingSounds;    //"HEY! GET OUT!"
-    [SerializeField] private AudioClip[] caughtSounds;     //"GOTCHA!"
-    [SerializeField] private AudioClip[] asleepSounds;     //"musta been nothin'" (false alarm / give up)
+    private GuardAudio guardAudio; //reusable voice component - AudioSource + bark clips + the networked bark RPC live there
 
     [SerializeField] private float searchSweepRadius = 6f;
     [SerializeField] private int maximumSearchSweepPoints = 3;
@@ -59,9 +48,6 @@ public class GuardPatrol : NetworkBehaviour
     private float searchNoiseReactionTimer;
 
     [SerializeField] private Vector3 spawnPosition;
-
-    private float barkCooldown = 1.5f; //min seconds between barks
-    private float barkCooldownTimer;
 
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
@@ -79,7 +65,10 @@ public class GuardPatrol : NetworkBehaviour
 
     public override void Spawned()
     {
-        agent = GetComponent<NavMeshAgent>(); //grab it from our own GameObject so it's never null 
+        agent = GetComponent<NavMeshAgent>(); //grab it from our own GameObject so it's never null
+        vision = GetComponent<GuardVision>(); //reusable sight component sits on the same GameObject
+        hearing = GetComponent<GuardHearing>(); //reusable ears component sits on the same GameObject
+        guardAudio = GetComponent<GuardAudio>(); //reusable voice component sits on the same GameObject
         if (!HasStateAuthority)
         {
             agent.enabled = false;
@@ -94,10 +83,6 @@ public class GuardPatrol : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
-        if (barkCooldownTimer > 0f)
-        {
-            barkCooldownTimer -= Runner.DeltaTime;
-        }
         if (searchNoiseReactionTimer > 0f)
         {
             searchNoiseReactionTimer -= Runner.DeltaTime;
@@ -158,11 +143,16 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Searching:
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
-                float perceivedNoise = LoudestPerceivedNoise();
+                GuardHearing.Heard heardWhileSearching = hearing.LoudestNoise();
+                float perceivedNoise = heardWhileSearching.loudness;
+                if (perceivedNoise > 0f)
+                {
+                    lastKnownPosition = heardWhileSearching.position; //keep tracking the loudest noise source (side-effect the old method used to do)
+                }
                 foreach (Player player in Player.ActivePlayers) //live list, so players who joined after the guard spawned still count
                 {
                     if (player.IsEliminated) continue; //don't hunt players who are already out
-                    if (CanSeePlayer(player) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
+                    if (vision.CanSee(player.transform) && player.NoiseLevel > loudestNoiseHeard) //can see them and louder than the current best
                     {
                         loudestNoiseHeard = player.NoiseLevel;//set only if we hear a noise louder then the previous loudest noise
                         loudestVisiblePlayer = player; 
@@ -211,7 +201,7 @@ public class GuardPatrol : NetworkBehaviour
                 toTarget.y = 0f; //ignore height difference
                 float distanceToTarget = toTarget.magnitude;
 
-                if (CanSeePlayer(chaseTarget) || distanceToTarget < chaseSenseRange) //see the target or close enough to sense them
+                if (vision.CanSee(chaseTarget.transform) || distanceToTarget < chaseSenseRange) //see the target or close enough to sense them
                 {
                     lastKnownPosition = chaseTarget.transform.position;
                     agent.SetDestination(lastKnownPosition);
@@ -221,7 +211,7 @@ public class GuardPatrol : NetworkBehaviour
                     Debug.Log("CAUGHT!");
                     ChangeState(GuardState.Caught);
                 }
-                else if (!CanSeePlayer(chaseTarget) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                else if (!vision.CanSee(chaseTarget.transform) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
                     Debug.Log("Guard: lost 'em...");
                     ChangeState(GuardState.Searching);
@@ -327,33 +317,18 @@ public class GuardPatrol : NetworkBehaviour
     private void TickAnger() //anger builds while he's actively chasing and slowly cools while he's calm
     {
         if (State == GuardState.Chasing)
+        {
             Anger = Mathf.Min(angerMax, Anger + angerChaseRate * Runner.DeltaTime);
+        }
         else if (State == GuardState.Asleep || State == GuardState.Relaxed)
+        {
             Anger = Mathf.Max(0f, Anger - angerDecayRate * Runner.DeltaTime);
+        }
     }
 
-    private bool CanSeePlayer(Player target)//bool with the parameter of a player, passed in by whoever calling
-    {
-        Vector3 eyePos = transform.position + Vector3.up * eyeHeight; //where the guard sees from
-        Vector3 targetPos = target.transform.position + Vector3.up * 1f; //where the player is, we can adjust this if we want the guard to see the player's head or body
-        Vector3 toTarget = targetPos - eyePos; //direction from guard to player
-        float distance = toTarget.magnitude; //length of the vector
-
-        if(distance > sightRange) return false; //In sight?
-        Vector3 dir = toTarget.normalized; //direction from guard to player normalized
-
-        // cone is horizontal only — up/down stairs no longer kicks you out
-        Vector3 flatToTarget = Vector3.ProjectOnPlane(toTarget, Vector3.up);
-        Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
-        if (Vector3.Angle(flatForward, flatToTarget) > fovAngle * 0.5f) return false; //flat plane check
-
-        if (Physics.Raycast(eyePos, dir, distance, obstacleMask)) return false; //hits object
-
-        return true;
-    }
     private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)
     {
-        return LoudestPerceivedNoise() > 0f;
+        return hearing.LoudestNoise().loudness > 0f;
     }
     private bool IsAtSpawn()
     {
@@ -367,51 +342,13 @@ public class GuardPatrol : NetworkBehaviour
         }
     }
 
-    private void OnDrawGizmos() //used to draw lines fro the guards view, honestly had no idea how to do this so watched some videos and used AI
-    { //NO IDEA HOW THIS WORKS
-        Vector3 eye = transform.position + Vector3.up * eyeHeight;
-
-        // red while actually seeing a player, yellow otherwise
-        bool sees = false;
-        if (Application.isPlaying)
-            foreach (Player pl in FindObjectsByType<Player>(FindObjectsSortMode.None))
-                if (CanSeePlayer(pl)) { sees = true; break; }
-        Gizmos.color = sees ? new Color(1f, 0.2f, 0.2f) : new Color(1f, 0.9f, 0.2f);
-
-        int rays = 10;
-        Vector3 prev = Vector3.zero;
-        for (int i = 0; i <= rays; i++)
-        {
-            float ang = Mathf.Lerp(-fovAngle * 0.5f, fovAngle * 0.5f, (float)i / rays);
-            Vector3 end = eye + (Quaternion.Euler(0, ang, 0) * transform.forward) * sightRange;
-            Gizmos.DrawLine(eye, end);              // ray from the eye to the edge of range
-            if (i > 0) Gizmos.DrawLine(prev, end);  // connect tips → forms the far arc
-            prev = end;
-        }
-    }
-    private float LoudestPerceivedNoise() //strongest noise he perceives, factoring loudness AND distance
-    {
-        float loudest = 0f;
-        foreach (Player player in Player.ActivePlayers) //live list, so players who joined after the guard spawned still count
-        {
-            if (player.IsEliminated) continue; //eliminated players make no noise the guard cares about
-            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
-            float distanceFactor = Mathf.Clamp01((noiseRange - distanceToPlayer) / noiseRange); //either in range or not
-            float audibleLoudness = Mathf.Max(0f, player.NoiseLevel - noiseSpeedThreshold); //below the floor (crouch) = silent
-            float perceived = audibleLoudness * distanceFactor;                           //loud+close = big, loud+far = ~0
-            if (perceived > loudest) //if noise we just picked up is louder than previous replace
-            {
-                loudest = perceived;
-                lastKnownPosition = player.transform.position; //remember WHERE the loudest noise came from
-            }
-        }
-        return loudest;
-    }
     private void ListenForNoise() //shared ears for Asleep + Relaxed
     {
-        float perceivedNoise = LoudestPerceivedNoise(); //use loudest thing closest relative to guard
+        GuardHearing.Heard heard = hearing.LoudestNoise();
+        float perceivedNoise = heard.loudness;
         if (perceivedNoise > 0f)
         {
+            lastKnownPosition = heard.position; //remember WHERE the noise came from (used when he escalates to Searching)
             quietTimer = 0f;
             noiseAccumulator += perceivedNoise * Runner.DeltaTime;
             if (noiseAccumulator >= noiseThreshold)
@@ -429,43 +366,16 @@ public class GuardPatrol : NetworkBehaviour
             }
         }
     }
-    private AudioClip[] ClipsFor(GuardState state)
+    private void PlayStateSound(GuardState state) //map THIS archetype's state onto a generic bark; GuardAudio handles cooldown + network playback
     {
         switch (state)
-        { //returns the state were at and plays those sounds
-            case GuardState.Suspicious: return suspiciousSounds;
-            case GuardState.Searching: return searchingSounds;
-            case GuardState.Chasing: return chasingSounds;
-            case GuardState.Caught: return caughtSounds;
-            case GuardState.Asleep: return asleepSounds;
-            default: return null; //Relaxed = no bark for now
-        }
-
-    }
-    private void PlayStateSound(GuardState state)
-    {
-        if(barkCooldownTimer > 0f)
         {
-            return;
-        }
-        AudioClip[] clips = ClipsFor(state);
-        if (clips != null && clips.Length > 0)
-        {
-            int index = Random.Range(0, clips.Length); //chosen once on the host
-            barkCooldownTimer = barkCooldown;
-            RPC_PlayStateSound(index, state);
-        }
-    }
-
-    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    private void RPC_PlayStateSound(int index, GuardState state)
-    {
-        AudioClip[] clips = ClipsFor(state); //clips from the state being active
-        if (voiceSource != null && clips != null && index >= 0 && index < clips.Length) //if voice not nll and we have clips with an index of clips, 
-        {
-            voiceSource.Stop();          //cut any bark still playing so two voices never overlap
-            voiceSource.clip = clips[index]; //choose a clip to play based off index
-            voiceSource.Play(); //play sound
+            case GuardState.Asleep: guardAudio.Bark(GuardAudio.BarkType.GiveUp); break;    //"musta been nothin'"
+            case GuardState.Suspicious: guardAudio.Bark(GuardAudio.BarkType.Alert); break; //"huh? who's there?"
+            case GuardState.Searching: guardAudio.Bark(GuardAudio.BarkType.Search); break; //"I know you're in here"
+            case GuardState.Chasing: guardAudio.Bark(GuardAudio.BarkType.Chase); break;    //"HEY! GET OUT!"
+            case GuardState.Caught: guardAudio.Bark(GuardAudio.BarkType.Caught); break;    //"GOTCHA!"
+            //Relaxed / Escorting: no bark
         }
     }
     private void PickRandomSearchPoint(Vector3 searchCenter)
