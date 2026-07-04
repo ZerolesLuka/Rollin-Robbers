@@ -85,6 +85,7 @@ public class Player : NetworkBehaviour
     {
         if (!HasInputAuthority) return; //stop here if not our instance of player
         HandleLook(); //our player only
+        HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
     }
     private void LateUpdate()
     {
@@ -188,17 +189,20 @@ public class Player : NetworkBehaviour
         bool staysCrouched = crouching || BlockedAbove(); //if crouch held OR no room to stand, stay down
         isCrouching = staysCrouched;
         float targetHeight = staysCrouched ? crouchingHeight : standingHeight;
-        float targetCamY = staysCrouched ? crouchCamHeight : standCamHeight; //question mark acts as a tiny if/else, if crouching is true, target height is crouching height, if crouching is false, target height is standing height
 
-        //ease the controller height toward the target so it doesnt snap instantly
+        //ease the controller height toward the target so it doesnt snap instantly (collider stays on the 32Hz tick - fine for physics/networked body)
         characterController.height = Mathf.Lerp(characterController.height, targetHeight, crouchSpeed * Runner.DeltaTime); //height transitions smoothly to the target height based on crouchSpeed
 
         //as the capsule shrinks, drop the center by half the shrink so feet stay planted instead of floating up
         characterController.center = new Vector3(0f, (characterController.height - standingHeight) / 2f, 0f);
+        //camera eye-height is eased in Update (render frame) instead - see HandleCrouchCamera - so it doesn't step at the 32Hz tick
+    }
 
-        //ease the camera down to crouch eye level and back up to match the body
+    private void HandleCrouchCamera() //eases the crouch eye-height on the RENDER frame (local only) so it's smooth at any FPS, not stepped at the 32Hz network tick
+    {
+        float targetCamY = isCrouching ? crouchCamHeight : standCamHeight;
         Vector3 camPos = playerCamera.localPosition;
-        camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Runner.DeltaTime); //camera y transitions smoothly to the target cam height based on crouchSpeed
+        camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
         playerCamera.localPosition = camPos;
     }
     private void HandleLook()
