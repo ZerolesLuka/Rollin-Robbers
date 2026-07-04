@@ -52,6 +52,8 @@ public class Player : NetworkBehaviour
     [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
     [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
+    public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
+    [SerializeField] private AudioLowPassFilter voiceMuffle; //on the player's Photon Voice Speaker AudioSource - enabled while trapped so their LIVE voice comes through everyone muffled (taped mouth)
     private bool interactHeldLastTick; //interact fires on the rising edge (press), not while held
 
     public override void Spawned()
@@ -86,6 +88,11 @@ public class Player : NetworkBehaviour
     }
     private void Update()
     {
+        if (voiceMuffle != null)
+        {
+            voiceMuffle.enabled = IsLockedUp; //taped mouth: muffle this player's LIVE voice while trapped. Runs on ALL copies (before the authority check) so remote teammates hear the muffle, driven by the [Networked] IsLockedUp
+        }
+
         if (!HasInputAuthority) return; //stop here if not our instance of player
         HandleLook(); //our player only
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
@@ -114,11 +121,10 @@ public class Player : NetworkBehaviour
         {
             if (HasStateAuthority)
             {
-                NoiseLevel = 0f; //taped mouth - can't make useful noise
+                NoiseLevel = 0f; //taped mouth - the guard hears nothing, so screaming for help is safe (voice still carries to teammates, just muffled - see voiceMuffle in Update)
                 suffocateTimer -= Runner.DeltaTime;
                 if (suffocateTimer <= 0f) //ran out of air, nobody came
                 {
-                    Debug.Log("[Rescue] SUFFOCATED - died before anyone freed me"); //TEMP
                     IsLockedUp = false;
                     IsEliminated = true;                 //dead for the run
                     characterController.enabled = false; //freeze the body like any other elimination
@@ -225,7 +231,6 @@ public class Player : NetworkBehaviour
         {
             return;
         }
-        Debug.Log("[Rescue] interact pressed"); //TEMP - delete once rescue works
 
         //free the nearest trapped teammate in range. you can NEVER free yourself: a locked player early-returns before this runs, and we skip self here too
         foreach (Player other in ActivePlayers)
@@ -234,7 +239,6 @@ public class Player : NetworkBehaviour
             {
                 continue; //friends only, never yourself
             }
-            Debug.Log($"[Rescue] candidate locked={other.IsLockedUp} eliminated={other.IsEliminated} dist={Vector3.Distance(transform.position, other.transform.position):F1}"); //TEMP
             if (!other.IsLockedUp)
             {
                 continue; //only rescue someone actually stuck in the closet
@@ -321,7 +325,6 @@ public class Player : NetworkBehaviour
             return; //nothing to free
         }
         IsLockedUp = false; //sprung by a friend - the only way out of the closet
-        Debug.Log($"[Rescue] FREED - eliminated={IsEliminated} dragged={isBeingDragged} ccEnabled={characterController.enabled}"); //TEMP - read this on the FREED player's console
     }
 }
 

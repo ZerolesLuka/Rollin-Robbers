@@ -180,13 +180,11 @@ public class GuardPatrol : NetworkBehaviour
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
                         {
-                            Debug.Log("Guard: Must have been nothing...");
                             ChangeState(GuardState.Relaxed);
                         }
                         else
                         {
                             PickRandomSearchPoint(transform.position);
-                            Debug.Log("Picked tracking point");
                         }
                     }
                 }
@@ -208,12 +206,10 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 if (distanceToTarget < catchRange)
                 {
-                    Debug.Log("CAUGHT!");
                     ChangeState(GuardState.Caught);
                 }
                 else if (!vision.CanSee(chaseTarget.transform) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    Debug.Log("Guard: lost 'em...");
                     ChangeState(GuardState.Searching);
                 }
                 break;
@@ -353,7 +349,6 @@ public class GuardPatrol : NetworkBehaviour
             noiseAccumulator += perceivedNoise * Runner.DeltaTime;
             if (noiseAccumulator >= noiseThreshold)
             {
-                Debug.Log("Guard heard something!");
                 ChangeState(GuardState.Suspicious);
             }
         }

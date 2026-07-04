@@ -220,6 +220,7 @@ GameObject:
   - component: {fileID: -606685323809471342}
   - component: {fileID: 7836639216215506259}
   - component: {fileID: -9050777606421466444}
+  - component: {fileID: -185174176684180050}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -272,7 +273,16 @@ MonoBehaviour:
   voiceNoiseScale: 20
   maxStamina: 3
   staminaRegenRate: 1
+  jumpHeight: 1.5
+  fallGravityMultiplier: 2.2
+  lowJumpGravityMultiplier: 1.6
   verticalVelocity: 0
+  _IsEliminated: 0
+  _IsLockedUp: 0
+  dragFollowDistance: 1.2
+  rescueRange: 2.5
+  suffocateDuration: 45
+  voiceMuffle: {fileID: -185174176684180050}
 --- !u!143 &3332511634651341915
 CharacterController:
   m_ObjectHideFlags: 0
@@ -476,6 +486,31 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4fa91ce39613fd84faeffee632c57f3f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerSignals
+--- !u!169 &-185174176684180050
+AudioLowPassFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5464379920807862808}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_LowpassResonanceQ: 1
+  lowpassLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0.045020465
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0
