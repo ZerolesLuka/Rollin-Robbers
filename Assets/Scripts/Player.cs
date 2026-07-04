@@ -48,7 +48,8 @@ public class Player : NetworkBehaviour
     [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
     private bool isBeingDragged; //true while the guard is hauling us to the closet
     private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
-    [SerializeField] private float dragFollowDistance = 1.2f; //how far behind the guard we trail while being dragged
+    private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
+    [SerializeField] private int dragTrailLag = 12; //how many ticks back on the guard's path the player trails (bigger = further behind)
     [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
     [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
@@ -107,11 +108,16 @@ public class Player : NetworkBehaviour
     {
         if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore
 
-        if (isBeingDragged) //the guard is hauling us to the closet - no control, just trail behind him
+        if (isBeingDragged) //the guard is hauling us to the closet - no control, trail behind him on his path
         {
             if (draggingGuard != null)
             {
-                transform.position = draggingGuard.transform.position - draggingGuard.transform.forward * dragFollowDistance; //pin just behind the guard
+                dragTrail.Enqueue(draggingGuard.transform.position); //remember where the guard is each tick
+                while (dragTrail.Count > dragTrailLag)
+                {
+                    dragTrail.Dequeue(); //keep only the last few positions
+                }
+                transform.position = dragTrail.Peek(); //sit where the guard was a few ticks ago - behind him, ON his valid path (no clipping, not inside him)
             }
             NoiseLevel = 0f; //can't make useful noise while grabbed
             return;
@@ -301,8 +307,9 @@ public class Player : NetworkBehaviour
     {
         draggingGuard = guard;
         isBeingDragged = true;
+        dragTrail.Clear();                   // fresh trail for this drag
         verticalVelocity = 0f;               // don't bank fall velocity while pinned
-        characterController.enabled = false; // off so we can be teleported behind the guard each tick without the CC fighting it
+        characterController.enabled = false; // off so we can be positioned along the guard's path without the CC fighting it
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine
