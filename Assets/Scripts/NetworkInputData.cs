@@ -9,5 +9,6 @@ public struct NetworkInputData : INetworkInput //A struct holds input of the pla
     public bool crouchInput;
     public bool sprintInput;
     public bool jumpInput;
+    public bool interactInput;
 
 }

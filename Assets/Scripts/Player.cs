@@ -45,12 +45,14 @@ public class Player : NetworkBehaviour
     private float crouchSpeed = 10f; //how fast the player transitions between crouching and standing
 
     [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
-    [Networked] public bool IsLockedUp { get; private set; } //temporarily stuffed in the closet - frozen but not out for the run
+    [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
     private bool isBeingDragged; //true while the guard is hauling us to the closet
     private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
-    private float lockTimer; //seconds left in the closet
-    [SerializeField] private float lockDuration = 6f; //how long the closet holds you (later: a teammate frees you instead)
     [SerializeField] private float dragFollowDistance = 1.2f; //how far behind the guard we trail while being dragged
+    [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
+    [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
+    private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
+    private bool interactHeldLastTick; //interact fires on the rising edge (press), not while held
 
     public override void Spawned()
     {
@@ -108,16 +110,23 @@ public class Player : NetworkBehaviour
             return;
         }
 
-        if (IsLockedUp) //stuffed in the closet, frozen until the timer runs out
+        if (IsLockedUp) //stuffed in the closet - frozen; a teammate must free you before your air runs out
         {
-            if (HasStateAuthority) //only the owner ticks the timer and clears the flag
+            if (HasStateAuthority)
             {
-                lockTimer -= Runner.DeltaTime;
-                if (lockTimer <= 0f)
+                NoiseLevel = 0f; //taped mouth - can't make useful noise
+                suffocateTimer -= Runner.DeltaTime;
+                if (suffocateTimer <= 0f) //ran out of air, nobody came
                 {
-                    IsLockedUp = false; //door's open, back to normal
+                    Debug.Log("[Rescue] SUFFOCATED - died before anyone freed me"); //TEMP
+                    IsLockedUp = false;
+                    IsEliminated = true;                 //dead for the run
+                    characterController.enabled = false; //freeze the body like any other elimination
+                    if (RunManager.Instance != null)
+                    {
+                        RunManager.Instance.RPC_ReportCaught(); //hop the death to the master so the alive-count drops
+                    }
                 }
-                NoiseLevel = 0f;
             }
             return;
         }
@@ -127,6 +136,7 @@ public class Player : NetworkBehaviour
         {
             HandleMovement(networkInputData.movementInput, networkInputData.sprintInput, networkInputData.jumpInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
+            HandleInteract(networkInputData.interactInput); //E to free a trapped teammate
         }
     }
     private void HandleMovement(Vector2 inputVector, bool sprinting, bool jumpInput)
@@ -206,6 +216,36 @@ public class Player : NetworkBehaviour
         camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
         playerCamera.localPosition = camPos;
     }
+
+    private void HandleInteract(bool interacting)
+    {
+        bool pressed = interacting && !interactHeldLastTick; //rising edge only - one rescue per press
+        interactHeldLastTick = interacting;
+        if (!pressed)
+        {
+            return;
+        }
+        Debug.Log("[Rescue] interact pressed"); //TEMP - delete once rescue works
+
+        //free the nearest trapped teammate in range. you can NEVER free yourself: a locked player early-returns before this runs, and we skip self here too
+        foreach (Player other in ActivePlayers)
+        {
+            if (other == this)
+            {
+                continue; //friends only, never yourself
+            }
+            Debug.Log($"[Rescue] candidate locked={other.IsLockedUp} eliminated={other.IsEliminated} dist={Vector3.Distance(transform.position, other.transform.position):F1}"); //TEMP
+            if (!other.IsLockedUp)
+            {
+                continue; //only rescue someone actually stuck in the closet
+            }
+            if (Vector3.Distance(transform.position, other.transform.position) <= rescueRange)
+            {
+                other.RPC_Rescue(); //spring them early
+                break; //one rescue per press
+            }
+        }
+    }
     private void HandleLook()
     {
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
@@ -270,7 +310,18 @@ public class Player : NetworkBehaviour
         transform.position = closetPosition;
         characterController.enabled = true;
         IsLockedUp = true;
-        lockTimer = lockDuration;
+        suffocateTimer = suffocateDuration; //start the air clock the moment the closet closes
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //any caller (the rescuer); runs on the freed player's own machine
+    public void RPC_Rescue()
+    {
+        if (!IsLockedUp)
+        {
+            return; //nothing to free
+        }
+        IsLockedUp = false; //sprung by a friend - the only way out of the closet
+        Debug.Log($"[Rescue] FREED - eliminated={IsEliminated} dragged={isBeingDragged} ccEnabled={characterController.enabled}"); //TEMP - read this on the FREED player's console
     }
 }
 

@@ -33,6 +33,12 @@ public class RunManager : NetworkBehaviour
         if (playersAlive <= 0) ChangeState(RunState.Caught);
     }
 
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_ReportCaught() //a suffocation death is decided on the victim's machine; this hops it to the master so the alive-count stays authoritative
+    {
+        OnPlayerCaught();
+    }
+
     public void OnPlayerLeft()
     {
         if (!HasStateAuthority) return;
