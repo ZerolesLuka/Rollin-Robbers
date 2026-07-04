@@ -36,6 +36,7 @@ public class Player : NetworkBehaviour
     private bool isCrouching;
     private float gravity = 9.81f; //regular gravity lol
     public float verticalVelocity = 0f;
+    private bool jumpHeldLastTick; //jump fires only on the rising edge (press), so holding space doesn't bunnyhop
     private float yRotation = 0f;
     private float xRotation = 0f;
 
@@ -162,11 +163,11 @@ public class Player : NetworkBehaviour
         }
 
         float moveDistance = speed * Runner.DeltaTime;
-        if (jumpInput && characterController.isGrounded && !isCrouching) //if jumping and we on da floor and not crouching
-         {
-             verticalVelocity = Mathf.Sqrt(jumpHeight * 2f * gravity);
-             Debug.Log("jump");
-         }
+        if (jumpInput && !jumpHeldLastTick && characterController.isGrounded && !isCrouching) //rising edge only: must release + repress to jump again (no bunnyhop from holding space)
+        {
+            verticalVelocity = Mathf.Sqrt(jumpHeight * 2f * gravity);
+        }
+        jumpHeldLastTick = jumpInput; //remember this tick's hold state so next tick can detect a fresh press
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
 
         //noise comes AFTER speed is finalized
@@ -220,6 +221,12 @@ public class Player : NetworkBehaviour
     }
     private void PlayerGravity()
     {
+        if (characterController.isGrounded && verticalVelocity < 0f) //planted on the ground
+        {
+            verticalVelocity = -2f; //small downward stick keeps isGrounded reliable on steps/slopes, and stops the fall speed building to terminal velocity while just standing
+            return;
+        }
+
         float gravityMultiplier = 1f;
 
         if (verticalVelocity < 0f)
