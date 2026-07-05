@@ -6,6 +6,7 @@ public class GuardPatrol : NetworkBehaviour
 {
     public enum GuardState { Asleep, Relaxed, Suspicious, Searching, Chasing, Caught, Escorting }
     //
+    public static GuardPatrol Instance; //the master's guard, so sensors (toys, cameras, ...) can ping it without needing a scene reference
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
     [SerializeField] private float noiseThreshold; //random wake threshold, rolled in Spawned
@@ -74,6 +75,7 @@ public class GuardPatrol : NetworkBehaviour
             agent.enabled = false;
             return;
         }
+        Instance = this; //only the master's guard - sensors ping this one
         spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
         noiseThreshold = Random.Range(3f, 6f); //random wake threshold so players cant memorize the exact amount
@@ -255,6 +257,14 @@ public class GuardPatrol : NetworkBehaviour
     public void SetCloset(Transform spot)
     {
         closetSpot = spot; //closet lives in the scene, handed over by the spawner like the waypoints
+    }
+
+    public void AlertTo(Vector3 spot) //any sensor (squeaky toy, camera, ...) pings this to send the guard to investigate a spot
+    {
+        if (!HasStateAuthority) return; //only the master drives the guard
+        if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
+        lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
+        ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
     }
 
     private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry

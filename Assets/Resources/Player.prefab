@@ -270,7 +270,7 @@ MonoBehaviour:
     m_Bits: 1
   crouchSpeedMultiplier: 0.5
   sprintSpeedMultiplier: 1.5
-  voiceNoiseScale: 20
+  voiceNoiseScale: 24
   maxStamina: 3
   staminaRegenRate: 1
   jumpHeight: 1.5
@@ -279,9 +279,9 @@ MonoBehaviour:
   verticalVelocity: 0
   _IsEliminated: 0
   _IsLockedUp: 0
-  dragFollowDistance: 1.2
+  dragTrailLag: 12
   rescueRange: 2.5
-  suffocateDuration: 45
+  suffocateDuration: 20
   voiceMuffle: {fileID: -185174176684180050}
 --- !u!143 &3332511634651341915
 CharacterController:
