@@ -9,7 +9,7 @@ public class HUD : MonoBehaviour
 
     private void Update()
     {
-        if (Player.LocalPlayer != null)
+        if (Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid)
         {
             staminaImage.fillAmount = Player.LocalPlayer.staminaNormalized;
 
@@ -21,7 +21,7 @@ public class HUD : MonoBehaviour
             }
         }
 
-        if (lootText != null && RunManager.Instance != null)
+        if (lootText != null && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
         {
             lootText.text = $"Loot: ${RunManager.Instance.GatheredLootValue}";
         }

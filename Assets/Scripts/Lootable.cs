@@ -13,7 +13,7 @@ public class Lootable : MonoBehaviour
     [SerializeField] public int value = 100;
     [SerializeField] private GameObject[] hideOnLooted; // drag in the mesh renderers to hide on pickup
 
-    public bool IsLooted => RunManager.Instance != null && RunManager.Instance.IsLooted(lootId);
+    public bool IsLooted => RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid && RunManager.Instance.IsLooted(lootId);
 
     private bool wasLooted;
 

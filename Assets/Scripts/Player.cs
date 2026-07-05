@@ -5,7 +5,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
-
+using UnityEngine.SceneManagement;
+//
 public class Player : NetworkBehaviour
 {
     public PlayerInputActions playerInputActions;
@@ -60,7 +61,8 @@ public class Player : NetworkBehaviour
 
     public override void Spawned()
     {
-        ActivePlayers.Add(this); //join the list the moment we exist so guards hear late joiners too
+        DontDestroyOnLoad(gameObject); //survive scene loads - Fusion doesn't always preserve spawned objects automatically
+        ActivePlayers.Add(this);
         characterController.enabled = false;
         characterController.enabled = true;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
@@ -77,6 +79,7 @@ public class Player : NetworkBehaviour
             playerInputActions = new PlayerInputActions(); //our input actions
             playerInputActions.Player.Enable(); //our input actions enabled
             Cursor.lockState = CursorLockMode.Locked; //our cursor locked
+            SceneManager.activeSceneChanged += OnSceneChanged; //teleport to the new scene's spawn when Fusion loads a new scene
         }
         else
         {
@@ -90,7 +93,7 @@ public class Player : NetworkBehaviour
     }
     private void Update()
     {
-        if (voiceMuffle != null)
+        if (voiceMuffle != null && Object != null && Object.IsValid)
         {
             voiceMuffle.enabled = IsLockedUp; //taped mouth: muffle this player's LIVE voice while trapped. Runs on ALL copies (before the authority check) so remote teammates hear the muffle, driven by the [Networked] IsLockedUp
         }
@@ -259,6 +262,25 @@ public class Player : NetworkBehaviour
                 return; //looted, done for this press
             }
         }
+
+        //exit door: only runs if no rescue or loot happened
+        foreach (ExitDoor door in ExitDoor.AllDoors)
+        {
+            if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)
+            {
+                RunManager.Instance.RPC_LoadScene(door.targetSceneBuildIndex);
+                return;
+            }
+        }
+    }
+
+    public void TeleportTo(Vector3 position) //called by GameBootstrap after a scene load to reposition the local player
+    {
+        if (!HasInputAuthority) return; //only move our own player; Fusion syncs the position to everyone else
+        verticalVelocity = 0f; //reset fall speed so the player doesn't phase through the floor on arrival
+        characterController.enabled = false;
+        transform.position = position;
+        characterController.enabled = true;
     }
     private void HandleLook()
     {
@@ -298,6 +320,38 @@ public class Player : NetworkBehaviour
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
         ActivePlayers.Remove(this); //leave the list on disconnect so nobody iterates a destroyed player
+        if (HasInputAuthority) SceneManager.activeSceneChanged -= OnSceneChanged;
+    }
+
+    private void OnSceneChanged(Scene previous, Scene next)
+    {
+        Cursor.lockState = CursorLockMode.Locked;
+        StartCoroutine(TeleportAfterLoad());
+    }
+
+    private System.Collections.IEnumerator TeleportAfterLoad()
+    {
+        //scene objects aren't always ready on the frame activeSceneChanged fires - poll until the spawn point exists
+        GameObject spawnPoint = null;
+        float timeout = 3f;
+        while (spawnPoint == null && timeout > 0f)
+        {
+            spawnPoint = GameObject.Find("PlayerSpawn");
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+        if (spawnPoint != null)
+        {
+            TeleportTo(spawnPoint.transform.position);
+        }
+        else
+        {
+            Debug.LogWarning($"[Player] PlayerSpawn not found. Active scene: '{SceneManager.GetActiveScene().name}'. Root objects:");
+            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+            {
+                Debug.LogWarning($"  '{root.name}' (active: {root.activeInHierarchy})");
+            }
+        }
     }
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()

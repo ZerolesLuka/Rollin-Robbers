@@ -139,6 +139,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     private async void ConnectToRoom() //async so the game doesnt freeze while waiting to connect
     {
+        DontDestroyOnLoad(gameObject); //keep this alive across scene loads so OnInput keeps firing (input dies if this is destroyed)
         networkRunner = GetComponent<NetworkRunner>();
         if (networkRunner == null) //if there isnt a runner, add one
         {
@@ -147,8 +148,9 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         networkRunner.AddCallbacks(this); //tells the Network Runner to use this script for its callbacks, which are functions that are called in response to certain events in the network
         await networkRunner.StartGame(new StartGameArgs() //wait to start game before calling this code
         {
-            GameMode = GameMode.Shared, //Gamemode runs of a server, not a home
-            SessionName = roomCode, //whoever uses the same code lands in the same game, first one in becomes the host
+            GameMode = GameMode.Shared,
+            SessionName = roomCode,
+            SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(), //required for Runner.LoadScene to preserve spawned NetworkObjects across scene loads
         });
         if(networkRunner.IsSharedModeMasterClient) //only spawn the guard if we're the host, since its shared mode, we all run the same code but only the host should spawn things
         {

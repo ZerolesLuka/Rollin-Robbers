@@ -223,7 +223,7 @@ GameObject:
   - component: {fileID: -185174176684180050}
   m_Layer: 0
   m_Name: Player
-  m_TagString: Untagged
+  m_TagString: 'PlayerSpawn '
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -281,6 +281,7 @@ MonoBehaviour:
   _IsLockedUp: 0
   dragTrailLag: 12
   rescueRange: 2.5
+  lootRange: 2
   suffocateDuration: 20
   voiceMuffle: {fileID: -185174176684180050}
 --- !u!143 &3332511634651341915

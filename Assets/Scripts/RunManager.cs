@@ -17,6 +17,7 @@ public class RunManager : NetworkBehaviour
 
     public override void Spawned()
     {
+        DontDestroyOnLoad(gameObject); //survive scene loads
         Instance = this;
         State = RunState.InProgress;
     }
@@ -43,6 +44,16 @@ public class RunManager : NetworkBehaviour
         if ((lootedMask & bit) != 0) return; // already taken (two players pressed E at the same time)
         lootedMask |= bit;
         GatheredLootValue += value;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_LoadScene(int buildIndex)
+    {
+        if (GuardPatrol.Instance != null)
+        {
+            Runner.Despawn(GuardPatrol.Instance.Object); // indoor guard can't navigate the outdoor NavMesh - clean it up before leaving
+        }
+        Runner.LoadScene(SceneRef.FromIndex(buildIndex));
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
