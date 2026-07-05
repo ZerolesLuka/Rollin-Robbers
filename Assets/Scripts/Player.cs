@@ -51,6 +51,7 @@ public class Player : NetworkBehaviour
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
     [SerializeField] private int dragTrailLag = 12; //how many ticks back on the guard's path the player trails (bigger = further behind)
     [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
+    [SerializeField] private float lootRange = 2f;    //how close you must be to pick up a lootable item
     [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
     public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
@@ -231,28 +232,31 @@ public class Player : NetworkBehaviour
 
     private void HandleInteract(bool interacting)
     {
-        bool pressed = interacting && !interactHeldLastTick; //rising edge only - one rescue per press
+        bool pressed = interacting && !interactHeldLastTick; //rising edge only - one action per press
         interactHeldLastTick = interacting;
-        if (!pressed)
-        {
-            return;
-        }
+        if (!pressed) return;
 
-        //free the nearest trapped teammate in range. you can NEVER free yourself: a locked player early-returns before this runs, and we skip self here too
+        //rescue takes priority: free the nearest trapped teammate. you can NEVER free yourself (locked player returns before this runs, and we skip self below)
         foreach (Player other in ActivePlayers)
         {
-            if (other == this)
-            {
-                continue; //friends only, never yourself
-            }
-            if (!other.IsLockedUp)
-            {
-                continue; //only rescue someone actually stuck in the closet
-            }
+            if (other == this) continue;
+            if (!other.IsLockedUp) continue;
             if (Vector3.Distance(transform.position, other.transform.position) <= rescueRange)
             {
-                other.RPC_Rescue(); //spring them early
-                break; //one rescue per press
+                other.RPC_Rescue();
+                return; //rescued, done for this press
+            }
+        }
+
+        //loot pickup: only runs if no rescue happened
+        if (RunManager.Instance == null) return;
+        foreach (Lootable lootable in Lootable.AllLootables)
+        {
+            if (lootable.IsLooted) continue;
+            if (Vector3.Distance(transform.position, lootable.transform.position) <= lootRange)
+            {
+                RunManager.Instance.RPC_ClaimLoot(lootable.lootId, lootable.value);
+                return; //looted, done for this press
             }
         }
     }

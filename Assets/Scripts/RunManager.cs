@@ -11,8 +11,9 @@ public class RunManager : NetworkBehaviour
     [Networked] public RunState State { get; private set; }
     [Networked] public int playersAlive { get; set; }
 
-    public int totalLootValue; //make a list and then calculate maybe?
-    public int gatheredLootValue; //make a list and then calculate maybe?
+    [SerializeField] public int totalLootValue; // total value of all loot in the house - set in Inspector for a score screen later
+    [Networked] public int GatheredLootValue { get; private set; } // what the team has picked up so far - replicates to all clients
+    [Networked] private ulong lootedMask { get; set; } // one bit per loot item (up to 64); bit N set = item N is already taken
 
     public override void Spawned()
     {
@@ -31,6 +32,17 @@ public class RunManager : NetworkBehaviour
         if (!HasStateAuthority || State != RunState.InProgress) return;
         playersAlive--;
         if (playersAlive <= 0) ChangeState(RunState.Caught);
+    }
+
+    public bool IsLooted(int lootId) => (lootedMask & (1ul << lootId)) != 0;
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_ClaimLoot(int lootId, int value)
+    {
+        ulong bit = 1ul << lootId;
+        if ((lootedMask & bit) != 0) return; // already taken (two players pressed E at the same time)
+        lootedMask |= bit;
+        GatheredLootValue += value;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
