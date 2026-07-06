@@ -57,7 +57,7 @@ public class SecurityCamera : MonoBehaviour
         foreach (Player player in Player.ActivePlayers)
         {
             if (player.Object == null || !player.Object.IsValid) continue;
-            if (player.IsEliminated || player.IsLockedUp) continue;
+            if (player.IsEliminated || player.IsLockedUp || player.IsHiding) continue;
 
             Vector3 toPlayer = player.transform.position - transform.position;
             float distance = toPlayer.magnitude;

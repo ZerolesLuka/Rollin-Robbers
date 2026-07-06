@@ -37,6 +37,12 @@ public class GuardVision : MonoBehaviour
             return false;
         }
 
+        Player targetPlayer = target.GetComponent<Player>();
+        if (targetPlayer != null && targetPlayer.IsHiding) // hidden players are invisible to all sensors
+        {
+            return false;
+        }
+
         return true;
     }
 

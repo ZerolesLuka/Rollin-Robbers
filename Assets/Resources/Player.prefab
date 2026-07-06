@@ -279,6 +279,8 @@ MonoBehaviour:
   verticalVelocity: 0
   _IsEliminated: 0
   _IsLockedUp: 0
+  _IsHiding: 0
+  playerVisuals: {fileID: 2020982582522420744}
   dragTrailLag: 12
   rescueRange: 2.5
   lootRange: 2

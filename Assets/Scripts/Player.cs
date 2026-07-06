@@ -47,6 +47,9 @@ public class Player : NetworkBehaviour
 
     [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
     [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
+    [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
+    [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
+    private bool wasHiding;
     private bool isBeingDragged; //true while the guard is hauling us to the closet
     private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
@@ -98,6 +101,12 @@ public class Player : NetworkBehaviour
             voiceMuffle.enabled = IsLockedUp; //taped mouth: muffle this player's LIVE voice while trapped. Runs on ALL copies (before the authority check) so remote teammates hear the muffle, driven by the [Networked] IsLockedUp
         }
 
+        if (playerVisuals != null && Object != null && Object.IsValid && IsHiding != wasHiding)
+        {
+            wasHiding = IsHiding;
+            playerVisuals.SetActive(!IsHiding); // runs on all clients so other players see you vanish
+        }
+
         if (!HasInputAuthority) return; //stop here if not our instance of player
         HandleLook(); //our player only
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
@@ -124,6 +133,14 @@ public class Player : NetworkBehaviour
                 transform.position = dragTrail.Peek(); //sit where the guard was a few ticks ago - behind him, ON his valid path (no clipping, not inside him)
             }
             NoiseLevel = 0f; //can't make useful noise while grabbed
+            return;
+        }
+
+        if (IsHiding) // locked inside a hiding spot - can't move, but can still press E to exit
+        {
+            NoiseLevel = 0f;
+            if (GetInput(out NetworkInputData hidingInput))
+                HandleInteract(hidingInput.interactInput);
             return;
         }
 
@@ -272,6 +289,23 @@ public class Player : NetworkBehaviour
                 return;
             }
         }
+     
+        foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
+        {
+            if(Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)
+            {
+                if(!hidingSpot.isOccupied)
+                {
+                    hidingSpot.OnSpotEnter();
+                    hidingSpot.isOccupied = true;
+                }
+                else if(hidingSpot.isOccupied && hidingSpot.isHiding)
+                {
+                    hidingSpot.OnSpotExit();
+                }
+                return;
+            }
+        }
     }
 
     public void TeleportTo(Vector3 position) //called by GameBootstrap after a scene load to reposition the local player
@@ -353,6 +387,8 @@ public class Player : NetworkBehaviour
             }
         }
     }
+    public void SetHiding(bool hiding) => IsHiding = hiding;
+
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
     {
