@@ -115,22 +115,23 @@ public class SecurityCamera : MonoBehaviour
         float centerYaw = Application.isPlaying ? initialYaw : transform.eulerAngles.y;
         Vector3 euler = Application.isPlaying ? initialEuler : transform.eulerAngles;
         float halfFov = fovAngle * 0.5f;
-        int segments = 20;
+        int ringSegments = 24;
 
-        //detection cone in yellow - lines from camera to each edge of the cone + arc across the tip
+        //detection cone in yellow - a ring of rays around transform.forward at the half-angle, plus lines from the tip back to origin
         Gizmos.color = new Color(1f, 0.9f, 0f, 0.6f);
-        Vector3 prevEdge = Vector3.zero;
-        for (int i = 0; i <= segments; i++)
+        Vector3 prevRingPoint = Vector3.zero;
+        for (int i = 0; i <= ringSegments; i++)
         {
-            float angle = Mathf.Lerp(-halfFov, halfFov, i / (float)segments);
-            Vector3 dir = Quaternion.Euler(euler.x, transform.eulerAngles.y + angle, euler.z) * Vector3.forward;
-            Vector3 edge = transform.position + dir * sightRange;
-            Gizmos.DrawLine(transform.position, edge);
-            if (i > 0) Gizmos.DrawLine(transform.position + prevEdge, edge); // tip arc
-            prevEdge = dir * sightRange;
+            float ringAngle = (i / (float)ringSegments) * 360f;
+            //rotate a vector that sits on the cone edge (halfFov away from forward) around the forward axis
+            Vector3 coneEdge = Quaternion.AngleAxis(ringAngle, transform.forward) * (Quaternion.AngleAxis(halfFov, transform.up) * transform.forward);
+            Vector3 ringPoint = transform.position + coneEdge * sightRange;
+            Gizmos.DrawLine(transform.position, ringPoint); //spoke from camera to ring
+            if (i > 0) Gizmos.DrawLine(prevRingPoint, ringPoint); //ring edge
+            prevRingPoint = ringPoint;
         }
 
-        //patrol arc limits in cyan - shows how far left and right the camera sweeps
+        //patrol arc limits in cyan
         Gizmos.color = new Color(0f, 1f, 1f, 0.5f);
         float halfArc = patrolArcDegrees * 0.5f;
         Vector3 leftDir = Quaternion.Euler(euler.x, centerYaw - halfArc, euler.z) * Vector3.forward;
