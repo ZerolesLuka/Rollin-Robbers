@@ -8,6 +8,7 @@ public class PlayerFootsteps : NetworkBehaviour
     [SerializeField] private AudioClip[] footstepClips; // Array of footstep audio clips
     [SerializeField] private CharacterController characterController;
     [SerializeField] private float strideLength = 2f;   //distance walked per step
+    [SerializeField] private float maxStepDistance = 1f; //any per-tick move larger than this is a teleport, not a step - ignore it so we don't spam footsteps
 
     private Vector3 lastPosition; // To track the player's last position
     private float stepAccumulator; // Accumulates distance walked to determine when to play the next footstep sound
@@ -27,7 +28,7 @@ public class PlayerFootsteps : NetworkBehaviour
 
         lastPosition = transform.position; // Update last position for the next frame
 
-        if (characterController.isGrounded)
+        if (characterController.isGrounded && distance <= maxStepDistance)
         {
             stepAccumulator += distance;
         }

@@ -50,6 +50,9 @@ public class Player : NetworkBehaviour
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     private bool wasHiding;
+    private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
+    private Vector3 pendingTeleportPosition;
+    private int teleportSettleTicks; //ticks to hold position with the CC disabled after a teleport, so the disable is processed before we re-enable (a same-frame off/on doesn't reset the CC's internal position)
     private bool isBeingDragged; //true while the guard is hauling us to the closet
     private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
@@ -119,6 +122,23 @@ public class Player : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
+        if (hasPendingTeleport)
+        {
+            ApplyPendingTeleport(); //begins the teleport: CC off, position set, networked. CC is re-enabled a couple ticks later once the disable has processed
+            return;
+        }
+
+        if (teleportSettleTicks > 0)
+        {
+            transform.position = pendingTeleportPosition; //hold firmly at the spawn while the CC is disabled so nothing drifts
+            teleportSettleTicks--;
+            if (teleportSettleTicks == 0)
+            {
+                characterController.enabled = true; //re-enable now - the disable happened ticks ago, so the CC resets its internal position to the spawn cleanly
+            }
+            return; //no movement while settling
+        }
+
         if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore
 
         if (isBeingDragged) //the guard is hauling us to the closet - no control, trail behind him on his path
@@ -285,7 +305,7 @@ public class Player : NetworkBehaviour
         {
             if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)
             {
-                RunManager.Instance.RPC_LoadScene(door.targetSceneBuildIndex);
+                RunManager.Instance.RPC_LoadScene(door.targetSceneBuildIndex, door.spawnPointId);
                 return;
             }
         }
@@ -308,13 +328,27 @@ public class Player : NetworkBehaviour
         }
     }
 
-    public void TeleportTo(Vector3 position) //called by GameBootstrap after a scene load to reposition the local player
+    public void TeleportTo(Vector3 position) //called after a scene load to reposition the local player
     {
         if (!HasInputAuthority) return; //only move our own player; Fusion syncs the position to everyone else
+        pendingTeleportPosition = position;
+        hasPendingTeleport = true; //applied in FixedUpdateNetwork - see the block at the top of it
+    }
+
+    private void ApplyPendingTeleport()
+    {
+        hasPendingTeleport = false;
         verticalVelocity = 0f; //reset fall speed so the player doesn't phase through the floor on arrival
-        characterController.enabled = false;
-        transform.position = position;
-        characterController.enabled = true;
+        characterController.enabled = false; //stays off for teleportSettleTicks so the disable is processed before the re-enable
+        transform.position = pendingTeleportPosition;
+
+        NetworkTransform networkTransform = GetComponent<NetworkTransform>();
+        if (networkTransform != null)
+        {
+            networkTransform.Teleport(pendingTeleportPosition); //update the networked position + clear interpolation so Fusion doesn't lerp us back to the old spot
+        }
+
+        teleportSettleTicks = 2;
     }
     private void HandleLook()
     {
@@ -365,26 +399,50 @@ public class Player : NetworkBehaviour
 
     private System.Collections.IEnumerator TeleportAfterLoad()
     {
-        //scene objects aren't always ready on the frame activeSceneChanged fires - poll until the spawn point exists
-        GameObject spawnPoint = null;
-        float timeout = 3f;
+        SpawnPoint spawnPoint = null;
+        float timeout = 5f;
         while (spawnPoint == null && timeout > 0f)
         {
-            spawnPoint = GameObject.Find("PlayerSpawn");
+            //re-read the id every frame - the networked value may not have replicated on the frame the scene loaded
+            int targetId = (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+                ? RunManager.Instance.EntrySpawnPointId
+                : 0;
+
+            Scene activeScene = SceneManager.GetActiveScene();
+            foreach (SpawnPoint candidate in SpawnPoint.All)
+            {
+                //ignore spawn points from the scene we just left - they linger in the static list for a frame or two and hold stale coordinates
+                if (candidate.gameObject.scene != activeScene) continue;
+                if (candidate.spawnId == targetId)
+                {
+                    spawnPoint = candidate;
+                    break;
+                }
+            }
             timeout -= Time.deltaTime;
             yield return null;
         }
+
+        //fall back to any spawn point IN THIS SCENE rather than leaving the player floating in the void at their old coordinates
+        if (spawnPoint == null)
+        {
+            Scene activeScene = SceneManager.GetActiveScene();
+            foreach (SpawnPoint candidate in SpawnPoint.All)
+            {
+                if (candidate.gameObject.scene != activeScene) continue;
+                spawnPoint = candidate;
+                Debug.LogWarning($"[Player] Matching SpawnPoint not found in time - falling back to '{spawnPoint.name}'.");
+                break;
+            }
+        }
+
         if (spawnPoint != null)
         {
             TeleportTo(spawnPoint.transform.position);
         }
         else
         {
-            Debug.LogWarning($"[Player] PlayerSpawn not found. Active scene: '{SceneManager.GetActiveScene().name}'. Root objects:");
-            foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
-            {
-                Debug.LogWarning($"  '{root.name}' (active: {root.activeInHierarchy})");
-            }
+            Debug.LogWarning($"[Player] No SpawnPoints exist in scene '{SceneManager.GetActiveScene().name}'.");
         }
     }
     public void SetHiding(bool hiding) => IsHiding = hiding;

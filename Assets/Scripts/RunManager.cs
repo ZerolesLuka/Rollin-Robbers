@@ -14,6 +14,7 @@ public class RunManager : NetworkBehaviour
     [SerializeField] public int totalLootValue; // total value of all loot in the house - set in Inspector for a score screen later
     [Networked] public int GatheredLootValue { get; private set; } // what the team has picked up so far - replicates to all clients
     [Networked] private ulong lootedMask { get; set; } // one bit per loot item (up to 64); bit N set = item N is already taken
+    [Networked] public int EntrySpawnPointId { get; private set; } // which PlayerSpawnN to teleport to after a scene load - set by whichever door triggers the transition
 
     public override void Spawned()
     {
@@ -47,11 +48,12 @@ public class RunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_LoadScene(int buildIndex)
+    public void RPC_LoadScene(int buildIndex, int spawnPointId)
     {
+        EntrySpawnPointId = spawnPointId;
         if (GuardPatrol.Instance != null)
         {
-            Runner.Despawn(GuardPatrol.Instance.Object); // indoor guard can't navigate the outdoor NavMesh - clean it up before leaving
+            Runner.Despawn(GuardPatrol.Instance.Object);
         }
         Runner.LoadScene(SceneRef.FromIndex(buildIndex));
     }

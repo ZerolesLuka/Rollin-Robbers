@@ -8,8 +8,9 @@ public class ExitDoor : MonoBehaviour
 {
     public static readonly List<ExitDoor> AllDoors = new List<ExitDoor>();
 
-    [SerializeField] public int targetSceneBuildIndex = 1; // outdoor scene index in Build Settings
+    [SerializeField] public int targetSceneBuildIndex = 1;
     [SerializeField] public float interactRange = 2f;
+    [SerializeField] public int spawnPointId = 0; // which PlayerSpawnN to use in the destination scene
 
     private void OnEnable() => AllDoors.Add(this);
     private void OnDisable() => AllDoors.Remove(this);
