@@ -309,7 +309,18 @@ public class Player : NetworkBehaviour
                 return;
             }
         }
-     
+
+        //getaway van: start it from the driver's seat and the run ends successfully for everyone
+        foreach (Van van in Van.AllVans)
+        {
+            Transform seat = van.driverSeat != null ? van.driverSeat : van.transform;
+            if (Vector3.Distance(transform.position, seat.position) <= van.interactRange)
+            {
+                RunManager.Instance.RPC_StartGetaway();
+                return;
+            }
+        }
+
         foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
         {
             if(Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)

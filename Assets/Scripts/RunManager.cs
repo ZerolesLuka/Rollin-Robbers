@@ -76,6 +76,12 @@ public class RunManager : NetworkBehaviour
         ChangeState(RunState.Success);
     }
 
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_StartGetaway() //any player can start the van; the authority flips the run to Success and it replicates to everyone
+    {
+        OnLootExtracted();
+    }
+
     private void ChangeState(RunState newState)
     {
         State = newState;
