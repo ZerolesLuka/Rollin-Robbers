@@ -71,6 +71,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         networkInputData.sprintInput = Player.LocalPlayer.playerInputActions.Player.Sprint.ReadValue<float>() > 0.5f;
         networkInputData.jumpInput = Player.LocalPlayer.playerInputActions.Player.Jump.ReadValue<float>() > 0.5f;
         networkInputData.interactInput = Player.LocalPlayer.playerInputActions.Player.Interact.ReadValue<float>() > 0.5f; //E to free a trapped teammate (and later: loot, lockpick, extract)
+        networkInputData.flashlightInput = Player.LocalPlayer.playerInputActions.Player.Flashlight.ReadValue<float>() > 0.5f; //F to toggle the flashlight
         input.Set(networkInputData); //set the network input to the struct
     }
 

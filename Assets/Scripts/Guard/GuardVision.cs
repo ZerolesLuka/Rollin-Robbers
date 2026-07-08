@@ -9,15 +9,29 @@ public class GuardVision : MonoBehaviour
     [SerializeField] private float fovAngle = 120f;   //width of the view cone in degrees
     [SerializeField] private float eyeHeight = 1.6f;  //where he sees from
     [SerializeField] private LayerMask obstacleMask;  //what blocks line of sight
+    [SerializeField] private float flashlightSightBonus = 6f; //a player with their flashlight ON is lit up - visible from this much farther away
 
     public bool CanSee(Transform target)
     {
+        Player targetPlayer = target.GetComponent<Player>();
+        if (targetPlayer != null && targetPlayer.IsHiding) // hidden players are invisible to all sensors
+        {
+            return false;
+        }
+
         Vector3 eyePos = transform.position + Vector3.up * eyeHeight;  //where the guard sees from
         Vector3 targetPos = target.position + Vector3.up * 1f;         //aim at the target's body
         Vector3 toTarget = targetPos - eyePos;
         float distance = toTarget.magnitude;
 
-        if (distance > sightRange) //out of range
+        //a lit flashlight gives the holder away - the guard picks them out from farther in the dark
+        float effectiveSightRange = sightRange;
+        if (targetPlayer != null && targetPlayer.IsFlashlightOn)
+        {
+            effectiveSightRange += flashlightSightBonus;
+        }
+
+        if (distance > effectiveSightRange) //out of range
         {
             return false;
         }
@@ -33,12 +47,6 @@ public class GuardVision : MonoBehaviour
         }
 
         if (Physics.Raycast(eyePos, dir, distance, obstacleMask)) //something's blocking the view
-        {
-            return false;
-        }
-
-        Player targetPlayer = target.GetComponent<Player>();
-        if (targetPlayer != null && targetPlayer.IsHiding) // hidden players are invisible to all sensors
         {
             return false;
         }

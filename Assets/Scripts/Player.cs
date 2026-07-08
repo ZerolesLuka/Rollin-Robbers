@@ -50,6 +50,12 @@ public class Player : NetworkBehaviour
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     private bool wasHiding;
+
+    [Networked] public bool IsFlashlightOn { get; private set; } //replicated so teammates see your beam, same idea as IsHiding driving playerVisuals
+    [Networked] private float lookPitch { get; set; } //owner writes its up/down look angle here so remote clients can aim its flashlight beam vertically (their camera pitch isn't otherwise networked)
+    [SerializeField] private Light flashlight; //spotlight child; assign in inspector
+    [SerializeField] private float flashlightFollowSpeed = 10f; //how fast the beam catches up to where you're looking - lower = more lag/sway off the camera
+    private bool flashlightHeldLastTick; //rising-edge detect so one press = one toggle
     private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
     private Vector3 pendingTeleportPosition;
     private int teleportSettleTicks; //ticks to hold position with the CC disabled after a teleport, so the disable is processed before we re-enable (a same-frame off/on doesn't reset the CC's internal position)
@@ -110,9 +116,22 @@ public class Player : NetworkBehaviour
             playerVisuals.SetActive(!IsHiding); // runs on all clients so other players see you vanish
         }
 
+        UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
+
         if (!HasInputAuthority) return; //stop here if not our instance of player
         HandleLook(); //our player only
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
+    }
+
+    private void UpdateFlashlight()
+    {
+        if (flashlight == null || Object == null || !Object.IsValid) return;
+
+        flashlight.enabled = IsFlashlightOn; //on every client, so you see teammates' beams too
+
+        //aim the beam where this player is looking - body yaw (networked) + look pitch (networked), eased so the beam trails the camera slightly instead of snapping. that lag is the "handheld" feel
+        Quaternion targetRotation = Quaternion.Euler(lookPitch, transform.eulerAngles.y, 0f);
+        flashlight.transform.rotation = Quaternion.Slerp(flashlight.transform.rotation, targetRotation, flashlightFollowSpeed * Time.deltaTime);
     }
     private void LateUpdate()
     {
@@ -185,12 +204,28 @@ public class Player : NetworkBehaviour
             return;
         }
 
+        if (HasStateAuthority)
+        {
+            lookPitch = xRotation; //publish our up/down look angle so remote clients can aim our flashlight beam (their copy never runs HandleLook)
+        }
+
         PlayerGravity();
         if (GetInput(out NetworkInputData networkInputData))
         {
             HandleMovement(networkInputData.movementInput, networkInputData.sprintInput, networkInputData.jumpInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
             HandleInteract(networkInputData.interactInput); //E to free a trapped teammate
+            HandleFlashlight(networkInputData.flashlightInput); //F to toggle the flashlight
+        }
+    }
+
+    private void HandleFlashlight(bool flashlightPressed)
+    {
+        bool pressed = flashlightPressed && !flashlightHeldLastTick; //rising edge only - one toggle per press
+        flashlightHeldLastTick = flashlightPressed;
+        if (pressed)
+        {
+            IsFlashlightOn = !IsFlashlightOn; //networked, so every client's copy of us updates the beam in Update
         }
     }
     private void HandleMovement(Vector2 inputVector, bool sprinting, bool jumpInput)

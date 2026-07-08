@@ -10,5 +10,6 @@ public struct NetworkInputData : INetworkInput //A struct holds input of the pla
     public bool sprintInput;
     public bool jumpInput;
     public bool interactInput;
+    public bool flashlightInput; //F held this tick - the player edge-detects it to toggle the flashlight on/off
 
 }
