@@ -40254,6 +40254,12 @@ MonoBehaviour:
   - {fileID: 838602046}
   - {fileID: 1894370996}
   closetSpot: {fileID: 1475882560}
+  dogPrefab: {fileID: 5647142314712709375, guid: 8e394e6e17792f04cb9484ae0a8e0720, type: 3}
+  dogSpawn: {fileID: 1311313096}
+  dogWaypoints:
+  - {fileID: 578799530}
+  - {fileID: 838602046}
+  - {fileID: 1894370996}
 --- !u!4 &1045881976
 Transform:
   m_ObjectHideFlags: 0
@@ -46714,6 +46720,75 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 192233920417278196, guid: 0b7921e1f8eecd14a9e23bffb8650fdd, type: 3}
   m_PrefabInstance: {fileID: 1213083025}
   m_PrefabAsset: {fileID: 0}
+--- !u!1001 &1218766453
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1481696589}
+    m_Modifications:
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.4255352
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 2.3731823
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 12.3145485
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2220929941919385348, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+      propertyPath: m_Name
+      value: DogSpawn
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
 --- !u!43 &1228072981
 Mesh:
   m_ObjectHideFlags: 0
@@ -49524,6 +49599,11 @@ MonoBehaviour:
   m_SelectedFaces: 
   m_SelectedEdges: []
   m_SelectedVertices: 
+--- !u!4 &1311313096 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 146397557405775496, guid: 84baba05c9e2c2047baf7f1b82fe7b99, type: 3}
+  m_PrefabInstance: {fileID: 1218766453}
+  m_PrefabAsset: {fileID: 0}
 --- !u!43 &1319168400
 Mesh:
   m_ObjectHideFlags: 0
@@ -53700,6 +53780,7 @@ Transform:
   - {fileID: 1523321636}
   - {fileID: 125500314}
   - {fileID: 1475882560}
+  - {fileID: 1311313096}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1484691653

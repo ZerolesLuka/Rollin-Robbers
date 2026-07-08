@@ -56,6 +56,10 @@ public class RunManager : NetworkBehaviour
         {
             Runner.Despawn(GuardPatrol.Instance.Object);
         }
+        if (DogAI.Instance != null)
+        {
+            Runner.Despawn(DogAI.Instance.Object); //neither guard type can navigate the outdoor NavMesh - clean up before leaving
+        }
         Runner.LoadScene(SceneRef.FromIndex(buildIndex));
     }
 
@@ -92,6 +96,10 @@ public class RunManager : NetworkBehaviour
         if (GuardPatrol.Instance != null)
         {
             Runner.Despawn(GuardPatrol.Instance.Object);
+        }
+        if (DogAI.Instance != null)
+        {
+            Runner.Despawn(DogAI.Instance.Object);
         }
         Runner.LoadScene(SceneRef.FromIndex(outdoorSceneBuildIndex));
     }

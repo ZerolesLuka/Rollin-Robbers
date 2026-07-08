@@ -131,6 +131,7 @@ public class Player : NetworkBehaviour
         if (teleportSettleTicks > 0)
         {
             transform.position = pendingTeleportPosition; //hold firmly at the spawn while the CC is disabled so nothing drifts
+            NoiseLevel = 0f; //a mid-teleport player isn't making footstep noise - clear the stale walking value so a freshly-spawned guard doesn't "hear" the footstep from before the transition
             teleportSettleTicks--;
             if (teleportSettleTicks == 0)
             {
@@ -350,6 +351,7 @@ public class Player : NetworkBehaviour
     {
         hasPendingTeleport = false;
         verticalVelocity = 0f; //reset fall speed so the player doesn't phase through the floor on arrival
+        NoiseLevel = 0f; //clear any stale walking noise from before the transition so a freshly-spawned guard doesn't wake to a footstep that already happened
         characterController.enabled = false; //stays off for teleportSettleTicks so the disable is processed before the re-enable
         transform.position = pendingTeleportPosition;
 

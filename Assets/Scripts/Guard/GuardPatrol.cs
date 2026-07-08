@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using Fusion;
 using UnityEngine.AI;
 
@@ -50,6 +51,23 @@ public class GuardPatrol : NetworkBehaviour
 
     [SerializeField] private Vector3 spawnPosition;
 
+    private Vector3 lastTargetPosition; //used to estimate the chase target's velocity for predictive pursuit
+    private Vector3 targetVelocity;
+    [SerializeField] private float predictionLeadTime = 0.3f; //seconds ahead of the target's velocity the guard aims for - cuts corners instead of tailing exactly
+
+    private float lastReactedLootPercent; //how much of the house's value he's already gotten rattled about
+    [SerializeField] private float lootSuspicionStep = 0.25f; //every time another quarter of the house's total value goes missing, he notices
+    [SerializeField] private float noiseThresholdDropPerLootMilestone = 0.75f; //each milestone permanently sharpens his ears for the rest of the run - he's on edge now
+
+    private readonly List<Vector3> searchPointsThisSweep = new List<Vector3>(); //spots already checked this search - keeps the sweep spreading out instead of clustering by chance
+    [SerializeField] private float minSearchPointSpacing = 2f; //a new random search point must be at least this far from ones already checked
+
+    [SerializeField] private float sweepLookRange = 45f; //how far left/right of center he turns while waiting at a search point
+    [SerializeField] private float sweepLookSpeed = 90f;  //degrees per second the look oscillates back and forth
+    private bool isSweepingSearchPoint;
+    private float sweepBaseYaw;    //the direction he was facing when he arrived - the look oscillates around this, not world-forward
+    private float sweepPhaseTimer;
+
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 6.5f;
@@ -92,6 +110,7 @@ public class GuardPatrol : NetworkBehaviour
         if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
 
         TickAnger(); //rise while chasing, cool while calm
+        CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
 
         switch(State)
         {
@@ -109,8 +128,7 @@ public class GuardPatrol : NetworkBehaviour
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
                 if (relaxPatrolTimer <= 0f && waypoints != null && waypoints.Length > 0 && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    currentWaypoint = (currentWaypoint + 1) % waypoints.Length; //cycle to next waypoint, wraps with modulo
-                    agent.SetDestination(waypoints[currentWaypoint].position);
+                    PickNextWaypoint(); //random non-repeating pick instead of a fixed cycle - a memorized loop is a stealth game's biggest exploit
                     relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit then move again
                 }
                 break;
@@ -173,11 +191,22 @@ public class GuardPatrol : NetworkBehaviour
 
                 if (!agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
+                    if (!isSweepingSearchPoint) //just arrived - lock in facing direction and take manual control of rotation while we look around
+                    {
+                        isSweepingSearchPoint = true;
+                        agent.updateRotation = false; //nothing to path toward right now anyway, so this can't fight the agent's own auto-rotate
+                        sweepBaseYaw = transform.eulerAngles.y;
+                        sweepPhaseTimer = 0f;
+                    }
+                    SweepLookAround(); //turn his head left/right instead of standing frozen while he checks the spot
+
                     searchSweepWaitTimer += Runner.DeltaTime;
 
                     if (searchSweepWaitTimer >= searchSweepWaitTime)
                     {
                         searchSweepWaitTimer = 0f;
+                        isSweepingSearchPoint = false;
+                        agent.updateRotation = true; //hand facing back to the agent now that he's about to move again
                         searchSweepPointsChecked++;
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
@@ -203,8 +232,13 @@ public class GuardPatrol : NetworkBehaviour
 
                 if (vision.CanSee(chaseTarget.transform) || distanceToTarget < chaseSenseRange) //see the target or close enough to sense them
                 {
-                    lastKnownPosition = chaseTarget.transform.position;
-                    agent.SetDestination(lastKnownPosition);
+                    Vector3 currentTargetPosition = chaseTarget.transform.position;
+                    targetVelocity = (currentTargetPosition - lastTargetPosition) / Runner.DeltaTime; //crude per-tick velocity estimate
+                    lastTargetPosition = currentTargetPosition;
+
+                    lastKnownPosition = currentTargetPosition; //still the real last-seen spot, used if we lose the target entirely
+                    Vector3 predictedPosition = currentTargetPosition + targetVelocity * predictionLeadTime; //aim a little ahead instead of exactly where they are right now
+                    agent.SetDestination(predictedPosition);
                 }
                 if (distanceToTarget < catchRange)
                 {
@@ -270,6 +304,12 @@ public class GuardPatrol : NetworkBehaviour
     private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry
     {
         State = newState;
+
+        //default rotation control back to the agent on every transition - Searching re-claims it manually, but only while actually idle at a sweep point.
+        //covers spotting a player mid-sweep (Searching -> Chasing without ever reaching the sweep-timeout code below)
+        agent.updateRotation = true;
+        isSweepingSearchPoint = false;
+
         switch (newState)
         {
             case GuardState.Asleep:
@@ -299,11 +339,20 @@ public class GuardPatrol : NetworkBehaviour
                 searchNoiseReactionTimer = 0f;
                 searchSweepWaitTimer = 0f;
                 searchSweepPointsChecked = 0;
+                searchPointsThisSweep.Clear(); //fresh search - forget spots checked on a previous alert
+                searchPointsThisSweep.Add(lastKnownPosition); //count the first spot he's heading to so later sweep points don't cluster around it either
                 PlayStateSound(newState); //bark whenever he changes state
+                if (DogAI.Instance != null) DogAI.Instance.AlertTo(lastKnownPosition); //a confirmed noise pulls the dog toward it too
                 break;
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;
                 Anger = Mathf.Min(angerMax, Anger + angerPerAlert); //spotting a player really sets him off
+                if (chaseTarget != null)
+                {
+                    lastTargetPosition = chaseTarget.transform.position; //reset so the first velocity sample isn't computed against stale data from a previous chase
+                    targetVelocity = Vector3.zero;
+                    if (DogAI.Instance != null) DogAI.Instance.AlertTo(chaseTarget.transform.position); //a confirmed sighting pulls the dog in too - two threats converging is meaningfully scarier
+                }
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Caught:
@@ -330,6 +379,41 @@ public class GuardPatrol : NetworkBehaviour
         {
             Anger = Mathf.Max(0f, Anger - angerDecayRate * Runner.DeltaTime);
         }
+    }
+
+    private void CheckForMissingLoot() //a new sensing mode: notices his valuables disappearing even with zero noise or sightings - ties threat directly to how much you've stolen
+    {
+        if (RunManager.Instance == null || RunManager.Instance.totalLootValue <= 0) return;
+        if (State != GuardState.Asleep && State != GuardState.Relaxed) return; //only the calm states get spooked by this - an already-alert guard doesn't need extra help
+
+        float lootPercentTaken = RunManager.Instance.GatheredLootValue / (float)RunManager.Instance.totalLootValue;
+        if (lootPercentTaken - lastReactedLootPercent >= lootSuspicionStep)
+        {
+            lastReactedLootPercent = lootPercentTaken;
+            noiseThreshold = Mathf.Max(1f, noiseThreshold - noiseThresholdDropPerLootMilestone); //getting nervous permanently sharpens his ears
+
+            //go straight to Searching, NOT Suspicious - Suspicious drains back to sleep when there's no noise, so a silent looter would never trigger a real search (the whole point of this sensor).
+            //point him at an emptied container so he actually investigates the scene of the crime instead of sweeping a random old spot.
+            lastKnownPosition = NearestLootedItemPosition();
+            ChangeState(GuardState.Searching); //"...wait, where's my silverware?" - and now he actually goes looking
+        }
+    }
+
+    private Vector3 NearestLootedItemPosition() //find an already-taken container to send the guard to - the closest one reads as him noticing the freshest theft
+    {
+        Vector3 nearest = transform.position; //fallback: search around himself if we somehow can't find a looted item
+        float nearestDistance = float.MaxValue;
+        foreach (Lootable lootable in Lootable.AllLootables)
+        {
+            if (!lootable.IsLooted) continue;
+            float distance = Vector3.Distance(transform.position, lootable.transform.position);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = lootable.transform.position;
+            }
+        }
+        return nearest;
     }
 
     private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)
@@ -383,14 +467,62 @@ public class GuardPatrol : NetworkBehaviour
             //Relaxed / Escorting: no bark
         }
     }
-    private void PickRandomSearchPoint(Vector3 searchCenter)
+    private void SweepLookAround() //oscillates his facing left/right around the direction he arrived, instead of standing frozen while he checks a search point
     {
-        Vector2 randomCircle = Random.insideUnitCircle * searchSweepRadius;
-        Vector3 randomPosition = searchCenter + new Vector3(randomCircle.x, 0f, randomCircle.y);
+        sweepPhaseTimer += Runner.DeltaTime;
+        float sweepAngle = Mathf.Sin(sweepPhaseTimer * sweepLookSpeed * Mathf.Deg2Rad) * sweepLookRange; //smooth back-and-forth between -sweepLookRange and +sweepLookRange
+        transform.rotation = Quaternion.Euler(0f, sweepBaseYaw + sweepAngle, 0f);
+    }
 
-        if(NavMesh.SamplePosition(randomPosition, out NavMeshHit hit, searchSweepRadius, NavMesh.AllAreas)) // if that position hits the mesh
+    private void PickRandomSearchPoint(Vector3 searchCenter) //picks a spot to check, biased away from ones already checked this search so the sweep spreads out instead of clustering by chance
+    {
+        Vector3 bestCandidate = searchCenter;
+        bool foundCandidate = false;
+
+        for (int attempt = 0; attempt < 5; attempt++) //a few tries to find a spot that isn't right on top of ground he's already covered
         {
-            agent.SetDestination(hit.position); //position the guard chose on the random circle
+            Vector2 randomCircle = Random.insideUnitCircle * searchSweepRadius;
+            Vector3 randomPosition = searchCenter + new Vector3(randomCircle.x, 0f, randomCircle.y);
+            if (!NavMesh.SamplePosition(randomPosition, out NavMeshHit hit, searchSweepRadius, NavMesh.AllAreas)) continue;
+
+            bestCandidate = hit.position;
+            foundCandidate = true;
+
+            bool tooClose = false;
+            foreach (Vector3 checkedPoint in searchPointsThisSweep)
+            {
+                if (Vector3.Distance(hit.position, checkedPoint) < minSearchPointSpacing)
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (!tooClose) break; //well-spaced spot found, stop looking
         }
+
+        if (foundCandidate)
+        {
+            searchPointsThisSweep.Add(bestCandidate);
+            agent.SetDestination(bestCandidate);
+        }
+    }
+
+    private void PickNextWaypoint() //random non-repeating pick instead of a fixed cycle, so the patrol route can't be memorized
+    {
+        if (waypoints.Length == 1)
+        {
+            currentWaypoint = 0;
+            agent.SetDestination(waypoints[0].position);
+            return;
+        }
+
+        int nextWaypoint;
+        do
+        {
+            nextWaypoint = Random.Range(0, waypoints.Length);
+        } while (nextWaypoint == currentWaypoint); //never immediately repeat the spot we're already at
+
+        currentWaypoint = nextWaypoint;
+        agent.SetDestination(waypoints[currentWaypoint].position);
     }
 }

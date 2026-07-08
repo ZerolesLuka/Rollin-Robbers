@@ -10,6 +10,10 @@ public class GuardBootstrap : MonoBehaviour
     [SerializeField] private Transform[] guardWaypoints;
     [SerializeField] private Transform closetSpot;
 
+    [SerializeField] private NetworkObject dogPrefab;     //leave null to skip the dog entirely - not every house needs one
+    [SerializeField] private Transform dogSpawn;
+    [SerializeField] private Transform[] dogWaypoints;    //optional - DogAI wanders near its spawn if this is empty
+
     public void TriggerSpawn(NetworkRunner runner)
     {
         if (!runner.IsSharedModeMasterClient) return;
@@ -21,5 +25,15 @@ public class GuardBootstrap : MonoBehaviour
                 guard.SetWaypoints(guardWaypoints);
                 guard.SetCloset(closetSpot);
             });
+
+        if (dogPrefab != null && dogSpawn != null)
+        {
+            runner.Spawn(dogPrefab, dogSpawn.position, Quaternion.identity, PlayerRef.None,
+                (spawnRunner, obj) =>
+                {
+                    DogAI dog = obj.GetComponent<DogAI>();
+                    dog.SetWaypoints(dogWaypoints);
+                });
+        }
     }
 }
