@@ -6557,7 +6557,7 @@ Transform:
   m_GameObject: {fileID: 799293875}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0.00000065565104, z: -0, w: 1}
-  m_LocalPosition: {x: 2.87, y: 2.05, z: -22.0352}
+  m_LocalPosition: {x: 3.3, y: 2.05, z: -22.0352}
   m_LocalScale: {x: 1, y: 1.6146001, z: 3.6293154}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -6896,7 +6896,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExitDoor
   targetSceneBuildIndex: 0
-  interactRange: 2
+  interactRange: 5
   spawnPointId: 2
 --- !u!1 &815975939
 GameObject:

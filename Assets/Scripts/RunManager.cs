@@ -15,6 +15,7 @@ public class RunManager : NetworkBehaviour
     [Networked] public int GatheredLootValue { get; private set; } // what the team has picked up so far - replicates to all clients
     [Networked] private ulong lootedMask { get; set; } // one bit per loot item (up to 64); bit N set = item N is already taken
     [Networked] public int EntrySpawnPointId { get; private set; } // which PlayerSpawnN to teleport to after a scene load - set by whichever door triggers the transition
+    [SerializeField] private int outdoorSceneBuildIndex = 0; // the scene the van lives in - everyone gets pulled here when the run ends, even players still indoors
 
     public override void Spawned()
     {
@@ -86,6 +87,13 @@ public class RunManager : NetworkBehaviour
     {
         State = newState;
         Debug.Log($"Run ended: {newState}"); // TEMP: trigger end screen / return to lobby here
+
+        //force everyone to the outdoor scene so players left behind indoors (caught, locked up) also reach the van
+        if (GuardPatrol.Instance != null)
+        {
+            Runner.Despawn(GuardPatrol.Instance.Object);
+        }
+        Runner.LoadScene(SceneRef.FromIndex(outdoorSceneBuildIndex));
     }
     public override void FixedUpdateNetwork()
     {

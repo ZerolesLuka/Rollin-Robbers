@@ -48,7 +48,9 @@ MonoBehaviour:
   _State: 0
   _playersAlive: 0
   totalLootValue: 0
-  gatheredLootValue: 0
+  _GatheredLootValue: 0
+  _EntrySpawnPointId: 0
+  outdoorSceneBuildIndex: 1
 --- !u!114 &1268990276334212518
 MonoBehaviour:
   m_ObjectHideFlags: 0

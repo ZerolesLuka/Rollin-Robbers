@@ -53,7 +53,6 @@ public class Player : NetworkBehaviour
     private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
     private Vector3 pendingTeleportPosition;
     private int teleportSettleTicks; //ticks to hold position with the CC disabled after a teleport, so the disable is processed before we re-enable (a same-frame off/on doesn't reset the CC's internal position)
-    private bool hasSeatedForSuccess; //one-time guard so we don't re-teleport to the van seat every tick after the run succeeds
     private bool isBeingDragged; //true while the guard is hauling us to the closet
     private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
@@ -140,24 +139,7 @@ public class Player : NetworkBehaviour
             return; //no movement while settling
         }
 
-        //run succeeded - free players ride to their seat in the van; caught/locked-up players are left behind
-        if (HasInputAuthority && !hasSeatedForSuccess && RunManager.Instance != null && RunManager.Instance.Object != null
-            && RunManager.Instance.Object.IsValid && RunManager.Instance.State == RunManager.RunState.Success
-            && !IsEliminated && !IsLockedUp)
-        {
-            hasSeatedForSuccess = true;
-            int seatIndex = Object.InputAuthority.PlayerId % 4;
-            foreach (VanSeat seat in VanSeat.AllSeats)
-            {
-                if (seat.seatIndex == seatIndex)
-                {
-                    TeleportTo(seat.transform.position);
-                    break;
-                }
-            }
-        }
-
-        if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore
+        if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore - stays true until the run-end scene reload resets it (see TeleportAfterLoad)
 
         if (isBeingDragged) //the guard is hauling us to the closet - no control, trail behind him on his path
         {
@@ -428,6 +410,15 @@ public class Player : NetworkBehaviour
 
     private System.Collections.IEnumerator TeleportAfterLoad()
     {
+        //run is over (escaped OR everyone got caught) - ride the van instead of a door spawn point, even if we were still indoors when it ended
+        bool runEnded = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
+            && RunManager.Instance.State != RunManager.RunState.InProgress;
+        if (runEnded)
+        {
+            yield return TeleportToVanSeat();
+            yield break;
+        }
+
         SpawnPoint spawnPoint = null;
         float timeout = 5f;
         while (spawnPoint == null && timeout > 0f)
@@ -474,6 +465,49 @@ public class Player : NetworkBehaviour
             Debug.LogWarning($"[Player] No SpawnPoints exist in scene '{SceneManager.GetActiveScene().name}'.");
         }
     }
+
+    private System.Collections.IEnumerator TeleportToVanSeat()
+    {
+        IsEliminated = false; //pull caught/dead players back in - no loot, just a clean slate
+        IsLockedUp = false;
+        isBeingDragged = false;
+        draggingGuard = null;
+        dragTrail.Clear();
+        characterController.enabled = true; //restore control even if no seat is found below
+
+        int seatIndex = Object.InputAuthority.PlayerId % 4;
+        VanSeat targetSeat = null;
+        float timeout = 5f;
+        while (targetSeat == null && timeout > 0f)
+        {
+            foreach (VanSeat candidate in VanSeat.AllSeats)
+            {
+                if (candidate.seatIndex == seatIndex)
+                {
+                    targetSeat = candidate;
+                    break;
+                }
+            }
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        if (targetSeat == null && VanSeat.AllSeats.Count > 0)
+        {
+            targetSeat = VanSeat.AllSeats[0];
+            Debug.LogWarning($"[Player] Matching VanSeat not found - falling back to '{targetSeat.name}'.");
+        }
+
+        if (targetSeat != null)
+        {
+            TeleportTo(targetSeat.transform.position);
+        }
+        else
+        {
+            Debug.LogWarning("[Player] No VanSeats exist in the outdoor scene.");
+        }
+    }
+
     public void SetHiding(bool hiding) => IsHiding = hiding;
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
@@ -514,5 +548,5 @@ public class Player : NetworkBehaviour
         }
         IsLockedUp = false; //sprung by a friend - the only way out of the closet
     }
-}
+}//
 
