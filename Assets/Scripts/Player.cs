@@ -53,6 +53,7 @@ public class Player : NetworkBehaviour
     private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
     private Vector3 pendingTeleportPosition;
     private int teleportSettleTicks; //ticks to hold position with the CC disabled after a teleport, so the disable is processed before we re-enable (a same-frame off/on doesn't reset the CC's internal position)
+    private bool hasSeatedForSuccess; //one-time guard so we don't re-teleport to the van seat every tick after the run succeeds
     private bool isBeingDragged; //true while the guard is hauling us to the closet
     private GuardPatrol draggingGuard; //the guard currently dragging us, so we can trail behind him
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
@@ -137,6 +138,23 @@ public class Player : NetworkBehaviour
                 characterController.enabled = true; //re-enable now - the disable happened ticks ago, so the CC resets its internal position to the spawn cleanly
             }
             return; //no movement while settling
+        }
+
+        //run succeeded - free players ride to their seat in the van; caught/locked-up players are left behind
+        if (HasInputAuthority && !hasSeatedForSuccess && RunManager.Instance != null && RunManager.Instance.Object != null
+            && RunManager.Instance.Object.IsValid && RunManager.Instance.State == RunManager.RunState.Success
+            && !IsEliminated && !IsLockedUp)
+        {
+            hasSeatedForSuccess = true;
+            int seatIndex = Object.InputAuthority.PlayerId % 4;
+            foreach (VanSeat seat in VanSeat.AllSeats)
+            {
+                if (seat.seatIndex == seatIndex)
+                {
+                    TeleportTo(seat.transform.position);
+                    break;
+                }
+            }
         }
 
         if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore

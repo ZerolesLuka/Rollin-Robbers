@@ -165,6 +165,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         {
             GameMode = GameMode.Shared,
             SessionName = roomCode,
+            PlayerCount = 4, //hard cap the lobby at 4 - matches the van's 4 seats
             SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(), //required for Runner.LoadScene to preserve spawned NetworkObjects across scene loads
         });
         if(networkRunner.IsSharedModeMasterClient)
