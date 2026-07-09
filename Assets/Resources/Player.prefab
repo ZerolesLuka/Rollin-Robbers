@@ -249,8 +249,8 @@ Light:
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 1
   m_Range: 10
-  m_SpotAngle: 70.850624
-  m_InnerSpotAngle: 62.652702
+  m_SpotAngle: 86.157646
+  m_InnerSpotAngle: 45
   m_CookieSize2D: {x: 0.5, y: 0.5}
   m_Shadows:
     m_Type: 2
@@ -411,6 +411,9 @@ MonoBehaviour:
   _IsFlashlightOn: 0
   flashlight: {fileID: 8160274470397713396}
   flashlightFollowSpeed: 100
+  flashlightSwayAmount: 1.5
+  flashlightSwayFrequency: 1.1
+  flashlightWalkSwayMultiplier: 3
   dragTrailLag: 12
   rescueRange: 2.5
   lootRange: 2
@@ -747,8 +750,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: -1, z: 0, w: -0.00000035762784}
-  m_LocalPosition: {x: 0, y: 0.559, z: -0.2619998}
+  m_LocalRotation: {x: 0.12745959, y: 0.006578015, z: -0.0008005412, w: 0.99182165}
+  m_LocalPosition: {x: 31.673885, y: 4.0595565, z: -3.4911144}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -877,7 +880,7 @@ MonoBehaviour:
   m_BlendUpdateMethod: 1
   m_DefaultBlend:
     m_Style: 1
-    m_Time: 2
+    m_Time: 1
     m_CustomCurve:
       serializedVersion: 2
       m_Curve: []

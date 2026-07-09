@@ -11,6 +11,7 @@ public class Player : NetworkBehaviour
 {
     public PlayerInputActions playerInputActions;
     public static Player LocalPlayer;
+    public Camera ViewCamera { get; private set; } //the rendering camera for this player - world-space UI needs it to raycast clicks
     public static readonly List<Player> ActivePlayers = new List<Player>(); //everyone currently in the session, AIs read this instead of scanning the scene once and going stale
     [Networked] public float NoiseLevel { get; private set; }
     [SerializeField] private float moveSpeed = 7f;
@@ -54,8 +55,16 @@ public class Player : NetworkBehaviour
     [Networked] public bool IsFlashlightOn { get; private set; } //replicated so teammates see your beam, same idea as IsHiding driving playerVisuals
     [Networked] private float lookPitch { get; set; } //owner writes its up/down look angle here so remote clients can aim its flashlight beam vertically (their camera pitch isn't otherwise networked)
     [SerializeField] private Light flashlight; //spotlight child; assign in inspector
-    [SerializeField] private float flashlightFollowSpeed = 10f; //how fast the beam catches up to where you're looking - lower = more lag/sway off the camera
+    [SerializeField] private float flashlightFollowSpeed = 8f; //how fast the beam catches up to where you're looking - lower = more lag/sway off the camera
+    [SerializeField] private float flashlightSwayAmount = 1.5f; //idle handheld tremor, in degrees - keeps the beam alive when you're still
+    [SerializeField] private float flashlightSwayFrequency = 1.1f; //how fast that tremor drifts
+    [SerializeField] private float flashlightWalkSwayMultiplier = 3f; //how much bigger the sway gets while walking - the bob that sells "handheld"
     private bool flashlightHeldLastTick; //rising-edge detect so one press = one toggle
+    private Vector3 flashlightLastPosition; //to gauge how fast this player is moving, for the walk bob
+    private bool hasRiddenVanForRunEnd; //one-shot so the run-end van teleport only fires once
+    private bool isUsingComputer; //local only - frozen at the van computer, camera focused on the screen, cursor freed
+    private ComputerTerminal currentTerminal; //the terminal we're currently "in", so E can exit it
+    private ComputerTerminal pendingTerminal; //terminal we've asked to use and are waiting on the networked lock for
     private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
     private Vector3 pendingTeleportPosition;
     private int teleportSettleTicks; //ticks to hold position with the CC disabled after a teleport, so the disable is processed before we re-enable (a same-frame off/on doesn't reset the CC's internal position)
@@ -78,6 +87,7 @@ public class Player : NetworkBehaviour
         characterController.enabled = false;
         characterController.enabled = true;
         Camera mainCam = GetComponentInChildren<Camera>(); //raw camera
+        ViewCamera = mainCam; //exposed so world-space UI (the computer screen) can use it to raycast clicks
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
         stamina = maxStamina;
 
@@ -119,8 +129,27 @@ public class Player : NetworkBehaviour
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
+        UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
+        if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
         HandleLook(); //our player only
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
+    }
+
+    private void UpdateComputerClaim()
+    {
+        if (pendingTerminal == null || isUsingComputer) return;
+        if (RunManager.Instance == null || RunManager.Instance.Object == null || !RunManager.Instance.Object.IsValid) return;
+
+        if (RunManager.Instance.ComputerUser == Object.InputAuthority) //the lock is ours - sit down
+        {
+            ComputerTerminal terminal = pendingTerminal;
+            pendingTerminal = null;
+            terminal.Enter();
+        }
+        else if (!RunManager.Instance.IsComputerFree) //someone else grabbed it first - give up our request
+        {
+            pendingTerminal = null;
+        }
     }
 
     private void UpdateFlashlight()
@@ -128,14 +157,30 @@ public class Player : NetworkBehaviour
         if (flashlight == null || Object == null || !Object.IsValid) return;
 
         flashlight.enabled = IsFlashlightOn; //on every client, so you see teammates' beams too
+        if (!IsFlashlightOn)
+        {
+            flashlightLastPosition = transform.position; //keep this current while off so we don't get a huge fake "speed" spike the frame it turns on
+            return;
+        }
 
-        //aim the beam where this player is looking - body yaw (networked) + look pitch (networked), eased so the beam trails the camera slightly instead of snapping. that lag is the "handheld" feel
-        Quaternion targetRotation = Quaternion.Euler(lookPitch, transform.eulerAngles.y, 0f);
-        flashlight.transform.rotation = Quaternion.Slerp(flashlight.transform.rotation, targetRotation, flashlightFollowSpeed * Time.deltaTime);
+        //how fast are we actually moving this frame - drives a bigger bob while walking
+        float speed = Time.deltaTime > 0f ? (transform.position - flashlightLastPosition).magnitude / Time.deltaTime : 0f;
+        flashlightLastPosition = transform.position;
+        float walkFactor = Mathf.Clamp01(speed / moveSpeed); //0 standing still, ~1 at full walk speed
+
+        //handheld tremor: two Perlin channels drifting independently so it wanders naturally instead of looping. bigger while walking (the bob), always a little alive while still
+        float swayScale = flashlightSwayAmount * (1f + walkFactor * flashlightWalkSwayMultiplier);
+        float swayPitch = (Mathf.PerlinNoise(Time.time * flashlightSwayFrequency, 0f) - 0.5f) * 2f * swayScale;
+        float swayYaw = (Mathf.PerlinNoise(0f, Time.time * flashlightSwayFrequency) - 0.5f) * 2f * swayScale;
+
+        //aim where the player looks (networked yaw + pitch), plus the handheld sway, eased in so the beam trails the camera instead of snapping
+        Quaternion aimRotation = Quaternion.Euler(lookPitch + swayPitch, transform.eulerAngles.y + swayYaw, 0f);
+        flashlight.transform.rotation = Quaternion.Slerp(flashlight.transform.rotation, aimRotation, flashlightFollowSpeed * Time.deltaTime);
     }
     private void LateUpdate()
     {
         if (!HasInputAuthority) return;
+        if (isUsingComputer) return; //hold still while parked at the computer
         transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
 
@@ -159,7 +204,32 @@ public class Player : NetworkBehaviour
             return; //no movement while settling
         }
 
-        if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore - stays true until the run-end scene reload resets it (see TeleportAfterLoad)
+        //a fresh run started (House button) - re-arm the one-shot so the NEXT run-over ride can fire
+        if (hasRiddenVanForRunEnd && RunManager.Instance != null && RunManager.Instance.Object != null
+            && RunManager.Instance.Object.IsValid && RunManager.Instance.State == RunManager.RunState.InProgress)
+        {
+            hasRiddenVanForRunEnd = false;
+        }
+
+        //run's over - ride to the van. done here in FUN (not a coroutine) so the state resets below actually stick as networked values, and so it fires whether or not a scene reload happened
+        if (HasStateAuthority && !hasRiddenVanForRunEnd && RunManager.Instance != null && RunManager.Instance.Object != null
+            && RunManager.Instance.Object.IsValid && RunManager.Instance.State != RunManager.RunState.InProgress)
+        {
+            VanSeat seat = FindMyVanSeat(); //null until the van's scene is actually loaded - indoor players wait for RunManager's reload to bring the seats in
+            if (seat != null)
+            {
+                hasRiddenVanForRunEnd = true;
+                IsEliminated = false;  //pull caught/dead players back in - no loot, just a clean slate (sticks because we're in FUN)
+                IsLockedUp = false;
+                isBeingDragged = false;
+                draggingGuard = null;
+                dragTrail.Clear();
+                TeleportTo(seat.transform.position);
+                return; //hand off to the teleport pipeline next tick
+            }
+        }
+
+        if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore - stays true until the run ends and the van ride resets it (above)
 
         if (isBeingDragged) //the guard is hauling us to the closet - no control, trail behind him on his path
         {
@@ -181,6 +251,21 @@ public class Player : NetworkBehaviour
             NoiseLevel = 0f;
             if (GetInput(out NetworkInputData hidingInput))
                 HandleInteract(hidingInput.interactInput);
+            return;
+        }
+
+        if (isUsingComputer) // parked at the van computer - frozen, but E backs out
+        {
+            NoiseLevel = 0f;
+            if (GetInput(out NetworkInputData computerInput))
+            {
+                bool exitPressed = computerInput.interactInput && !interactHeldLastTick; //rising edge so the enter-press doesn't instantly exit
+                interactHeldLastTick = computerInput.interactInput;
+                if (exitPressed && currentTerminal != null)
+                {
+                    currentTerminal.Exit();
+                }
+            }
             return;
         }
 
@@ -357,6 +442,30 @@ public class Player : NetworkBehaviour
             }
         }
 
+        //van computer: press E to sit down at it - only if nobody else is on it (networked lock). we don't enter here; we claim it and enter once granted (see UpdateComputerClaim)
+        foreach (ComputerTerminal terminal in ComputerTerminal.AllTerminals)
+        {
+            if (Vector3.Distance(transform.position, terminal.transform.position) <= terminal.interactRange)
+            {
+                if (RunManager.Instance.IsComputerFree)
+                {
+                    pendingTerminal = terminal;
+                    RunManager.Instance.RPC_ClaimComputer(Object.InputAuthority);
+                }
+                return;
+            }
+        }
+
+        //van computer buttons: route the crew to the house (fresh heist) or the pawn shop
+        foreach (RouteButton button in RouteButton.AllButtons)
+        {
+            if (Vector3.Distance(transform.position, button.transform.position) <= button.interactRange)
+            {
+                RunManager.Instance.RPC_Route(button.targetSceneBuildIndex, button.spawnPointId, button.startsNewRun);
+                return;
+            }
+        }
+
         foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
         {
             if(Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)
@@ -447,12 +556,11 @@ public class Player : NetworkBehaviour
 
     private System.Collections.IEnumerator TeleportAfterLoad()
     {
-        //run is over (escaped OR everyone got caught) - ride the van instead of a door spawn point, even if we were still indoors when it ended
+        //if the run already ended, the van ride is handled in FixedUpdateNetwork - don't also do a normal door-spawn teleport here
         bool runEnded = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
             && RunManager.Instance.State != RunManager.RunState.InProgress;
         if (runEnded)
         {
-            yield return TeleportToVanSeat();
             yield break;
         }
 
@@ -503,49 +611,42 @@ public class Player : NetworkBehaviour
         }
     }
 
-    private System.Collections.IEnumerator TeleportToVanSeat()
+    private VanSeat FindMyVanSeat() //my assigned seat if it exists in the loaded scene, else any seat, else null (van scene not loaded yet)
     {
-        IsEliminated = false; //pull caught/dead players back in - no loot, just a clean slate
-        IsLockedUp = false;
-        isBeingDragged = false;
-        draggingGuard = null;
-        dragTrail.Clear();
-        characterController.enabled = true; //restore control even if no seat is found below
-
+        Scene activeScene = SceneManager.GetActiveScene();
         int seatIndex = Object.InputAuthority.PlayerId % 4;
-        VanSeat targetSeat = null;
-        float timeout = 5f;
-        while (targetSeat == null && timeout > 0f)
-        {
-            foreach (VanSeat candidate in VanSeat.AllSeats)
-            {
-                if (candidate.seatIndex == seatIndex)
-                {
-                    targetSeat = candidate;
-                    break;
-                }
-            }
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
 
-        if (targetSeat == null && VanSeat.AllSeats.Count > 0)
+        VanSeat fallback = null;
+        foreach (VanSeat candidate in VanSeat.AllSeats)
         {
-            targetSeat = VanSeat.AllSeats[0];
-            Debug.LogWarning($"[Player] Matching VanSeat not found - falling back to '{targetSeat.name}'.");
+            if (candidate.gameObject.scene != activeScene) continue; //ignore seats lingering from a scene we just left
+            if (candidate.seatIndex == seatIndex) return candidate; //my exact seat
+            fallback = candidate; //at least land in the van somewhere
         }
-
-        if (targetSeat != null)
-        {
-            TeleportTo(targetSeat.transform.position);
-        }
-        else
-        {
-            Debug.LogWarning("[Player] No VanSeats exist in the outdoor scene.");
-        }
+        return fallback;
     }
 
     public void SetHiding(bool hiding) => IsHiding = hiding;
+
+    public void EnterComputer(ComputerTerminal terminal)
+    {
+        isUsingComputer = true;
+        currentTerminal = terminal;
+        Cursor.lockState = CursorLockMode.None; //free the cursor for the on-screen buttons (coming next)
+        Cursor.visible = true;
+    }
+
+    public void ExitComputer()
+    {
+        isUsingComputer = false;
+        currentTerminal = null;
+        Cursor.lockState = CursorLockMode.Locked; //back to mouselook
+        Cursor.visible = false;
+        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+        {
+            RunManager.Instance.RPC_ReleaseComputer(Object.InputAuthority); //free the lock for the next player
+        }
+    }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
