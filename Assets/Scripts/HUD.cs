@@ -36,9 +36,9 @@ public class HUD : MonoBehaviour
             }
         }
 
-        if (lootText != null && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+        if (lootText != null && Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid)
         {
-            lootText.text = $"Loot: ${RunManager.Instance.GatheredLootValue}";
+            lootText.text = $"Carrying: ${Player.LocalPlayer.CarriedValue}"; //what you're holding, worth-wise - banked when you sell
         }
 
         if (moneyText != null && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
@@ -48,11 +48,11 @@ public class HUD : MonoBehaviour
 
         if (inventorySlotTexts != null && Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid)
         {
-            IReadOnlyList<string> inventory = Player.LocalPlayer.Inventory;
+            IReadOnlyList<InventoryItem> inventory = Player.LocalPlayer.Inventory;
             for (int slot = 0; slot < inventorySlotTexts.Length; slot++)
             {
                 if (inventorySlotTexts[slot] == null) continue;
-                inventorySlotTexts[slot].text = slot < inventory.Count ? inventory[slot] : "";
+                inventorySlotTexts[slot].text = slot < inventory.Count ? $"{inventory[slot].name} (${inventory[slot].value})" : "";
             }
         }
 

@@ -9,9 +9,11 @@ public class WorldItem : NetworkBehaviour
 {
     public static readonly List<WorldItem> AllItems = new List<WorldItem>();
 
-    [SerializeField] private string startingName = "Item"; // for items placed in the scene; dropped items get named on spawn instead
+    [SerializeField] private string startingName = "Item"; // for items placed in the scene; the spawner/drop set these on spawn instead
+    [SerializeField] private int startingValue = 100;       // fallback value; the spawner/drop set the real value on spawn
     [Networked] public NetworkString<_32> ItemName { get; set; }
-    [Networked] private NetworkBool claimed { get; set; } // stops two players grabbing the same item on the same tick
+    [Networked] public int Value { get; set; }              // what it sells for at the pawn shop
+    [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
 
     [HideInInspector] public bool pendingRemoval; // set locally the instant we grab it, so our own pickup scan can't re-grab it during the despawn lag
 
@@ -22,9 +24,10 @@ public class WorldItem : NetworkBehaviour
         //every client falls the item with its own local physics from the same synced spawn position - no NetworkTransform
         //resampling the motion, so the fall is smooth everywhere and they land in the same spot (gravity is deterministic enough)
 
-        if (HasStateAuthority && string.IsNullOrEmpty(ItemName.ToString())) // a scene item nobody named yet
+        if (HasStateAuthority && string.IsNullOrEmpty(ItemName.ToString())) // a scene item the spawner/drop didn't name
         {
             ItemName = startingName;
+            Value = startingValue;
         }
     }
 

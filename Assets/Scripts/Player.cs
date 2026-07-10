@@ -70,9 +70,18 @@ public class Player : NetworkBehaviour
     [SerializeField] private int maxInventorySlots = 4;
     [SerializeField] private float pickupRange = 2f;
     [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
-    private readonly List<string> inventory = new List<string>(); //local only - just the item names, shown on this player's own HUD
-    public IReadOnlyList<string> Inventory => inventory;
+    private readonly List<InventoryItem> inventory = new List<InventoryItem>(); //local only - carried loot (name + value), shown on this player's own HUD
+    public IReadOnlyList<InventoryItem> Inventory => inventory;
     public int MaxInventorySlots => maxInventorySlots;
+    public int CarriedValue //total worth of what this player is holding - the HUD reads it, selling banks it
+    {
+        get
+        {
+            int total = 0;
+            foreach (InventoryItem carried in inventory) total += carried.value;
+            return total;
+        }
+    }
     private bool dropHeldLastTick; //rising-edge detect so one G press drops one item
     private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
     private Vector3 pendingTeleportPosition;
@@ -320,7 +329,7 @@ public class Player : NetworkBehaviour
         dropHeldLastTick = dropPressed;
         if (!pressed || inventory.Count == 0 || worldItemPrefab == null) return;
 
-        string itemName = inventory[inventory.Count - 1]; //drop the most recently picked up (the one you're "holding")
+        InventoryItem dropped = inventory[inventory.Count - 1]; //drop the most recently picked up (the one you're "holding")
         inventory.RemoveAt(inventory.Count - 1);
 
         Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
@@ -328,7 +337,11 @@ public class Player : NetworkBehaviour
             (runner, spawnedObject) =>
             {
                 WorldItem item = spawnedObject.GetComponent<WorldItem>();
-                if (item != null) item.ItemName = itemName; //name it on spawn so every client shows the right item
+                if (item != null) //carry the name AND value back onto the dropped item so it's worth the same when re-picked
+                {
+                    item.ItemName = dropped.name;
+                    item.Value = dropped.value;
+                }
             });
     }
 
@@ -445,7 +458,8 @@ public class Player : NetworkBehaviour
                 if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
-                    inventory.Add(item.ItemName.ToString());
+                    inventory.Add(new InventoryItem(item.ItemName.ToString(), item.Value));
+                    if (RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value); //the house is now missing this - feeds the guard's suspicion
                     item.pendingRemoval = true; //so we don't re-grab it before it despawns
                     item.RPC_PickUp();
                     return; //picked up, done for this press
@@ -505,10 +519,14 @@ public class Player : NetworkBehaviour
         {
             if (Vector3.Distance(transform.position, counter.transform.position) <= counter.interactRange)
             {
-                RunManager.Instance.RPC_SellLoot();
+                if (inventory.Count > 0)
+                {
+                    RunManager.Instance.RPC_SellItems(CarriedValue); //bank the worth of my haul into the shared money
+                    inventory.Clear();                                //handed it all over
+                }
                 return;
             }
-        } 
+        }
 
         foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
         {

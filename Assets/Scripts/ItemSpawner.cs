@@ -8,6 +8,7 @@ using UnityEngine;
 public class ItemSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkObject worldItemPrefab;
+    [SerializeField] private int defaultValue = 100; // used when a child's name doesn't specify a value
 
     private IEnumerator Start()
     {
@@ -22,12 +23,25 @@ public class ItemSpawner : MonoBehaviour
 
         foreach (Transform spawnPoint in transform)
         {
-            string itemName = spawnPoint.name; //the child's name IS the item's name
+            //child name is "ItemName:Value" (e.g. "Vase:1200"). no colon = just a name, worth defaultValue
+            string itemName = spawnPoint.name;
+            int itemValue = defaultValue;
+            int colon = spawnPoint.name.IndexOf(':');
+            if (colon >= 0)
+            {
+                itemName = spawnPoint.name.Substring(0, colon);
+                int.TryParse(spawnPoint.name.Substring(colon + 1), out itemValue);
+            }
+
             runner.Spawn(worldItemPrefab, spawnPoint.position, Random.rotation, PlayerRef.None, //random tilt so it settles on a face instead of balancing on a point; the rotation syncs as part of the spawn
                 (spawnRunner, spawnedObject) =>
                 {
                     WorldItem item = spawnedObject.GetComponent<WorldItem>();
-                    if (item != null) item.ItemName = itemName;
+                    if (item != null)
+                    {
+                        item.ItemName = itemName;
+                        item.Value = itemValue;
+                    }
                 });
         }
     }

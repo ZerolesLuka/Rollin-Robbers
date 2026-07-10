@@ -138,17 +138,23 @@ public class RunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_SellLoot() //pawn shop counter - cash in the whole haul at once
+    public void RPC_SellItems(int value) //a player sold their carried inventory at the pawn shop - add its worth to the shared money
     {
-        Money += GatheredLootValue;
-        GatheredLootValue = 0; //haul emptied; the house refills each run so there's always more to steal
+        Money += value;
     }
 
-    private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house refilled with loot. the team's accumulated haul (GatheredLootValue) is kept to sell later at the pawn shop
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_ReportLootTaken(int value) //a WorldItem was picked up off the shelf - the house is missing that much now, which feeds the guard's suspicion
+    {
+        GatheredLootValue += value;
+    }
+
+    private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house re-stocked. Money and each player's carried inventory are kept - only the house resets
     {
         State = RunState.InProgress;
         playersAlive = Player.ActivePlayers.Count; //everyone was revived on the van ride, so they all count again
-        lootedMask = 0; //re-lootable house for the new run - the items reappear (Lootable reads IsLooted)
+        lootedMask = 0; //re-lootable house for the new run - any legacy Lootables reappear
+        GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
         FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run
     }
 
