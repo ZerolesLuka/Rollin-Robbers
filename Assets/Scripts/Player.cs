@@ -6,8 +6,18 @@ using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-//
-public class Player : NetworkBehaviour
+
+// Player is split across partial files to keep this from being one 750-line monster:
+//   Player.cs             - this file: all [Networked] state, lifecycle (Spawned/Despawned), the FixedUpdateNetwork
+//                           state machine, the Update dispatch, and the caught/drag/rescue RPCs
+//   Player.Movement.cs    - walking, crouching, sprinting, jumping, gravity, mouse look
+//   Player.Interaction.cs - the E key: rescue, item pickup, loot, doors, van, computer, pawn shop, hiding spots
+//   Player.Inventory.cs   - dropping carried items back into the world (G)
+//   Player.Flashlight.cs  - the handheld flashlight beam + toggle (F)
+//   Player.Teleport.cs    - scene-load spawning and the run-end van ride
+//   Player.Computer.cs    - claiming and sitting at the van computer
+// Everything Fusion weaves ([Networked] + [Rpc] + the override lifecycle) lives HERE so the weaver sees it in one place.
+public partial class Player : NetworkBehaviour
 {
     public PlayerInputActions playerInputActions;
     public static Player LocalPlayer;
@@ -153,48 +163,6 @@ public class Player : NetworkBehaviour
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
     }
 
-    private void UpdateComputerClaim()
-    {
-        if (pendingTerminal == null || isUsingComputer) return;
-        if (RunManager.Instance == null || RunManager.Instance.Object == null || !RunManager.Instance.Object.IsValid) return;
-
-        if (RunManager.Instance.ComputerUser == Object.InputAuthority) //the lock is ours - sit down
-        {
-            ComputerTerminal terminal = pendingTerminal;
-            pendingTerminal = null;
-            terminal.Enter();
-        }
-        else if (!RunManager.Instance.IsComputerFree) //someone else grabbed it first - give up our request
-        {
-            pendingTerminal = null;
-        }
-    }
-
-    private void UpdateFlashlight()
-    {
-        if (flashlight == null || Object == null || !Object.IsValid) return;
-
-        flashlight.enabled = IsFlashlightOn; //on every client, so you see teammates' beams too
-        if (!IsFlashlightOn)
-        {
-            flashlightLastPosition = transform.position; //keep this current while off so we don't get a huge fake "speed" spike the frame it turns on
-            return;
-        }
-
-        //how fast are we actually moving this frame - drives a bigger bob while walking
-        float speed = Time.deltaTime > 0f ? (transform.position - flashlightLastPosition).magnitude / Time.deltaTime : 0f;
-        flashlightLastPosition = transform.position;
-        float walkFactor = Mathf.Clamp01(speed / moveSpeed); //0 standing still, ~1 at full walk speed
-
-        //handheld tremor: two Perlin channels drifting independently so it wanders naturally instead of looping. bigger while walking (the bob), always a little alive while still
-        float swayScale = flashlightSwayAmount * (1f + walkFactor * flashlightWalkSwayMultiplier);
-        float swayPitch = (Mathf.PerlinNoise(Time.time * flashlightSwayFrequency, 0f) - 0.5f) * 2f * swayScale;
-        float swayYaw = (Mathf.PerlinNoise(0f, Time.time * flashlightSwayFrequency) - 0.5f) * 2f * swayScale;
-
-        //aim where the player looks (networked yaw + pitch), plus the handheld sway, eased in so the beam trails the camera instead of snapping
-        Quaternion aimRotation = Quaternion.Euler(lookPitch + swayPitch, transform.eulerAngles.y + swayYaw, 0f);
-        flashlight.transform.rotation = Quaternion.Slerp(flashlight.transform.rotation, aimRotation, flashlightFollowSpeed * Time.deltaTime);
-    }
     private void LateUpdate()
     {
         if (!HasInputAuthority) return;
@@ -323,392 +291,13 @@ public class Player : NetworkBehaviour
         }
     }
 
-    private void HandleDrop(bool dropPressed)
-    {
-        bool pressed = dropPressed && !dropHeldLastTick; //rising edge only - one drop per press
-        dropHeldLastTick = dropPressed;
-        if (!pressed || inventory.Count == 0 || worldItemPrefab == null) return;
-
-        InventoryItem dropped = inventory[inventory.Count - 1]; //drop the most recently picked up (the one you're "holding")
-        inventory.RemoveAt(inventory.Count - 1);
-
-        Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
-        Runner.Spawn(worldItemPrefab, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point
-            (runner, spawnedObject) =>
-            {
-                WorldItem item = spawnedObject.GetComponent<WorldItem>();
-                if (item != null) //carry the name AND value back onto the dropped item so it's worth the same when re-picked
-                {
-                    item.ItemName = dropped.name;
-                    item.Value = dropped.value;
-                }
-            });
-    }
-
-    private void HandleFlashlight(bool flashlightPressed)
-    {
-        bool pressed = flashlightPressed && !flashlightHeldLastTick; //rising edge only - one toggle per press
-        flashlightHeldLastTick = flashlightPressed;
-        if (pressed)
-        {
-            IsFlashlightOn = !IsFlashlightOn; //networked, so every client's copy of us updates the beam in Update
-        }
-    }
-    private void HandleMovement(Vector2 inputVector, bool sprinting, bool jumpInput)
-    {
-        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
-
-        bool isSprinting = sprinting && !isCrouching && !exhausted && stamina > 0f;
-        if (isSprinting)
-        {
-            stamina -= Runner.DeltaTime; //sprinting burns stamina
-            if (stamina <= 0f)
-            {
-                stamina = 0f;
-                exhausted = true; //gassed out, locked until recovered
-            }
-        }
-        else
-        {
-            stamina = Mathf.Min(maxStamina, stamina + staminaRegenRate * Runner.DeltaTime); //recover when not sprinting
-            if (exhausted && stamina >= maxStamina * 0.3f)
-            {
-                exhausted = false; //recovered enough to sprint again
-            }
-        }
-
-        float speed = moveSpeed;
-        if (isCrouching)
-        {
-            speed = moveSpeed * crouchSpeedMultiplier; //crouch wins
-        }
-        else if (isSprinting)
-        {
-            speed = moveSpeed * sprintSpeedMultiplier;
-        }
-
-        float moveDistance = speed * Runner.DeltaTime;
-        if (jumpInput && !jumpHeldLastTick && characterController.isGrounded && !isCrouching) //rising edge only: must release + repress to jump again (no bunnyhop from holding space)
-        {
-            verticalVelocity = Mathf.Sqrt(jumpHeight * 2f * gravity);
-        }
-        jumpHeldLastTick = jumpInput; //remember this tick's hold state so next tick can detect a fresh press
-        characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
-
-        //noise comes AFTER speed is finalized
-        float movementNoise = (inputVector.magnitude > 0.1f) ? speed : 0f; //moving = your speed, still = 0
-        float voiceNoise = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
-        NoiseLevel = Mathf.Max(movementNoise, voiceNoise); //loudest of moving vs talking, set ONCE
-    }
-    private bool BlockedAbove()
-    {
-        float radius = characterController.radius; //radius of our capsule
-        //top hemisphere center of the capsule AS IT IS RIGHT NOW, in world space
-        Vector3 capsuleTop = transform.position + characterController.center + Vector3.up * (characterController.height / 2f - radius); 
-        //how much more we'd grow to reach full standing
-        float distance = standingHeight - characterController.height + 0.05f; //add a small buffer so we dont have to be perfectly flush with the ceiling to crouch
-        return Physics.SphereCast(capsuleTop, radius, Vector3.up, out _, distance, ceilingMask);
-    }
-    private void HandleCrouch(bool crouching)
-    {
-        //pick the height we want based on if the crouch key is held
-        bool staysCrouched = crouching || BlockedAbove(); //if crouch held OR no room to stand, stay down
-        isCrouching = staysCrouched;
-        float targetHeight = staysCrouched ? crouchingHeight : standingHeight;
-
-        //ease the controller height toward the target so it doesnt snap instantly (collider stays on the 32Hz tick - fine for physics/networked body)
-        characterController.height = Mathf.Lerp(characterController.height, targetHeight, crouchSpeed * Runner.DeltaTime); //height transitions smoothly to the target height based on crouchSpeed
-
-        //as the capsule shrinks, drop the center by half the shrink so feet stay planted instead of floating up
-        characterController.center = new Vector3(0f, (characterController.height - standingHeight) / 2f, 0f);
-        //camera eye-height is eased in Update (render frame) instead - see HandleCrouchCamera - so it doesn't step at the 32Hz tick
-    }
-
-    private void HandleCrouchCamera() //eases the crouch eye-height on the RENDER frame (local only) so it's smooth at any FPS, not stepped at the 32Hz network tick
-    {
-        float targetCamY = isCrouching ? crouchCamHeight : standCamHeight;
-        Vector3 camPos = playerCamera.localPosition;
-        camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
-        playerCamera.localPosition = camPos;
-    }
-
-    private void HandleInteract(bool interacting)
-    {
-        bool pressed = interacting && !interactHeldLastTick; //rising edge only - one action per press
-        interactHeldLastTick = interacting;
-        if (!pressed) return;
-
-        //rescue takes priority: free the nearest trapped teammate. you can NEVER free yourself (locked player returns before this runs, and we skip self below)
-        foreach (Player other in ActivePlayers)
-        {
-            if (other == this) continue;
-            if (!other.IsLockedUp) continue;
-            if (Vector3.Distance(transform.position, other.transform.position) <= rescueRange)
-            {
-                other.RPC_Rescue();
-                return; //rescued, done for this press
-            }
-        }
-
-        //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check
-        if (inventory.Count < maxInventorySlots)
-        {
-            foreach (WorldItem item in WorldItem.AllItems)
-            {
-                if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
-                if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
-                {
-                    inventory.Add(new InventoryItem(item.ItemName.ToString(), item.Value));
-                    if (RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value); //the house is now missing this - feeds the guard's suspicion
-                    item.pendingRemoval = true; //so we don't re-grab it before it despawns
-                    item.RPC_PickUp();
-                    return; //picked up, done for this press
-                }
-            }
-        }
-
-        //loot pickup: only runs if no rescue or item pickup happened
-        if (RunManager.Instance == null) return;
-        foreach (Lootable lootable in Lootable.AllLootables)
-        {
-            if (lootable.IsLooted) continue;
-            if (Vector3.Distance(transform.position, lootable.transform.position) <= lootRange)
-            {
-                RunManager.Instance.RPC_ClaimLoot(lootable.lootId, lootable.value);
-                return; //looted, done for this press
-            }
-        }
-
-        //exit door: only runs if no rescue or loot happened
-        foreach (ExitDoor door in ExitDoor.AllDoors)
-        {
-            if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)
-            {
-                RunManager.Instance.RPC_LoadScene(door.targetSceneBuildIndex, door.spawnPointId);
-                return;
-            }
-        }
-
-        //getaway van: start it from the driver's seat and the run ends successfully for everyone
-        foreach (Van van in Van.AllVans)
-        {
-            Transform seat = van.driverSeat != null ? van.driverSeat : van.transform;
-            if (Vector3.Distance(transform.position, seat.position) <= van.interactRange)
-            {
-                RunManager.Instance.RPC_StartGetaway();
-                return;
-            }
-        }
-
-        //van computer: press E to sit down at it - only if nobody else is on it (networked lock). we don't enter here; we claim it and enter once granted (see UpdateComputerClaim)
-        foreach (ComputerTerminal terminal in ComputerTerminal.AllTerminals)
-        {
-            if (Vector3.Distance(transform.position, terminal.transform.position) <= terminal.interactRange)
-            {
-                if (RunManager.Instance.IsComputerFree)
-                {
-                    pendingTerminal = terminal;
-                    RunManager.Instance.RPC_ClaimComputer(Object.InputAuthority);
-                }
-                return;
-            }
-        }
-
-       //pawn shop counter: sell the team's haul for money
-        foreach (SellCounter counter in SellCounter.AllCounters)
-        {
-            if (Vector3.Distance(transform.position, counter.transform.position) <= counter.interactRange)
-            {
-                if (inventory.Count > 0)
-                {
-                    RunManager.Instance.RPC_SellItems(CarriedValue); //bank the worth of my haul into the shared money
-                    inventory.Clear();                                //handed it all over
-                }
-                return;
-            }
-        }
-
-        foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
-        {
-            if(Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)
-            {
-                if(!hidingSpot.isOccupied)
-                {
-                    hidingSpot.OnSpotEnter();
-                    hidingSpot.isOccupied = true;
-                }
-                else if(hidingSpot.isOccupied && hidingSpot.isHiding)
-                {
-                    hidingSpot.OnSpotExit();
-                }
-                return;
-            }
-        }
-    }
-
-    public void TeleportTo(Vector3 position) //called after a scene load to reposition the local player
-    {
-        if (!HasInputAuthority) return; //only move our own player; Fusion syncs the position to everyone else
-        pendingTeleportPosition = position;
-        hasPendingTeleport = true; //applied in FixedUpdateNetwork - see the block at the top of it
-    }
-
-    private void ApplyPendingTeleport()
-    {
-        hasPendingTeleport = false;
-        verticalVelocity = 0f; //reset fall speed so the player doesn't phase through the floor on arrival
-        NoiseLevel = 0f; //clear any stale walking noise from before the transition so a freshly-spawned guard doesn't wake to a footstep that already happened
-        characterController.enabled = false; //stays off for teleportSettleTicks so the disable is processed before the re-enable
-        transform.position = pendingTeleportPosition;
-
-        NetworkTransform networkTransform = GetComponent<NetworkTransform>();
-        if (networkTransform != null)
-        {
-            networkTransform.Teleport(pendingTeleportPosition); //update the networked position + clear interpolation so Fusion doesn't lerp us back to the old spot
-        }
-
-        teleportSettleTicks = 2;
-    }
-    private void HandleLook()
-    {
-        Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
-
-        // Vertical camera pitch
-        xRotation -= lookInput.y * mouseSensitivity;
-        xRotation = Mathf.Clamp(xRotation, -90f, 90f); //clamp to prevent flipping over
-        playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
-
-        // Horizontal player body 
-        yRotation += lookInput.x * mouseSensitivity;
-        transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
-    }
-    private void PlayerGravity()
-    {
-        if (characterController.isGrounded && verticalVelocity < 0f) //planted on the ground
-        {
-            verticalVelocity = -2f; //small downward stick keeps isGrounded reliable on steps/slopes, and stops the fall speed building to terminal velocity while just standing
-            return;
-        }
-
-        float gravityMultiplier = 1f;
-
-        if (verticalVelocity < 0f)
-        {
-            gravityMultiplier = fallGravityMultiplier;
-        }
-        else if (verticalVelocity > 0f)
-        {
-            gravityMultiplier = lowJumpGravityMultiplier;
-        }
-
-        verticalVelocity -= gravity * gravityMultiplier * Runner.DeltaTime;
-        verticalVelocity = Mathf.Max(verticalVelocity, -20f); // terminal velocity
-    }
     public override void Despawned(NetworkRunner runner, bool hasState)
     {
         ActivePlayers.Remove(this); //leave the list on disconnect so nobody iterates a destroyed player
         if (HasInputAuthority) SceneManager.activeSceneChanged -= OnSceneChanged;
     }
 
-    private void OnSceneChanged(Scene previous, Scene next)
-    {
-        Cursor.lockState = CursorLockMode.Locked;
-        StartCoroutine(TeleportAfterLoad());
-    }
-
-    private System.Collections.IEnumerator TeleportAfterLoad()
-    {
-        //if the run already ended, the van ride is handled in FixedUpdateNetwork - don't also do a normal door-spawn teleport here
-        bool runEnded = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
-            && RunManager.Instance.State != RunManager.RunState.InProgress;
-        if (runEnded)
-        {
-            yield break;
-        }
-
-        SpawnPoint spawnPoint = null;
-        float timeout = 5f;
-        while (spawnPoint == null && timeout > 0f)
-        {
-            //re-read the id every frame - the networked value may not have replicated on the frame the scene loaded
-            int targetId = (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
-                ? RunManager.Instance.EntrySpawnPointId
-                : 0;
-
-            Scene activeScene = SceneManager.GetActiveScene();
-            foreach (SpawnPoint candidate in SpawnPoint.All)
-            {
-                //ignore spawn points from the scene we just left - they linger in the static list for a frame or two and hold stale coordinates
-                if (candidate.gameObject.scene != activeScene) continue;
-                if (candidate.spawnId == targetId)
-                {
-                    spawnPoint = candidate;
-                    break;
-                }
-            }
-            timeout -= Time.deltaTime;
-            yield return null;
-        }
-
-        //fall back to any spawn point IN THIS SCENE rather than leaving the player floating in the void at their old coordinates
-        if (spawnPoint == null)
-        {
-            Scene activeScene = SceneManager.GetActiveScene();
-            foreach (SpawnPoint candidate in SpawnPoint.All)
-            {
-                if (candidate.gameObject.scene != activeScene) continue;
-                spawnPoint = candidate;
-                Debug.LogWarning($"[Player] Matching SpawnPoint not found in time - falling back to '{spawnPoint.name}'.");
-                break;
-            }
-        }
-
-        if (spawnPoint != null)
-        {
-            TeleportTo(spawnPoint.transform.position);
-        }
-        else
-        {
-            Debug.LogWarning($"[Player] No SpawnPoints exist in scene '{SceneManager.GetActiveScene().name}'.");
-        }
-    }
-
-    private VanSeat FindMyVanSeat() //my assigned seat if it exists in the loaded scene, else any seat, else null (van scene not loaded yet)
-    {
-        Scene activeScene = SceneManager.GetActiveScene();
-        int seatIndex = Object.InputAuthority.PlayerId % 4;
-
-        VanSeat fallback = null;
-        foreach (VanSeat candidate in VanSeat.AllSeats)
-        {
-            if (candidate.gameObject.scene != activeScene) continue; //ignore seats lingering from a scene we just left
-            if (candidate.seatIndex == seatIndex) return candidate; //my exact seat
-            fallback = candidate; //at least land in the van somewhere
-        }
-        return fallback;
-    }
-
     public void SetHiding(bool hiding) => IsHiding = hiding;
-
-    public void EnterComputer(ComputerTerminal terminal)
-    {
-        isUsingComputer = true;
-        currentTerminal = terminal;
-        Cursor.lockState = CursorLockMode.None; //free the cursor for the on-screen buttons (coming next)
-        Cursor.visible = true;
-    }
-
-    public void ExitComputer()
-    {
-        isUsingComputer = false;
-        currentTerminal = null;
-        Cursor.lockState = CursorLockMode.Locked; //back to mouselook
-        Cursor.visible = false;
-        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
-        {
-            RunManager.Instance.RPC_ReleaseComputer(Object.InputAuthority); //free the lock for the next player
-        }
-    }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
@@ -732,7 +321,7 @@ public class Player : NetworkBehaviour
     {
         isBeingDragged = false;
         draggingGuard = null;
-        characterController.enabled = false; // toggle the CC so it accepts the teleport 
+        characterController.enabled = false; // toggle the CC so it accepts the teleport
         transform.position = closetPosition;
         characterController.enabled = true;
         IsLockedUp = true;
@@ -748,5 +337,4 @@ public class Player : NetworkBehaviour
         }
         IsLockedUp = false; //sprung by a friend - the only way out of the closet
     }
-}//
-
+}

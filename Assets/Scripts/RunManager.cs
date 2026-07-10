@@ -14,6 +14,9 @@ public class RunManager : NetworkBehaviour
 
     [SerializeField] public int totalLootValue; // total value of all loot in the house - set in Inspector for a score screen later
     [Networked] public int GatheredLootValue { get; private set; } // what the team has picked up so far - replicates to all clients
+    [Networked] public int HouseLootTotal { get; private set; } // total worth of loot ItemSpawner placed in the house this run - the success screen grades the haul against it
+    [Networked] public int BestClearPercent { get; private set; } // best % of a house the crew has ever cleared in one run - persists across runs as a bragging-rights stat
+    [Networked] public float RunTime { get; private set; } // seconds the current heist has been running - counts up while InProgress, frozen once the run ends
     [Networked] private ulong lootedMask { get; set; } // one bit per loot item (up to 64); bit N set = item N is already taken
     [Networked] public int EntrySpawnPointId { get; private set; } // which PlayerSpawnN to teleport to after a scene load - set by whichever door triggers the transition
     [SerializeField] private int outdoorSceneBuildIndex = 0; // the scene the van lives in - everyone gets pulled here when the run ends, even players still indoors
@@ -149,12 +152,20 @@ public class RunManager : NetworkBehaviour
         GatheredLootValue += value;
     }
 
+    public void ReportHouseLoot(int value) //ItemSpawner (master only) tallies the worth of everything it spawned this run, so Success can score the haul as a percentage of what was there
+    {
+        if (!HasStateAuthority) return;
+        HouseLootTotal += value;
+    }
+
     private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house re-stocked. Money and each player's carried inventory are kept - only the house resets
     {
         State = RunState.InProgress;
         playersAlive = Player.ActivePlayers.Count; //everyone was revived on the van ride, so they all count again
         lootedMask = 0; //re-lootable house for the new run - any legacy Lootables reappear
         GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
+        HouseLootTotal = 0; //ItemSpawner re-tallies the new run's loot when the indoor scene reloads
+        RunTime = 0f; //fresh clock for the new heist
         FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run
     }
 
@@ -162,6 +173,15 @@ public class RunManager : NetworkBehaviour
     {
         State = newState;
         Debug.Log($"Run ended: {newState}"); // TEMP: trigger end screen / return to lobby here
+
+        if (newState == RunState.Success && HouseLootTotal > 0) //remember the crew's best clear-out across every run
+        {
+            int clearPercent = Mathf.RoundToInt(100f * GatheredLootValue / HouseLootTotal);
+            if (clearPercent > BestClearPercent)
+            {
+                BestClearPercent = clearPercent;
+            }
+        }
 
         //only reload if players are still indoors - if the run ended at the van (success) everyone's already outside, and reloading the scene you're standing in doesn't reliably fire activeSceneChanged. players ride to their van seat from Player.FixedUpdateNetwork either way.
         if (SceneManager.GetActiveScene().buildIndex != outdoorSceneBuildIndex)
@@ -182,8 +202,10 @@ public class RunManager : NetworkBehaviour
     switch(State)
      {
         case RunState.InProgress:
-            //Maybe start calculating loot grabbed, pass it on to success case
-
+            if (HasStateAuthority)
+            {
+                RunTime += Runner.DeltaTime; //clock the length of the active heist; the HUD shows it live
+            }
          break;
         case RunState.Caught:
             //When all players die

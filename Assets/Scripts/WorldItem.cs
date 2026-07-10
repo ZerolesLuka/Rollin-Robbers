@@ -11,6 +11,7 @@ public class WorldItem : NetworkBehaviour
 
     [SerializeField] private string startingName = "Item"; // for items placed in the scene; the spawner/drop set these on spawn instead
     [SerializeField] private int startingValue = 100;       // fallback value; the spawner/drop set the real value on spawn
+    [SerializeField] private Light glowLight;               // optional child light - tinted by rarity so pricey loot glows. leave empty for no glow
     [Networked] public NetworkString<_32> ItemName { get; set; }
     [Networked] public int Value { get; set; }              // what it sells for at the pawn shop
     [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
@@ -28,6 +29,14 @@ public class WorldItem : NetworkBehaviour
         {
             ItemName = startingName;
             Value = startingValue;
+        }
+    }
+
+    public override void Render() //every frame on all clients - keeps the glow matched to the networked Value even as it replicates in after spawn
+    {
+        if (glowLight != null)
+        {
+            glowLight.color = LootRarityTable.ColorFor(Value);
         }
     }
 
