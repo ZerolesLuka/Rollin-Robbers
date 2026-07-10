@@ -217,7 +217,7 @@ public class DogAI : NetworkBehaviour
 
     private void TickChasing()
     {
-        if (chaseTarget == null || chaseTarget.IsEliminated)
+        if (chaseTarget == null || chaseTarget.IsEliminated || chaseTarget.IsHiding) //gone, out, or ducked into a hiding spot - the dog loses them and sniffs the last spot instead of camping the closet door
         {
             ChangeState(DogState.Investigating, null);
             return;

@@ -23,6 +23,7 @@ public class SecurityCamera : MonoBehaviour
     private int patrolDir = 1;      // sweep direction: 1 = sweeping right, -1 = sweeping left
     private float dwellTimer;
     private float cooldownTimer;
+    private bool wasSeen; //was a player visible last frame - so the sound fires once when you're first seen, not every frame
 
     private void Start()
     {
@@ -35,6 +36,23 @@ public class SecurityCamera : MonoBehaviour
         cooldownTimer -= Time.deltaTime;
 
         Player spotted = GetVisiblePlayer();
+
+        bool isSeen = spotted != null;
+        if (isSeen && !wasSeen) //rising edge - the camera just caught a player, so the sound plays ONLY when you're actually seen (not on awake, not on a timer)
+        {
+            if (alertSource != null)
+            {
+                alertSource.Play();
+            }
+        }
+        else if (!isSeen && wasSeen) //dropped out of view - cut the sound so audio means "the camera can see me right now"
+        {
+            if (alertSource != null)
+            {
+                alertSource.Stop();
+            }
+        }
+        wasSeen = isSeen;
 
         if (spotted != null && cooldownTimer <= 0f)
         {
@@ -106,8 +124,7 @@ public class SecurityCamera : MonoBehaviour
         dwellTimer = 0f;
         cooldownTimer = alertCooldown;
 
-        if (alertSource != null) alertSource.Play();
-        if (GuardPatrol.Instance != null) GuardPatrol.Instance.AlertTo(position); //master only
+        if (GuardPatrol.Instance != null) GuardPatrol.Instance.AlertTo(position, false); //master only, alertDog:false - the camera summons the GUARD but never the dog (a dog doesn't watch monitors). the spotted sound already played on sight (see Update)
     }
 
     private void OnDrawGizmos()

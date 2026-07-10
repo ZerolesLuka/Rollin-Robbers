@@ -178,6 +178,7 @@ MonoBehaviour:
   cornerAlertCooldown: 6
   reachDistance: 0.5
   wanderRadius: 10
+  restDisturbancesMax: 3
   searchSweepRadius: 5
   maximumSearchSweepPoints: 3
   searchSweepWaitTime: 1
@@ -187,7 +188,7 @@ MonoBehaviour:
   predictionLeadTime: 0.4
   patrolSpeed: 2
   investigateSpeed: 3
-  chaseSpeed: 7
+  chaseSpeed: 6
 --- !u!82 &2378744590278388840
 AudioSource:
   m_ObjectHideFlags: 0

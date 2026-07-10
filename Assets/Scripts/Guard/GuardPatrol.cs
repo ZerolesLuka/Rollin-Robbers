@@ -10,27 +10,30 @@ public class GuardPatrol : NetworkBehaviour
     public static GuardPatrol Instance; //the master's guard, so sensors (toys, cameras, ...) can ping it without needing a scene reference
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
-    [SerializeField] private float noiseThreshold; //random wake threshold, rolled in Spawned
-    [SerializeField] private float catchRange = 2f;
-    private float chaseSenseRange = 5f;
-    [SerializeField] private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
-    [SerializeField] private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
+    private float noiseThreshold; //runtime working value - rolled in Spawned between wakeThresholdMin/Max, then sharpened by loot theft. tune the RANGE below, not this
+    [SerializeField] private float wakeThresholdMin = 3f; //accumulated noise needed to wake him, randomized in this range so it cant be memorized. lower = twitchier
+    [SerializeField] private float wakeThresholdMax = 6f;
+    [SerializeField] private float catchRange = 2f; //how close he has to get to grab you
+    [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
+    private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
+    private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
-    private float alertConfirmTime = 1.5f;   // must stay suspicious this long before searching
+    [SerializeField] private float alertConfirmTime = 1.5f;   // must stay suspicious this long before he commits to searching. lower = jumps to search faster
     private float noiseAccumulator;
     private float suspicionTimer; //how long the guard is sus after in suspicion state
     private Player chaseTarget;//last seen player
     private Player escortTarget; //who he's currently dragging to the closet
     private Vector3 lastKnownPosition; //playerpos
+    private bool alertShouldPingDog = true; //whether the current alert also pulls the dog in - AlertTo sets this; the camera sets it false so it wakes ONLY the guard
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
-    private int asleepChancesMax = 3;
+    private int asleepChancesMax = 3; //false alarms he shrugs off before he stays permanently alert (never drops fully back to sleep)
     private float relaxPatrolTimer;
-    [SerializeField] private float relaxIdleMin = 3f;
-    [SerializeField] private float relaxIdleMax = 8f;
+    private float relaxIdleMin = 3f;
+    private float relaxIdleMax = 8f;
 
     private NavMeshAgent agent; //guard
     private Transform[] waypoints; //guard patrol
-    [SerializeField] private float reachDistance = 0.5f; //distance of which the guard consider it has reached waypoint
+    private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
 
     private GuardVision vision; //reusable sight component on the same GameObject - config (range/fov/eye/mask) lives there now so the dog can reuse it
@@ -38,52 +41,53 @@ public class GuardPatrol : NetworkBehaviour
 
     private GuardAudio guardAudio; //reusable voice component - AudioSource + bark clips + the networked bark RPC live there
 
-    [SerializeField] private float searchSweepRadius = 6f;
-    [SerializeField] private int maximumSearchSweepPoints = 3;
-    [SerializeField] private float searchSweepWaitTime = 1.25f;
+    private float searchSweepRadius = 6f;
+    [SerializeField] private int maximumSearchSweepPoints = 3; //spots he checks before giving up a search - bigger = he hunts longer
+    private float searchSweepWaitTime = 1.25f;
 
     private int searchSweepPointsChecked;
     private float searchSweepWaitTimer;
 
-    [SerializeField] private float searchNoiseReactThreshold = 1.5f;
-    [SerializeField] private float searchNoiseReactionCooldown = 2f;
+    private float searchNoiseReactThreshold = 1.5f;
+    private float searchNoiseReactionCooldown = 2f;
     private float searchNoiseReactionTimer;
 
-    [SerializeField] private Vector3 spawnPosition;
+    private Vector3 spawnPosition; //runtime - set to where he spawns in Spawned; not a tuning value
 
     private Vector3 lastTargetPosition; //used to estimate the chase target's velocity for predictive pursuit
     private Vector3 targetVelocity;
-    [SerializeField] private float predictionLeadTime = 0.3f; //seconds ahead of the target's velocity the guard aims for - cuts corners instead of tailing exactly
+    private float predictionLeadTime = 0.3f; //seconds ahead of the target's velocity the guard aims for - cuts corners instead of tailing exactly
 
     private float lastReactedLootPercent; //how much of the house's value he's already gotten rattled about
-    [SerializeField] private float lootSuspicionStep = 0.25f; //every time another quarter of the house's total value goes missing, he notices
-    [SerializeField] private float noiseThresholdDropPerLootMilestone = 0.75f; //each milestone permanently sharpens his ears for the rest of the run - he's on edge now
+    private float lootSuspicionStep = 0.25f; //every time another quarter of the house's total value goes missing, he notices
+    private float noiseThresholdDropPerLootMilestone = 0.75f; //each milestone permanently sharpens his ears for the rest of the run - he's on edge now
 
     private readonly List<Vector3> searchPointsThisSweep = new List<Vector3>(); //spots already checked this search - keeps the sweep spreading out instead of clustering by chance
-    [SerializeField] private float minSearchPointSpacing = 2f; //a new random search point must be at least this far from ones already checked
+    private float minSearchPointSpacing = 2f; //a new random search point must be at least this far from ones already checked
 
-    [SerializeField] private float sweepLookRange = 45f; //how far left/right of center he turns while waiting at a search point
-    [SerializeField] private float sweepLookSpeed = 90f;  //degrees per second the look oscillates back and forth
+    private float sweepLookRange = 45f; //how far left/right of center he turns while waiting at a search point
+    private float sweepLookSpeed = 90f;  //degrees per second the look oscillates back and forth
     private bool isSweepingSearchPoint;
     private float sweepBaseYaw;    //the direction he was facing when he arrived - the look oscillates around this, not world-forward
     private float sweepPhaseTimer;
 
-    [SerializeField] private int floorboardCreaksToInvestigate = 4; //a single creak is ignored - he only comes to look after this many
-    [SerializeField] private float floorboardCreakWindow = 6f;      //creaks must keep coming within this window; if they stop, the count fades and he shrugs it off
+    private int floorboardCreaksToInvestigate = 4; //a single creak is ignored - he only comes to look after this many
+    private float floorboardCreakWindow = 6f;      //creaks must keep coming within this window; if they stop, the count fades and he shrugs it off
     private int floorboardCreakCount;
     private float floorboardCreakTimer;
     private Vector3 lastFloorboardCreakPosition;
 
-    private float relaxSpeed = 1.5f;
-    private float searchSpeed = 3.5f;
-    private float chaseSpeed = 6.5f;
-    private float escortSpeed = 2.5f; //walk pace while hauling someone to the closet
+    [Header("Movement speeds")]
+    [SerializeField] private float relaxSpeed = 1.5f;   //strolling on patrol
+    [SerializeField] private float searchSpeed = 3.5f;  //investigating a noise
+    [SerializeField] private float chaseSpeed = 6.5f;   //player walks 7, so a sprintless player only just outruns him - THE main chase-feel lever
+    [SerializeField] private float escortSpeed = 2.5f;  //walk pace while hauling someone to the closet
 
-    [SerializeField] private float angerMax = 100f;
-    [SerializeField] private float angerPerAlert = 20f;           //bump each time he escalates to a fresh alert
-    [SerializeField] private float angerChaseRate = 12f;          //builds per second while actively chasing
-    [SerializeField] private float angerDecayRate = 5f;           //cools per second while calm
-    [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates instead of warns
+    private float angerMax = 100f;
+    private float angerPerAlert = 20f;           //bump each time he escalates to a fresh alert
+    private float angerChaseRate = 12f;          //builds per second while actively chasing
+    private float angerDecayRate = 5f;           //cools per second while calm
+    [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates you for the run instead of just jailing you. higher = more forgiving
     [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
 
     private int currentWaypoint = 0; //used in modulo
@@ -102,7 +106,7 @@ public class GuardPatrol : NetworkBehaviour
         Instance = this; //only the master's guard - sensors ping this one
         spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
-        noiseThreshold = Random.Range(3f, 6f); //random wake threshold so players cant memorize the exact amount
+        noiseThreshold = Random.Range(wakeThresholdMin, wakeThresholdMax); //random wake threshold so players cant memorize the exact amount
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
         agent.Warp(transform.position); 
     }
@@ -233,7 +237,7 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Chasing:
-                if (chaseTarget == null) //target left mid chase, fall back to searching
+                if (chaseTarget == null || chaseTarget.IsHiding) //target left, or ducked into a hiding spot - fall back to searching where they vanished instead of camping the closet or grabbing them through it
                 {
                     ChangeState(GuardState.Searching);
                     break;
@@ -305,11 +309,12 @@ public class GuardPatrol : NetworkBehaviour
         closetSpot = spot; //closet lives in the scene, handed over by the spawner like the waypoints
     }
 
-    public void AlertTo(Vector3 spot) //any sensor (squeaky toy, camera, ...) pings this to send the guard to investigate a spot
+    public void AlertTo(Vector3 spot, bool alertDog = true) //any sensor (squeaky toy, camera, ...) pings this to send the guard to investigate a spot. pass alertDog=false to wake ONLY the guard (the camera does this)
     {
         if (!HasStateAuthority) return; //only the master drives the guard
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
+        alertShouldPingDog = alertDog; //the Searching entry reads this to decide whether to pull the dog in too
         ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
     }
 
@@ -370,7 +375,8 @@ public class GuardPatrol : NetworkBehaviour
                 searchPointsThisSweep.Clear(); //fresh search - forget spots checked on a previous alert
                 searchPointsThisSweep.Add(lastKnownPosition); //count the first spot he's heading to so later sweep points don't cluster around it either
                 PlayStateSound(newState); //bark whenever he changes state
-                if (DogAI.Instance != null) DogAI.Instance.AlertTo(lastKnownPosition); //a confirmed noise pulls the dog toward it too
+                if (alertShouldPingDog && DogAI.Instance != null) DogAI.Instance.AlertTo(lastKnownPosition); //a confirmed noise pulls the dog toward it too - unless this alert opted out (the camera)
+                alertShouldPingDog = true; //reset: by default the next thing that starts a search DOES pull the dog
                 break;
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;

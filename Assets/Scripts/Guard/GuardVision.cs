@@ -7,9 +7,9 @@ public class GuardVision : MonoBehaviour
 {
     [SerializeField] private float sightRange = 10f;  //how far he can see
     [SerializeField] private float fovAngle = 120f;   //width of the view cone in degrees
-    [SerializeField] private float eyeHeight = 1.6f;  //where he sees from
+    [SerializeField] private float eyeHeight = 1.6f;  //where he sees from - MUST stay exposed: the dog tunes this down to ~0.84 (sees from lower), shared component
     [SerializeField] private LayerMask obstacleMask;  //what blocks line of sight
-    [SerializeField] private float flashlightSightBonus = 6f; //a player with their flashlight ON is lit up - visible from this much farther away
+    private float flashlightSightBonus = 6f; //a player with their flashlight ON is lit up - visible from this much farther away (hidden for now)
 
     public bool CanSee(Transform target)
     {
