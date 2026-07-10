@@ -414,6 +414,10 @@ MonoBehaviour:
   flashlightSwayAmount: 1.5
   flashlightSwayFrequency: 1.1
   flashlightWalkSwayMultiplier: 3
+  worldItemPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
+  maxInventorySlots: 4
+  pickupRange: 2
+  dropForwardOffset: 1
   dragTrailLag: 12
   rescueRange: 2.5
   lootRange: 2

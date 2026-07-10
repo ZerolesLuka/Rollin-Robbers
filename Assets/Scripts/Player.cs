@@ -65,6 +65,15 @@ public class Player : NetworkBehaviour
     private bool isUsingComputer; //local only - frozen at the van computer, camera focused on the screen, cursor freed
     private ComputerTerminal currentTerminal; //the terminal we're currently "in", so E can exit it
     private ComputerTerminal pendingTerminal; //terminal we've asked to use and are waiting on the networked lock for
+
+    [SerializeField] private NetworkObject worldItemPrefab; //spawned when you drop - the generic pickup item, named on spawn
+    [SerializeField] private int maxInventorySlots = 4;
+    [SerializeField] private float pickupRange = 2f;
+    [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
+    private readonly List<string> inventory = new List<string>(); //local only - just the item names, shown on this player's own HUD
+    public IReadOnlyList<string> Inventory => inventory;
+    public int MaxInventorySlots => maxInventorySlots;
+    private bool dropHeldLastTick; //rising-edge detect so one G press drops one item
     private bool hasPendingTeleport; //teleport requested from the scene-load coroutine, applied in FixedUpdateNetwork so the networked position updates and Fusion doesn't snap us back
     private Vector3 pendingTeleportPosition;
     private int teleportSettleTicks; //ticks to hold position with the CC disabled after a teleport, so the disable is processed before we re-enable (a same-frame off/on doesn't reset the CC's internal position)
@@ -301,7 +310,26 @@ public class Player : NetworkBehaviour
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
             HandleInteract(networkInputData.interactInput); //E to free a trapped teammate
             HandleFlashlight(networkInputData.flashlightInput); //F to toggle the flashlight
+            HandleDrop(networkInputData.dropInput); //G to drop an item on the floor
         }
+    }
+
+    private void HandleDrop(bool dropPressed)
+    {
+        bool pressed = dropPressed && !dropHeldLastTick; //rising edge only - one drop per press
+        dropHeldLastTick = dropPressed;
+        if (!pressed || inventory.Count == 0 || worldItemPrefab == null) return;
+
+        string itemName = inventory[inventory.Count - 1]; //drop the most recently picked up (the one you're "holding")
+        inventory.RemoveAt(inventory.Count - 1);
+
+        Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
+        Runner.Spawn(worldItemPrefab, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point
+            (runner, spawnedObject) =>
+            {
+                WorldItem item = spawnedObject.GetComponent<WorldItem>();
+                if (item != null) item.ItemName = itemName; //name it on spawn so every client shows the right item
+            });
     }
 
     private void HandleFlashlight(bool flashlightPressed)
@@ -409,7 +437,23 @@ public class Player : NetworkBehaviour
             }
         }
 
-        //loot pickup: only runs if no rescue happened
+        //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check
+        if (inventory.Count < maxInventorySlots)
+        {
+            foreach (WorldItem item in WorldItem.AllItems)
+            {
+                if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
+                if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
+                {
+                    inventory.Add(item.ItemName.ToString());
+                    item.pendingRemoval = true; //so we don't re-grab it before it despawns
+                    item.RPC_PickUp();
+                    return; //picked up, done for this press
+                }
+            }
+        }
+
+        //loot pickup: only runs if no rescue or item pickup happened
         if (RunManager.Instance == null) return;
         foreach (Lootable lootable in Lootable.AllLootables)
         {

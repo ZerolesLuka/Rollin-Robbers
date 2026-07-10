@@ -11,5 +11,6 @@ public struct NetworkInputData : INetworkInput //A struct holds input of the pla
     public bool jumpInput;
     public bool interactInput;
     public bool flashlightInput; //F held this tick - the player edge-detects it to toggle the flashlight on/off
+    public bool dropInput;       //G held this tick - edge-detected to drop the most recent inventory item
 
 }

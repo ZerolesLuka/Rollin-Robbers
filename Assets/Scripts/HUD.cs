@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,6 +9,7 @@ public class HUD : MonoBehaviour
     [SerializeField] private Image suffocationFade; //fullscreen black image; alpha ramps as the local player suffocates, full black on death
     [SerializeField] private Text lootText;         //shows team's gathered loot value; wire up a UI Text in the Inspector
     [SerializeField] private Text moneyText;        //shows the team's banked cash
+    [SerializeField] private Text[] inventorySlotTexts; //4 slot labels; each shows the held item's name or empty
 
     [SerializeField] private GameObject caughtPanel;    //shown when the whole team gets caught
     [SerializeField] private CanvasGroup caughtCanvasGroup; //on the same panel - drives the fade
@@ -42,6 +44,16 @@ public class HUD : MonoBehaviour
         if (moneyText != null && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
         {
             moneyText.text = $"Money: ${RunManager.Instance.Money}";
+        }
+
+        if (inventorySlotTexts != null && Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid)
+        {
+            IReadOnlyList<string> inventory = Player.LocalPlayer.Inventory;
+            for (int slot = 0; slot < inventorySlotTexts.Length; slot++)
+            {
+                if (inventorySlotTexts[slot] == null) continue;
+                inventorySlotTexts[slot].text = slot < inventory.Count ? inventory[slot] : "";
+            }
         }
 
         bool caught = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
