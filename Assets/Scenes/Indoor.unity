@@ -15048,6 +15048,7 @@ MonoBehaviour:
   staminaImage: {fileID: 1296060684}
   suffocationFade: {fileID: 406108289}
   lootText: {fileID: 1153762652}
+  moneyText: {fileID: 0}
   caughtPanel: {fileID: 949354957}
   caughtCanvasGroup: {fileID: 949354959}
   caughtBackground: {fileID: 1525543466}
@@ -58171,6 +58172,55 @@ MonoBehaviour:
   m_SelectedFaces: 
   m_SelectedEdges: []
   m_SelectedVertices: 
+--- !u!1 &1544252785
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1544252787}
+  - component: {fileID: 1544252786}
+  m_Layer: 0
+  m_Name: FloorboardScatter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1544252786
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1544252785}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 861f6b857141a324a871fae7bd524cac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FloorboardScatterer
+  floorboardPrefab: {fileID: 4654167051876982036, guid: 35b35c63aab46ec44aa87d728f857738, type: 3}
+  floorboardCount: 20
+  scatterRadius: 25
+  minSpacing: 2.5
+  navSampleDistance: 3
+--- !u!4 &1544252787
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1544252785}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -50.71475, y: 5.04393, z: 12.39668}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1548798855
 GameObject:
   m_ObjectHideFlags: 0
@@ -83160,3 +83210,4 @@ SceneRoots:
   - {fileID: 576112651}
   - {fileID: 1640248670}
   - {fileID: 1577574309}
+  - {fileID: 1544252787}

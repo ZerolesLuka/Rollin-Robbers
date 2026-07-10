@@ -456,15 +456,15 @@ public class Player : NetworkBehaviour
             }
         }
 
-        //van computer buttons: route the crew to the house (fresh heist) or the pawn shop
-        foreach (RouteButton button in RouteButton.AllButtons)
+       //pawn shop counter: sell the team's haul for money
+        foreach (SellCounter counter in SellCounter.AllCounters)
         {
-            if (Vector3.Distance(transform.position, button.transform.position) <= button.interactRange)
+            if (Vector3.Distance(transform.position, counter.transform.position) <= counter.interactRange)
             {
-                RunManager.Instance.RPC_Route(button.targetSceneBuildIndex, button.spawnPointId, button.startsNewRun);
+                RunManager.Instance.RPC_SellLoot();
                 return;
             }
-        }
+        } 
 
         foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
         {

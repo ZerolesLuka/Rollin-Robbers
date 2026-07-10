@@ -21,11 +21,16 @@ public class RunManager : NetworkBehaviour
     [Networked] public PlayerRef ComputerUser { get; private set; } // who's currently at the van computer; PlayerRef.None = free. Locks it to one person at a time
     public bool IsComputerFree => ComputerUser == PlayerRef.None;
 
+    [Networked] public int Money { get; private set; } // the team's banked cash - persists across runs, grows when they sell loot at the pawn shop
+
+    [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
+
     public override void Spawned()
     {
         DontDestroyOnLoad(gameObject); //survive scene loads
         Instance = this;
         State = RunState.InProgress;
+        if (HasStateAuthority) FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
     }
 
     public void RegisterPlayer()
@@ -132,11 +137,19 @@ public class RunManager : NetworkBehaviour
         }
     }
 
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_SellLoot() //pawn shop counter - cash in the whole haul at once
+    {
+        Money += GatheredLootValue;
+        GatheredLootValue = 0; //haul emptied; the house refills each run so there's always more to steal
+    }
+
     private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house refilled with loot. the team's accumulated haul (GatheredLootValue) is kept to sell later at the pawn shop
     {
         State = RunState.InProgress;
         playersAlive = Player.ActivePlayers.Count; //everyone was revived on the van ride, so they all count again
         lootedMask = 0; //re-lootable house for the new run - the items reappear (Lootable reads IsLooted)
+        FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run
     }
 
     private void ChangeState(RunState newState)

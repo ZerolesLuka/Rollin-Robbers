@@ -68,6 +68,12 @@ public class GuardPatrol : NetworkBehaviour
     private float sweepBaseYaw;    //the direction he was facing when he arrived - the look oscillates around this, not world-forward
     private float sweepPhaseTimer;
 
+    [SerializeField] private int floorboardCreaksToInvestigate = 4; //a single creak is ignored - he only comes to look after this many
+    [SerializeField] private float floorboardCreakWindow = 6f;      //creaks must keep coming within this window; if they stop, the count fades and he shrugs it off
+    private int floorboardCreakCount;
+    private float floorboardCreakTimer;
+    private Vector3 lastFloorboardCreakPosition;
+
     private float relaxSpeed = 1.5f;
     private float searchSpeed = 3.5f;
     private float chaseSpeed = 6.5f;
@@ -111,6 +117,12 @@ public class GuardPatrol : NetworkBehaviour
 
         TickAnger(); //rise while chasing, cool while calm
         CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
+
+        if (floorboardCreakCount > 0) //let the creak count fade if the creaking stops
+        {
+            floorboardCreakTimer -= Runner.DeltaTime;
+            if (floorboardCreakTimer <= 0f) floorboardCreakCount = 0;
+        }
 
         switch(State)
         {
@@ -299,6 +311,22 @@ public class GuardPatrol : NetworkBehaviour
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
         ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
+    }
+
+    public void RegisterFloorboardCreak(Vector3 spot) //floorboards don't alert on a single creak - it takes several in a row before he bothers to come look
+    {
+        if (!HasStateAuthority) return;
+        if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //busy - ignore creaks
+
+        lastFloorboardCreakPosition = spot;
+        floorboardCreakCount++;
+        floorboardCreakTimer = floorboardCreakWindow; //keep the window open as long as creaks keep coming
+
+        if (floorboardCreakCount >= floorboardCreaksToInvestigate)
+        {
+            floorboardCreakCount = 0;
+            AlertTo(lastFloorboardCreakPosition); //enough creaking - go check the last one
+        }
     }
 
     private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry

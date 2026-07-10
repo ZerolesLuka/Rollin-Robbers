@@ -7,6 +7,7 @@ public class HUD : MonoBehaviour
     [SerializeField] private Image staminaImage;
     [SerializeField] private Image suffocationFade; //fullscreen black image; alpha ramps as the local player suffocates, full black on death
     [SerializeField] private Text lootText;         //shows team's gathered loot value; wire up a UI Text in the Inspector
+    [SerializeField] private Text moneyText;        //shows the team's banked cash
 
     [SerializeField] private GameObject caughtPanel;    //shown when the whole team gets caught
     [SerializeField] private CanvasGroup caughtCanvasGroup; //on the same panel - drives the fade
@@ -36,6 +37,11 @@ public class HUD : MonoBehaviour
         if (lootText != null && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
         {
             lootText.text = $"Loot: ${RunManager.Instance.GatheredLootValue}";
+        }
+
+        if (moneyText != null && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+        {
+            moneyText.text = $"Money: ${RunManager.Instance.Money}";
         }
 
         bool caught = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
