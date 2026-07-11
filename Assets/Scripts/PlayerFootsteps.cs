@@ -6,6 +6,8 @@ public class PlayerFootsteps : NetworkBehaviour
 {
     [SerializeField] private AudioSource audioSource; // Reference to the AudioSource component
     [SerializeField] private AudioClip[] footstepClips; // Array of footstep audio clips
+    [SerializeField] private AudioClip landingClip; // loud thud played when the player hits the ground after a jump/fall
+    [SerializeField, Range(0f, 1f)] private float landingVolume = 0.6f; // how loud the thud SOUNDS - separate from how loud it is to the guard
     [SerializeField] private CharacterController characterController;
     [SerializeField] private float strideLength = 2f;   //distance walked per step
     [SerializeField] private float maxStepDistance = 1f; //any per-tick move larger than this is a teleport, not a step - ignore it so we don't spam footsteps
@@ -44,5 +46,21 @@ public class PlayerFootsteps : NetworkBehaviour
         AudioClip clip = footstepClips[Random.Range(0, footstepClips.Length)]; // Randomly select a footstep clip
         audioSource.pitch = Random.Range(0.9f, 1.1f); // Slightly randomize the pitch for variety
         audioSource.PlayOneShot(clip); // Play the selected footstep clip
+    }
+
+    public void PlayLanding() //called by Player the tick it lands hard - one loud thud for everyone
+    {
+        RPC_PlayLanding();
+    }
+
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)]
+    private void RPC_PlayLanding()
+    {
+        if (landingClip == null)
+        {
+            return;
+        }
+        audioSource.pitch = 1f; // a solid thud, no footstep-style pitch wobble
+        audioSource.PlayOneShot(landingClip, landingVolume);
     }
 }

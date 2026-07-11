@@ -403,6 +403,9 @@ MonoBehaviour:
   jumpHeight: 1.5
   fallGravityMultiplier: 2.2
   lowJumpGravityMultiplier: 1.6
+  landNoiseAmount: 30
+  landNoiseDecayRate: 60
+  minLandingFallSpeed: 4
   verticalVelocity: 0
   _IsEliminated: 0
   _IsLockedUp: 0
@@ -501,13 +504,13 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 8300000, guid: 16890b5b9c0f8cd4699fa6c0509667c3, type: 3}
   m_PlayOnAwake: 0
-  m_Volume: 1
+  m_Volume: 0.284
   m_Pitch: 1
   Loop: 0
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
-  Priority: 15
+  Priority: 256
   DopplerLevel: 1
   MinDistance: 1
   MaxDistance: 30
@@ -600,6 +603,8 @@ MonoBehaviour:
   audioSource: {fileID: -1691889112300188819}
   footstepClips:
   - {fileID: 8300000, guid: 16890b5b9c0f8cd4699fa6c0509667c3, type: 3}
+  landingClip: {fileID: 8300000, guid: f68cbe2b0f8074e42a6628fa2c33dd20, type: 3}
+  landingVolume: 1
   characterController: {fileID: 3332511634651341915}
   strideLength: 2
   maxStepDistance: 1

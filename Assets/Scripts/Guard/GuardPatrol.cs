@@ -237,7 +237,7 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Chasing:
-                if (chaseTarget == null || chaseTarget.IsHiding) //target left, or ducked into a hiding spot - fall back to searching where they vanished instead of camping the closet or grabbing them through it
+                if (chaseTarget == null || chaseTarget.IsHiding || chaseTarget.IsLockedUp || chaseTarget.IsEliminated) //target left, hid, or is already caught (jailed/out) - stop chasing so he never re-grabs or re-eliminates someone he's already dealt with
                 {
                     ChangeState(GuardState.Searching);
                     break;

@@ -52,10 +52,23 @@ public partial class Player
         jumpHeldLastTick = jumpInput; //remember this tick's hold state so next tick can detect a fresh press
         characterController.Move(moveDir * moveDistance + Vector3.up * verticalVelocity * Runner.DeltaTime);
 
+        //landing: the tick we touch down after being airborne. a hard landing is LOUD - a big noise spike that carries to the guard, plus a thud
+        bool groundedNow = characterController.isGrounded;
+        if (groundedNow && !wasGroundedForLanding && -verticalVelocity >= minLandingFallSpeed) //just hit the ground, and we were actually falling (not stepping off a tiny lip)
+        {
+            landingNoise = landNoiseAmount; //spike the guard-heard noise
+            if (playerFootsteps != null)
+            {
+                playerFootsteps.PlayLanding(); //thud on every client
+            }
+        }
+        wasGroundedForLanding = groundedNow;
+
         //noise comes AFTER speed is finalized
         float movementNoise = (inputVector.magnitude > 0.1f) ? speed : 0f; //moving = your speed, still = 0
         float voiceNoise = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
-        NoiseLevel = Mathf.Max(movementNoise, voiceNoise); //loudest of moving vs talking, set ONCE
+        NoiseLevel = Mathf.Max(movementNoise, Mathf.Max(voiceNoise, landingNoise)); //loudest of moving, talking, or a fresh landing
+        landingNoise = Mathf.MoveTowards(landingNoise, 0f, landNoiseDecayRate * Runner.DeltaTime); //the landing spike rings out over a moment instead of a single tick
     }
 
     private bool BlockedAbove()

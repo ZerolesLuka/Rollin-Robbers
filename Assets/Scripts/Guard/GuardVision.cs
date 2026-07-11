@@ -14,7 +14,7 @@ public class GuardVision : MonoBehaviour
     public bool CanSee(Transform target)
     {
         Player targetPlayer = target.GetComponent<Player>();
-        if (targetPlayer != null && targetPlayer.IsHiding) // hidden players are invisible to all sensors
+        if (targetPlayer != null && (targetPlayer.IsHiding || targetPlayer.IsLockedUp || targetPlayer.IsEliminated)) // hidden, jailed in a closet, or eliminated players are out of play - invisible to every sensor
         {
             return false;
         }

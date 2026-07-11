@@ -40,6 +40,14 @@ public partial class Player : NetworkBehaviour
 
     [SerializeField] private float fallGravityMultiplier = 2.2f;
     [SerializeField] private float lowJumpGravityMultiplier = 1.6f;
+
+    [SerializeField] private float landNoiseAmount = 30f;      //how loud a hard landing is to the guard - way above walking (7) or sprinting (10.5), so a jump-land near him gives you away
+    [SerializeField] private float landNoiseDecayRate = 60f;   //how fast that landing spike rings out, units per second
+    [SerializeField] private float minLandingFallSpeed = 4f;   //must be dropping at least this fast to count as a landing - stepping off a small lip stays quiet
+    private float landingNoise;                                //current landing-noise spike; decays each tick and folds into NoiseLevel
+    private bool wasGroundedForLanding;                        //grounded state last tick, to catch the airborne -> grounded moment
+    private PlayerFootsteps playerFootsteps;                   //cached so a landing can fire the thud through the footstep audio pipeline
+
     public float staminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
 
     private float stamina;                                 //current
@@ -118,6 +126,7 @@ public partial class Player : NetworkBehaviour
         ViewCamera = mainCam; //exposed so world-space UI (the computer screen) can use it to raycast clicks
         CinemachineVirtualCamera virtualCam = GetComponentInChildren<CinemachineVirtualCamera>(); //cinemachine virtual
         stamina = maxStamina;
+        playerFootsteps = GetComponentInChildren<PlayerFootsteps>(); //so a hard landing can fire a thud through the footstep audio
 
         if (RunManager.Instance != null) RunManager.Instance.RegisterPlayer();
 
