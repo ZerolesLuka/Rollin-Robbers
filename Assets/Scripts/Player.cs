@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using Photon.Voice.Unity;
 
 // Player is split across partial files to keep this from being one 750-line monster:
 //   Player.cs             - this file: all [Networked] state, lifecycle (Spawned/Despawned), the FixedUpdateNetwork
@@ -113,7 +114,8 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
     public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
-    [SerializeField] private AudioLowPassFilter voiceMuffle; //on the player's Photon Voice Speaker AudioSource - enabled while trapped so their LIVE voice comes through everyone muffled (taped mouth)
+    private AudioLowPassFilter voiceMuffleFilter; //the low-pass on this player's runtime voice Speaker(Clone) - found on first appearance, then toggled by IsLockedUp for the taped-mouth effect
+    [SerializeField] private float voiceMuffleCutoff = 1000f; //how muffled a trapped player's voice sounds to teammates - lower = more muffled
     private bool interactHeldLastTick; //interact fires on the rising edge (press), not while held
 
     public override void Spawned()
@@ -152,10 +154,7 @@ public partial class Player : NetworkBehaviour
     }
     private void Update()
     {
-        if (voiceMuffle != null && Object != null && Object.IsValid)
-        {
-            voiceMuffle.enabled = IsLockedUp; //taped mouth: muffle this player's LIVE voice while trapped. Runs on ALL copies (before the authority check) so remote teammates hear the muffle, driven by the [Networked] IsLockedUp
-        }
+        UpdateVoiceMuffle(); //taped mouth: low-pass this player's runtime voice Speaker while locked up. Runs on ALL clients so every teammate hears the muffle, driven by the [Networked] IsLockedUp
 
         if (playerVisuals != null && Object != null && Object.IsValid && IsHiding != wasHiding)
         {
@@ -170,6 +169,38 @@ public partial class Player : NetworkBehaviour
         if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
         HandleLook(); //our player only
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
+    }
+
+    private void UpdateVoiceMuffle() //Photon spawns a Speaker(Clone) under this player at runtime to play its voice; we find it and low-pass its audio while the player is locked up (taped mouth)
+    {
+        if (Object == null || !Object.IsValid)
+        {
+            return;
+        }
+
+        if (voiceMuffleFilter == null) //the speaker appears a moment after the player - keep looking until it's here. our OWN player has no speaker for its own voice, so this just stays null for us, which is fine
+        {
+            Speaker speaker = GetComponentInChildren<Speaker>();
+            if (speaker != null)
+            {
+                AudioSource speakerSource = speaker.GetComponent<AudioSource>();
+                if (speakerSource != null)
+                {
+                    voiceMuffleFilter = speakerSource.GetComponent<AudioLowPassFilter>();
+                    if (voiceMuffleFilter == null)
+                    {
+                        voiceMuffleFilter = speakerSource.gameObject.AddComponent<AudioLowPassFilter>(); //add it ourselves so nothing needs wiring in the inspector
+                    }
+                    voiceMuffleFilter.cutoffFrequency = voiceMuffleCutoff;
+                    voiceMuffleFilter.enabled = false;
+                }
+            }
+        }
+
+        if (voiceMuffleFilter != null)
+        {
+            voiceMuffleFilter.enabled = IsLockedUp;
+        }
     }
 
     private void LateUpdate()

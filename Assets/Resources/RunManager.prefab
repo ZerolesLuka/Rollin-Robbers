@@ -49,8 +49,13 @@ MonoBehaviour:
   _playersAlive: 0
   totalLootValue: 0
   _GatheredLootValue: 0
+  _HouseLootTotal: 0
+  _BestClearPercent: 0
+  _RunTime: 0
   _EntrySpawnPointId: 0
-  outdoorSceneBuildIndex: 1
+  outdoorSceneBuildIndex: 0
+  _Money: 0
+  _FloorboardSeed: 0
 --- !u!114 &1268990276334212518
 MonoBehaviour:
   m_ObjectHideFlags: 0

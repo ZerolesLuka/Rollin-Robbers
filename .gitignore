@@ -78,4 +78,5 @@ crashlytics-build.properties
 CLAUDE.md
 # Built game — never commit build output
 /Rollin' Robbers/
+/Rollin Robbers Game/
 *.config

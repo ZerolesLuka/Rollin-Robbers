@@ -5091,7 +5091,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1ac1640fc66bfd4aa785e0899a4a204, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExitDoor
-  targetSceneBuildIndex: 0
+  targetSceneBuildIndex: 1
   interactRange: 2
   spawnPointId: 0
 --- !u!43 &386128021
@@ -7580,7 +7580,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1ac1640fc66bfd4aa785e0899a4a204, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExitDoor
-  targetSceneBuildIndex: 0
+  targetSceneBuildIndex: 1
   interactRange: 5
   spawnPointId: 2
 --- !u!1 &815975939
@@ -15722,7 +15722,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1ac1640fc66bfd4aa785e0899a4a204, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExitDoor
-  targetSceneBuildIndex: 0
+  targetSceneBuildIndex: 1
   interactRange: 2
   spawnPointId: 1
 --- !u!1 &2033552150
