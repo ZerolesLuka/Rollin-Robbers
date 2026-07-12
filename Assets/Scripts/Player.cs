@@ -16,7 +16,7 @@ using UnityEngine.SceneManagement;
 //   Player.Flashlight.cs  - the handheld flashlight beam + toggle (F)
 //   Player.Teleport.cs    - scene-load spawning and the run-end van ride
 //   Player.Computer.cs    - claiming and sitting at the van computer
-// Everything Fusion weaves ([Networked] + [Rpc] + the override lifecycle) lives HERE so the weaver sees it in one place.
+// Everything Fusion weaves lives HERE so the weaver sees it in one place.
 public partial class Player : NetworkBehaviour
 {
     public PlayerInputActions playerInputActions;
