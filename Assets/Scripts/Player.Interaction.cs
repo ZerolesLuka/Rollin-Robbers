@@ -69,29 +69,51 @@ public partial class Player
             }
         }
 
-        //getaway van: start it from the driver's seat and the run ends successfully for everyone
+        //the getaway van (driver's seat, ends the run for everyone) and the van computer (routing) sit right next to
+        //each other, so don't pick by a fixed order - pick whichever you're actually CLOSEST to. that way standing at
+        //the seat starts the van and standing at the screen opens the computer, no accidental run-endings.
+        Van nearestVan = null;
+        float nearestVanDistance = float.MaxValue;
         foreach (Van van in Van.AllVans)
         {
             Transform seat = van.driverSeat != null ? van.driverSeat : van.transform;
-            if (Vector3.Distance(transform.position, seat.position) <= van.interactRange)
+            float distanceToSeat = Vector3.Distance(transform.position, seat.position);
+            if (distanceToSeat <= van.interactRange && distanceToSeat < nearestVanDistance)
             {
-                RunManager.Instance.RPC_StartGetaway();
-                return;
+                nearestVan = van;
+                nearestVanDistance = distanceToSeat;
             }
         }
 
-        //van computer: press E to sit down at it - only if nobody else is on it (networked lock). we don't enter here; we claim it and enter once granted (see UpdateComputerClaim)
+        ComputerTerminal nearestTerminal = null;
+        float nearestTerminalDistance = float.MaxValue;
         foreach (ComputerTerminal terminal in ComputerTerminal.AllTerminals)
         {
-            if (Vector3.Distance(transform.position, terminal.transform.position) <= terminal.interactRange)
+            float distanceToTerminal = Vector3.Distance(transform.position, terminal.transform.position);
+            if (distanceToTerminal <= terminal.interactRange && distanceToTerminal < nearestTerminalDistance)
             {
-                if (RunManager.Instance.IsComputerFree)
+                nearestTerminal = terminal;
+                nearestTerminalDistance = distanceToTerminal;
+            }
+        }
+
+        if (nearestVan != null || nearestTerminal != null)
+        {
+            //both in reach? use the closer one. a tie goes to the computer on purpose - it's harmless, whereas the van ends the whole run
+            bool useComputer = nearestTerminal != null && (nearestVan == null || nearestTerminalDistance <= nearestVanDistance);
+            if (useComputer)
+            {
+                if (RunManager.Instance.IsComputerFree) //networked lock - we claim it and enter once granted (see UpdateComputerClaim)
                 {
-                    pendingTerminal = terminal;
+                    pendingTerminal = nearestTerminal;
                     RunManager.Instance.RPC_ClaimComputer(Object.InputAuthority);
                 }
-                return;
             }
+            else
+            {
+                RunManager.Instance.RPC_StartGetaway(); //start the van - the run ends successfully for everyone
+            }
+            return;
         }
 
        //pawn shop counter: sell the team's haul for money
