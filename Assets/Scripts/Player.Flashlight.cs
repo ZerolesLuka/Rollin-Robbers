@@ -15,8 +15,9 @@ public partial class Player
     {
         if (flashlight == null || Object == null || !Object.IsValid) return;
 
-        flashlight.enabled = IsFlashlightOn; //on every client, so you see teammates' beams too
-        if (!IsFlashlightOn)
+        bool beamOn = IsFlashlightOn && !IsHiding && !IsEliminated && !IsLockedUp; //kill the beam while hidden, caught, or jailed - otherwise it shines out of the closet and gives you away / looks broken
+        flashlight.enabled = beamOn; //on every client, so you see teammates' beams too
+        if (!beamOn)
         {
             flashlightLastPosition = transform.position; //keep this current while off so we don't get a huge fake "speed" spike the frame it turns on
             return;
