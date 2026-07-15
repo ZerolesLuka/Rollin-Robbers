@@ -80,3 +80,8 @@ CLAUDE.md
 /Rollin' Robbers/
 /Rollin Robbers Game/
 *.config
+
+# Imported asset-store packs - re-downloadable, kept out of the repo to avoid bloat
+# (re-importing the same pack gives identical GUIDs, so scene references don't break)
+/Assets/Synty/
+/Assets/Synty.meta
