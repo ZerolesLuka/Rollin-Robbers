@@ -8,7 +8,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
 // Player - the E key. One press runs down a priority list: free a trapped teammate, pick up a world item,
-// grab legacy loot, use an exit door, start the getaway van, sit at the computer, sell at the pawn shop,
+// use an exit door, start the getaway van, sit at the computer, sell at the pawn shop,
 // or enter/exit a hiding spot. First match wins and returns.
 public partial class Player
 {
@@ -39,7 +39,7 @@ public partial class Player
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
                     inventory.Add(new InventoryItem(item.ItemName.ToString(), item.Value));
-                    if (RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value); //the house is now missing this - feeds the guard's suspicion
+                    if (RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value, item.transform.position); //the house is now missing this - feeds the guard's suspicion, and tells him WHERE it was lifted from
                     item.pendingRemoval = true; //so we don't re-grab it before it despawns
                     item.RPC_PickUp();
                     return; //picked up, done for this press
@@ -47,19 +47,10 @@ public partial class Player
             }
         }
 
-        //loot pickup: only runs if no rescue or item pickup happened
+        //everything below this point needs the RunManager
         if (RunManager.Instance == null) return;
-        foreach (Lootable lootable in Lootable.AllLootables)
-        {
-            if (lootable.IsLooted) continue;
-            if (Vector3.Distance(transform.position, lootable.transform.position) <= lootRange)
-            {
-                RunManager.Instance.RPC_ClaimLoot(lootable.lootId, lootable.value);
-                return; //looted, done for this press
-            }
-        }
 
-        //exit door: only runs if no rescue or loot happened
+        //exit door: only runs if no rescue or pickup happened
         foreach (ExitDoor door in ExitDoor.AllDoors)
         {
             if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)

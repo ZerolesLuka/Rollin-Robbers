@@ -417,37 +417,20 @@ public class GuardPatrol : NetworkBehaviour
 
     private void CheckForMissingLoot() //a new sensing mode: notices his valuables disappearing even with zero noise or sightings - ties threat directly to how much you've stolen
     {
-        if (RunManager.Instance == null || RunManager.Instance.totalLootValue <= 0) return;
+        if (RunManager.Instance == null || RunManager.Instance.HouseLootTotal <= 0) return;
         if (State != GuardState.Asleep && State != GuardState.Relaxed) return; //only the calm states get spooked by this - an already-alert guard doesn't need extra help
 
-        float lootPercentTaken = RunManager.Instance.GatheredLootValue / (float)RunManager.Instance.totalLootValue;
+        float lootPercentTaken = RunManager.Instance.GatheredLootValue / (float)RunManager.Instance.HouseLootTotal;
         if (lootPercentTaken - lastReactedLootPercent >= lootSuspicionStep)
         {
             lastReactedLootPercent = lootPercentTaken;
             noiseThreshold = Mathf.Max(1f, noiseThreshold - noiseThresholdDropPerLootMilestone); //getting nervous permanently sharpens his ears
 
             //go straight to Searching, NOT Suspicious - Suspicious drains back to sleep when there's no noise, so a silent looter would never trigger a real search (the whole point of this sensor).
-            //point him at an emptied container so he actually investigates the scene of the crime instead of sweeping a random old spot.
-            lastKnownPosition = NearestLootedItemPosition();
+            //send him to where the freshest theft actually happened, so he investigates the real crime scene instead of a random old spot.
+            lastKnownPosition = RunManager.Instance.LastStolenPosition;
             ChangeState(GuardState.Searching); //"...wait, where's my silverware?" - and now he actually goes looking
         }
-    }
-
-    private Vector3 NearestLootedItemPosition() //find an already-taken container to send the guard to - the closest one reads as him noticing the freshest theft
-    {
-        Vector3 nearest = transform.position; //fallback: search around himself if we somehow can't find a looted item
-        float nearestDistance = float.MaxValue;
-        foreach (Lootable lootable in Lootable.AllLootables)
-        {
-            if (!lootable.IsLooted) continue;
-            float distance = Vector3.Distance(transform.position, lootable.transform.position);
-            if (distance < nearestDistance)
-            {
-                nearestDistance = distance;
-                nearest = lootable.transform.position;
-            }
-        }
-        return nearest;
     }
 
     private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)

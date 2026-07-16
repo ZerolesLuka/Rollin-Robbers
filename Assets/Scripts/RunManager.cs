@@ -12,12 +12,11 @@ public class RunManager : NetworkBehaviour
     [Networked] public RunState State { get; private set; }
     [Networked] public int playersAlive { get; set; }
 
-    [SerializeField] public int totalLootValue; // total value of all loot in the house - set in Inspector for a score screen later
     [Networked] public int GatheredLootValue { get; private set; } // what the team has picked up so far - replicates to all clients
-    [Networked] public int HouseLootTotal { get; private set; } // total worth of loot ItemSpawner placed in the house this run - the success screen grades the haul against it
+    [Networked] public int HouseLootTotal { get; private set; } // total worth of loot ItemSpawner placed in the house this run - the success screen grades the haul against it, and the guard measures theft against it
     [Networked] public int BestClearPercent { get; private set; } // best % of a house the crew has ever cleared in one run - persists across runs as a bragging-rights stat
     [Networked] public float RunTime { get; private set; } // seconds the current heist has been running - counts up while InProgress, frozen once the run ends
-    [Networked] private ulong lootedMask { get; set; } // one bit per loot item (up to 64); bit N set = item N is already taken
+    [Networked] public Vector3 LastStolenPosition { get; private set; } // where the most recent item was lifted from - the guard investigates this exact spot when he notices things missing
     [Networked] public int EntrySpawnPointId { get; private set; } // which PlayerSpawnN to teleport to after a scene load - set by whichever door triggers the transition
     [SerializeField] private int outdoorSceneBuildIndex = 0; // the scene the van lives in - everyone gets pulled here when the run ends, even players still indoors
 
@@ -47,17 +46,6 @@ public class RunManager : NetworkBehaviour
         if (!HasStateAuthority || State != RunState.InProgress) return;
         playersAlive--;
         if (playersAlive <= 0) ChangeState(RunState.Caught);
-    }
-
-    public bool IsLooted(int lootId) => (lootedMask & (1ul << lootId)) != 0;
-
-    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_ClaimLoot(int lootId, int value)
-    {
-        ulong bit = 1ul << lootId;
-        if ((lootedMask & bit) != 0) return; // already taken (two players pressed E at the same time)
-        lootedMask |= bit;
-        GatheredLootValue += value;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -147,9 +135,10 @@ public class RunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_ReportLootTaken(int value) //a WorldItem was picked up off the shelf - the house is missing that much now, which feeds the guard's suspicion
+    public void RPC_ReportLootTaken(int value, Vector3 stolenFrom) //a WorldItem was lifted - the house is missing that much now (feeds the guard's suspicion), and we remember WHERE so he can investigate the actual crime scene
     {
         GatheredLootValue += value;
+        LastStolenPosition = stolenFrom;
     }
 
     public void ReportHouseLoot(int value) //ItemSpawner (master only) tallies the worth of everything it spawned this run, so Success can score the haul as a percentage of what was there
@@ -162,7 +151,6 @@ public class RunManager : NetworkBehaviour
     {
         State = RunState.InProgress;
         playersAlive = Player.ActivePlayers.Count; //everyone was revived on the van ride, so they all count again
-        lootedMask = 0; //re-lootable house for the new run - any legacy Lootables reappear
         GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
         HouseLootTotal = 0; //ItemSpawner re-tallies the new run's loot when the indoor scene reloads
         RunTime = 0f; //fresh clock for the new heist
