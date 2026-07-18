@@ -16,7 +16,7 @@ public class DogAI : NetworkBehaviour
 
     [Networked] public DogState State { get; private set; }
 
-    [SerializeField] private float catchRange = 2.5f;         //how close before the dog corners a player
+    [SerializeField] private float standoffDistance = 4f;     //the dog HOLDS this far from the player and barks - it doesn't close in and tackle. bigger = hangs further back, smaller = more in your face
     [SerializeField] private float chaseSenseRange = 6f;       //keeps chasing a bit past losing direct sight, same trick GuardPatrol uses
     [SerializeField] private float cornerAlertCooldown = 6f;   //don't spam AlertTo every tick while cornering someone
     [SerializeField] private float reachDistance = 0.5f;
@@ -39,7 +39,6 @@ public class DogAI : NetworkBehaviour
     private float sweepBaseYaw;
     private float sweepPhaseTimer;
 
-    [SerializeField] private float predictionLeadTime = 0.4f; //seconds ahead of the target's current velocity the dog aims for while chasing - cuts corners instead of tailing exactly
 
     [SerializeField] private float patrolSpeed = 2f;
     [SerializeField] private float investigateSpeed = 3f;
@@ -56,8 +55,6 @@ public class DogAI : NetworkBehaviour
     private Player chaseTarget;
     private Vector3 lastKnownPosition;
     private Vector3 spawnPosition;
-    private Vector3 lastTargetPosition; //used to estimate the chase target's velocity for predictive pursuit
-    private Vector3 targetVelocity;
 
     public override void Spawned()
     {
@@ -231,17 +228,20 @@ public class DogAI : NetworkBehaviour
         if (canSeeTarget || distanceToTarget < chaseSenseRange)
         {
             Vector3 currentTargetPosition = chaseTarget.transform.position;
-            targetVelocity = (currentTargetPosition - lastTargetPosition) / Runner.DeltaTime; //crude per-tick velocity estimate
-            lastTargetPosition = currentTargetPosition;
-
             lastKnownPosition = currentTargetPosition; //still the real last-seen spot, used if we lose the target entirely
-            Vector3 predictedPosition = currentTargetPosition + targetVelocity * predictionLeadTime; //aim a little ahead instead of exactly where they are right now - cuts corners like a real dog would
-            agent.SetDestination(predictedPosition);
+
+            //the dog never walks AT the player - it walks to a spot standoffDistance away from them, on our side.
+            //that one change gives the whole behaviour: player walks off and the spot moves too so we follow;
+            //player stops and we arrive at the spot and stand there barking; player walks at US and the spot
+            //slides behind us, so we give ground and keep our distance.
+            Vector3 fromPlayerToDog = distanceToTarget > 0.01f ? (-toTarget / distanceToTarget) : -transform.forward; //guard against a zero-length direction if they're right on top of us
+            Vector3 standoffPoint = currentTargetPosition + fromPlayerToDog * standoffDistance;
+            agent.SetDestination(standoffPoint);
         }
 
-        if (distanceToTarget < catchRange)
+        if (distanceToTarget <= standoffDistance + 0.75f)
         {
-            CornerTarget();
+            CornerTarget(); //within its standoff range - hold here and bark the guard over (CornerTarget has its own cooldown so it doesn't spam)
         }
         else if (!canSeeTarget && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
         {
@@ -349,6 +349,11 @@ public class DogAI : NetworkBehaviour
         agent.updateRotation = true;
         isSweepingSearchPoint = false;
 
+        //most states path all the way to their target (waypoint, last-known spot, home), so arrival needs
+        //stoppingDistance at 0 - otherwise the agent halts short and the "remainingDistance <= reachDistance"
+        //arrival checks never fire. Chasing overrides this below to keep its barking distance.
+        agent.stoppingDistance = 0f;
+
         switch (newState)
         {
             case DogState.Resting:
@@ -372,11 +377,6 @@ public class DogAI : NetworkBehaviour
             case DogState.Chasing:
                 agent.speed = chaseSpeed;
                 chaseTarget = target;
-                if (target != null)
-                {
-                    lastTargetPosition = target.transform.position; //reset so the first velocity sample isn't computed against stale data from a previous chase
-                    targetVelocity = Vector3.zero;
-                }
                 if (dogAudio != null) dogAudio.Bark(GuardAudio.BarkType.Chase);
                 break;
         }
