@@ -18,6 +18,7 @@ public class HUD : MonoBehaviour
     [SerializeField] private Image caughtBackground;    //the panel's background image - flashes red then settles dark
     [SerializeField] private Text caughtText;
     [SerializeField] private float caughtFadeDuration = 1.5f;
+    [SerializeField] private float caughtHoldDuration = 3.5f; //how long "run failed" stays up before clearing itself - the run is still Caught, we just can't leave the panel covering the van computer you need to press next
     [SerializeField] private Color caughtFlashColor = new Color(0.6f, 0f, 0f, 0.85f); //punchy red flash on impact
     [SerializeField] private Color caughtRestColor = new Color(0f, 0f, 0f, 0.85f);    //settles to near-black
 
@@ -27,6 +28,7 @@ public class HUD : MonoBehaviour
     [SerializeField] private Text successText;              //the headline
     [SerializeField] private Text successDetailText;        //payout breakdown lines
     [SerializeField] private float successFadeDuration = 1.2f;
+    [SerializeField] private float successHoldDuration = 5f; //payout screen stays up longer than the fail one - there are actual numbers to read - then clears so the van computer is reachable
     [SerializeField] private Color successColor = new Color(0.05f, 0.2f, 0.08f, 0.9f); //deep green for a clean getaway
 
     private bool wasCaught;
@@ -150,6 +152,23 @@ public class HUD : MonoBehaviour
         if (caughtCanvasGroup != null) caughtCanvasGroup.alpha = 1f;
         if (caughtBackground != null) caughtBackground.color = caughtRestColor;
         if (caughtText != null) caughtText.transform.localScale = restScale;
+
+        //let the message land, then clear it. the run STAYS in the Caught state (that's what the van's House
+        //button resets) - this only takes the panel off the screen, because otherwise it sits over the van
+        //computer you have to walk up to and press to pick pawn shop or the next house.
+        yield return new WaitForSeconds(caughtHoldDuration);
+
+        float fadeOutTimer = 0f;
+        while (fadeOutTimer < caughtFadeDuration)
+        {
+            fadeOutTimer += Time.deltaTime;
+            float fadingOut = 1f - Mathf.SmoothStep(0f, 1f, fadeOutTimer / caughtFadeDuration);
+            if (caughtCanvasGroup != null) caughtCanvasGroup.alpha = fadingOut;
+            yield return null;
+        }
+
+        if (caughtCanvasGroup != null) caughtCanvasGroup.alpha = 0f;
+        if (caughtPanel != null) caughtPanel.SetActive(false); //cleared - the van computer is usable again
     }
 
     private IEnumerator PlaySuccessSummary() //the getaway payout screen - grades how much of the house the crew cleared this run
@@ -221,6 +240,31 @@ public class HUD : MonoBehaviour
         if (successText != null)
         {
             successText.transform.localScale = restScale;
+        }
+
+        //same deal as the caught panel - hold it long enough to read the payout, then get it off the screen
+        //so the crew can actually reach the van computer and route to the pawn shop or the next house
+        yield return new WaitForSeconds(successHoldDuration);
+
+        float fadeOutTimer = 0f;
+        while (fadeOutTimer < successFadeDuration)
+        {
+            fadeOutTimer += Time.deltaTime;
+            float fadingOut = 1f - Mathf.SmoothStep(0f, 1f, fadeOutTimer / successFadeDuration);
+            if (successCanvasGroup != null)
+            {
+                successCanvasGroup.alpha = fadingOut;
+            }
+            yield return null;
+        }
+
+        if (successCanvasGroup != null)
+        {
+            successCanvasGroup.alpha = 0f;
+        }
+        if (successPanel != null)
+        {
+            successPanel.SetActive(false); //cleared - van computer reachable again
         }
     }
 
