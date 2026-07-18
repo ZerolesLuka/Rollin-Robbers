@@ -29,6 +29,8 @@ public partial class Player
                 {
                     item.ItemName = dropped.name;
                     item.Value = dropped.value;
+                    item.SpawnPoint = dropPosition;  //same networked-position safeguard as placed loot, in case a drop ever gets deferred too
+                    item.UseSpawnPoint = true;
                 }
             });
     }

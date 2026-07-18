@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
@@ -15,6 +16,8 @@ public class WorldItem : NetworkBehaviour
     [Networked] public NetworkString<_32> ItemName { get; set; }
     [Networked] public int Value { get; set; }              // what it sells for at the pawn shop
     [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
+    [Networked] public Vector3 SpawnPoint { get; set; }       // where this item should be. sent as networked data because a deferred spawn (prefab still loading) silently drops the position argument and dumps the item at origin
+    [Networked] public NetworkBool UseSpawnPoint { get; set; } // true = runtime-spawned loot, re-apply SpawnPoint in Spawned. false = an item placed directly in the scene, which keeps its own transform
 
     [HideInInspector] public bool pendingRemoval; // set locally the instant we grab it, so our own pickup scan can't re-grab it during the despawn lag
 
@@ -22,13 +25,45 @@ public class WorldItem : NetworkBehaviour
     {
         AllItems.Add(this);
 
-        //every client falls the item with its own local physics from the same synced spawn position - no NetworkTransform
-        //resampling the motion, so the fall is smooth everywhere and they land in the same spot (gravity is deterministic enough)
+        //DON'T place the item here. On a deferred spawn (prefab still loading) the networked SpawnPoint hasn't
+        //replicated yet - it reads (0,0,0) in Spawned - and a dynamic rigidbody dropped at origin, overlapping the
+        //other loot, explodes before the real position ever arrives. So FREEZE it, and let a coroutine place it a
+        //tick later once SpawnPoint has actually arrived. Same "delay the tick so network + physics stop arguing
+        //over where the object goes" fix the player scene-transition uses.
+        if (UseSpawnPoint)
+        {
+            Rigidbody body = GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.isKinematic = true; //frozen: no gravity, no collision blast, while we wait for the real position
+            }
+            StartCoroutine(PlaceOnceSpawnPointArrives());
+        }
 
         if (HasStateAuthority && string.IsNullOrEmpty(ItemName.ToString())) // a scene item the spawner/drop didn't name
         {
             ItemName = startingName;
             Value = startingValue;
+        }
+    }
+
+    private IEnumerator PlaceOnceSpawnPointArrives()
+    {
+        //the deferred spawn replicates SpawnPoint a tick or two after Spawned; until it lands it reads as zero
+        while (SpawnPoint == Vector3.zero)
+        {
+            yield return null;
+        }
+
+        transform.position = SpawnPoint;
+
+        Rigidbody body = GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.isKinematic = false;   //placed correctly now - release it so it falls and settles like a real object
+            body.position = SpawnPoint;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
         }
     }
 

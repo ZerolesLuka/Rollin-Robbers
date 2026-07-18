@@ -59,7 +59,7 @@ public class ItemSpawner : MonoBehaviour
             ParseSpot(spawnSpot.name, out itemName, out itemValue);
             spawnedTotalValue += itemValue;
 
-            runner.Spawn(worldItemPrefab, spawnSpot.position, Random.rotation, PlayerRef.None, //random tilt so it settles on a face instead of balancing on a point; the rotation syncs as part of the spawn
+            runner.Spawn(worldItemPrefab, spawnSpot.position, Quaternion.identity, PlayerRef.None, //upright so it drops flat and settles, instead of spawning mid-tumble
                 (spawnRunner, spawnedObject) =>
                 {
                     WorldItem item = spawnedObject.GetComponent<WorldItem>();
@@ -67,6 +67,8 @@ public class ItemSpawner : MonoBehaviour
                     {
                         item.ItemName = itemName;
                         item.Value = itemValue;
+                        item.SpawnPoint = spawnSpot.position;  //carried as networked data so the deferred spawn can't lose it
+                        item.UseSpawnPoint = true;
                     }
                 });
         }

@@ -484,9 +484,8 @@ MonoBehaviour:
   dropForwardOffset: 1
   dragTrailLag: 12
   rescueRange: 2.5
-  lootRange: 2
   suffocateDuration: 20
-  voiceMuffle: {fileID: -185174176684180050}
+  voiceMuffleCutoff: 1000
 --- !u!143 &3332511634651341915
 CharacterController:
   m_ObjectHideFlags: 0

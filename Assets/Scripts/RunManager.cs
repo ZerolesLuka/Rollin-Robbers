@@ -27,6 +27,12 @@ public class RunManager : NetworkBehaviour
 
     [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
 
+    //master-only bookkeeping so a loot tally belongs to exactly ONE scene load. every ItemSpawner runs its
+    //Start on every load, and ReportHouseLoot adds - so without this, walking back into the house through a
+    //door tallies the house on top of itself and the guard ends up half as suspicious as he should be.
+    private int sceneLoadCounter;
+    private int lastTalliedSceneLoad = -1;
+
     public override void Spawned()
     {
         DontDestroyOnLoad(gameObject); //survive scene loads
@@ -60,7 +66,7 @@ public class RunManager : NetworkBehaviour
         {
             Runner.Despawn(DogAI.Instance.Object); //neither guard type can navigate the outdoor NavMesh - clean up before leaving
         }
-        Runner.LoadScene(SceneRef.FromIndex(buildIndex));
+        LoadSceneForEveryone(buildIndex);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -107,7 +113,7 @@ public class RunManager : NetworkBehaviour
         {
             Runner.Despawn(DogAI.Instance.Object);
         }
-        Runner.LoadScene(SceneRef.FromIndex(buildIndex));
+        LoadSceneForEveryone(buildIndex);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -144,7 +150,23 @@ public class RunManager : NetworkBehaviour
     public void ReportHouseLoot(int value) //ItemSpawner (master only) tallies the worth of everything it spawned this run, so Success can score the haul as a percentage of what was there
     {
         if (!HasStateAuthority) return;
+
+        //the FIRST spawner to report after a scene load starts the tally over; the rest of that same load add
+        //to it. that way several ItemSpawners in one house still sum together, but re-entering the house (or
+        //a spawner sitting in another scene) can't stack its loot onto the previous count.
+        if (lastTalliedSceneLoad != sceneLoadCounter)
+        {
+            HouseLootTotal = 0;
+            lastTalliedSceneLoad = sceneLoadCounter;
+        }
+
         HouseLootTotal += value;
+    }
+
+    private void LoadSceneForEveryone(int buildIndex) //every scene load goes through here so the loot tally always gets scoped - see ReportHouseLoot
+    {
+        sceneLoadCounter++;
+        Runner.LoadScene(SceneRef.FromIndex(buildIndex));
     }
 
     private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house re-stocked. Money and each player's carried inventory are kept - only the house resets
@@ -182,7 +204,7 @@ public class RunManager : NetworkBehaviour
             {
                 Runner.Despawn(DogAI.Instance.Object);
             }
-            Runner.LoadScene(SceneRef.FromIndex(outdoorSceneBuildIndex)); //brings the indoor players out; the van seats exist in that scene
+            LoadSceneForEveryone(outdoorSceneBuildIndex); //brings the indoor players out; the van seats exist in that scene
         }
     }
     public override void FixedUpdateNetwork()
