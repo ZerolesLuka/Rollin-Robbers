@@ -39,7 +39,7 @@ public partial class Player
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
                     inventory.Add(new InventoryItem(item.ItemName.ToString(), item.Value));
-                    if (RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value, item.transform.position); //the house is now missing this - feeds the guard's suspicion, and tells him WHERE it was lifted from
+                    if (!item.CountedAsStolen && RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value, item.transform.position); //FIRST lift only - the house is now missing this, which feeds the guard's suspicion and tells him WHERE it went. re-picking something a teammate dropped isn't a fresh theft
                     item.pendingRemoval = true; //so we don't re-grab it before it despawns
                     item.RPC_PickUp();
                     return; //picked up, done for this press

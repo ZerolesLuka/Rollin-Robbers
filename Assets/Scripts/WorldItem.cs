@@ -18,6 +18,7 @@ public class WorldItem : NetworkBehaviour
     [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
     [Networked] public Vector3 SpawnPoint { get; set; }       // where this item should be. sent as networked data because a deferred spawn (prefab still loading) silently drops the position argument and dumps the item at origin
     [Networked] public NetworkBool UseSpawnPoint { get; set; } // true = runtime-spawned loot, re-apply SpawnPoint in Spawned. false = an item placed directly in the scene, which keeps its own transform
+    [Networked] public NetworkBool CountedAsStolen { get; set; } // true once this item's value has been added to RunManager.GatheredLootValue. a G-dropped item spawns with this ALREADY true, so re-picking it can't count the same loot toward the house twice (which used to push clear-% over 100% and poison BestClearPercent)
 
     [HideInInspector] public bool pendingRemoval; // set locally the instant we grab it, so our own pickup scan can't re-grab it during the despawn lag
 

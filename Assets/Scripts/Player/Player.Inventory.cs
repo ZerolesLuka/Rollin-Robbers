@@ -36,6 +36,7 @@ public partial class Player
                     item.Value = dropped.value;
                     item.SpawnPoint = dropPosition;  //same networked-position safeguard as placed loot, in case a drop ever gets deferred too
                     item.UseSpawnPoint = true;
+                    item.CountedAsStolen = true;     //this loot was already counted against the house when it was FIRST lifted - picking it back up must not count it again
                 }
             });
     }
