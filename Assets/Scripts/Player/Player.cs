@@ -244,7 +244,7 @@ public partial class Player : NetworkBehaviour
             if (seat != null)
             {
                 hasRiddenVanForRunEnd = true;
-                IsEliminated = false;  //pull caught/dead players back in - no loot, just a clean slate (sticks because we're in FUN)
+                IsEliminated = false;  //pull caught/dead players back in for the next run (their loot was already stripped at capture; a clean getaway keeps its haul). sticks because we're in FUN
                 IsLockedUp = false;
                 isBeingDragged = false;
                 draggingGuard = null;
@@ -341,6 +341,7 @@ public partial class Player : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
     {
+        LoseCarriedLoot();                   // caught red-handed - you lose everything you were carrying
         IsEliminated = true;                 // out for the run - spectator handoff + visuals come later in Unity
         characterController.enabled = false; // freeze them in place, no more moving or colliding
     }
@@ -348,6 +349,7 @@ public partial class Player : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine, so we own the movement in Shared Mode
     public void RPC_GetDragged(GuardPatrol guard)
     {
+        LoseCarriedLoot();                   // hauled off to the closet - the haul spills the moment he grabs you (jail's mercy is staying in the run, not keeping the loot). flip this line off if jail should let a rescued player keep their loot
         draggingGuard = guard;
         isBeingDragged = true;
         dragTrail.Clear();                   // fresh trail for this drag

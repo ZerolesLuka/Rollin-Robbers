@@ -11,6 +11,11 @@ using UnityEngine.SceneManagement;
 // this is just the G key spawning the held item back into the world so it falls to the floor.
 public partial class Player
 {
+    private void LoseCarriedLoot() //the guard grabbed you - you go home empty-handed. called the moment you're caught (eliminated) or hauled off to the closet (jailed), so getting caught actually costs the haul. the loot's already counted toward the house clear-% (reported at pickup); this just stops you banking it at the pawn shop
+    {
+        inventory.Clear();
+    }
+
     private void HandleDrop(bool dropPressed)
     {
         bool pressed = dropPressed && !dropHeldLastTick; //rising edge only - one drop per press
