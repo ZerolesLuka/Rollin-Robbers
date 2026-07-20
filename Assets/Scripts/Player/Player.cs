@@ -307,7 +307,7 @@ public partial class Player : NetworkBehaviour
                     characterController.enabled = false; //freeze the body like any other elimination
                     if (RunManager.Instance != null)
                     {
-                        RunManager.Instance.RPC_ReportCaught(); //hop the death to the master so the alive-count drops
+                        RunManager.Instance.RPC_ReportCaught(Object.InputAuthority); //hop the death to the master so the alive-count drops (for THIS player)
                     }
                 }
             }

@@ -274,7 +274,7 @@ public class GuardPatrol : NetworkBehaviour
                 if (Anger >= angerEliminateThreshold) //furious enough to throw them out for the run
                 {
                     chaseTarget.RPC_GetCaught();
-                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(); //tell the run tracker one player is out
+                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(chaseTarget.Object.InputAuthority); //tell the run tracker this specific player is out
                     ChangeState(GuardState.Relaxed);
                 }
                 else //just annoyed - drag them off to the closet instead of eliminating

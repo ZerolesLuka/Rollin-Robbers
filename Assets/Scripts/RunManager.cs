@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -33,6 +34,11 @@ public class RunManager : NetworkBehaviour
     private int sceneLoadCounter;
     private int lastTalliedSceneLoad = -1;
 
+    //master-only: who's already been counted out of the alive tally (caught or suffocated). a disconnect
+    //decrements playersAlive too, so without this an eliminated player who then leaves gets counted out
+    //TWICE and the run ends early for everyone still playing. cleared when a fresh run revives everyone.
+    private readonly HashSet<PlayerRef> countedOutPlayers = new HashSet<PlayerRef>();
+
     public override void Spawned()
     {
         DontDestroyOnLoad(gameObject); //survive scene loads
@@ -47,9 +53,10 @@ public class RunManager : NetworkBehaviour
         playersAlive++;
     }
 
-    public void OnPlayerCaught()
+    public void OnPlayerCaught(PlayerRef caught)
     {
         if (!HasStateAuthority || State != RunState.InProgress) return;
+        if (!countedOutPlayers.Add(caught)) return; //already counted out (e.g. guard + suffocation racing) - never drop the count twice for one player
         playersAlive--;
         if (playersAlive <= 0) ChangeState(RunState.Caught);
     }
@@ -70,15 +77,22 @@ public class RunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_ReportCaught() //a suffocation death is decided on the victim's machine; this hops it to the master so the alive-count stays authoritative
+    public void RPC_ReportCaught(PlayerRef victim) //a suffocation death is decided on the victim's machine; this hops it to the master so the alive-count stays authoritative
     {
-        OnPlayerCaught();
+        OnPlayerCaught(victim);
     }
 
     public void OnPlayerLeft(PlayerRef player)
     {
         if (!HasStateAuthority) return;
-        playersAlive = Mathf.Max(0, playersAlive - 1); //a disconnect isn't a catch, just drop them from the count so the run can still resolve for the rest
+        if (countedOutPlayers.Remove(player)) //already counted out when they were caught - forget them, but DON'T drop the count a second time
+        {
+            //nothing more to do for the tally; they were never in it
+        }
+        else
+        {
+            playersAlive = Mathf.Max(0, playersAlive - 1); //a live player disconnected - drop them from the count so the run can still resolve for the rest
+        }
         if (ComputerUser == player)
         {
             ComputerUser = PlayerRef.None; //don't leave the computer locked forever if the person on it disconnected
@@ -172,6 +186,7 @@ public class RunManager : NetworkBehaviour
     private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house re-stocked. Money and each player's carried inventory are kept - only the house resets
     {
         State = RunState.InProgress;
+        countedOutPlayers.Clear(); //fresh run revived everyone on the van ride - nobody's counted out anymore
         playersAlive = Player.ActivePlayers.Count; //everyone was revived on the van ride, so they all count again
         GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
         HouseLootTotal = 0; //ItemSpawner re-tallies the new run's loot when the indoor scene reloads
