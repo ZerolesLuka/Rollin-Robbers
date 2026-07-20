@@ -68,6 +68,7 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
     [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
+    [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     private bool wasHiding;
 
@@ -336,7 +337,11 @@ public partial class Player : NetworkBehaviour
         if (HasInputAuthority) SceneManager.activeSceneChanged -= OnSceneChanged;
     }
 
-    public void SetHiding(bool hiding) => IsHiding = hiding;
+    public void SetHiding(bool hiding, int spotId) //spotId identifies WHICH spot, so other clients can see it as taken. HidingSpot.NoSpot when climbing out
+    {
+        IsHiding = hiding;
+        HidingSpotId = hiding ? spotId : HidingSpot.NoSpot;
+    }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()

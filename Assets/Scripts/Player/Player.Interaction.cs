@@ -125,15 +125,15 @@ public partial class Player
         {
             if(Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)
             {
-                if(!hidingSpot.isOccupied)
+                if (hidingSpot.IsOccupiedByLocalPlayer)
                 {
-                    hidingSpot.OnSpotEnter();
-                    hidingSpot.isOccupied = true;
+                    hidingSpot.OnSpotExit(); //we're the one inside - climb out
                 }
-                else if(hidingSpot.isOccupied && hidingSpot.isHiding)
+                else if (!hidingSpot.IsOccupied)
                 {
-                    hidingSpot.OnSpotExit();
+                    hidingSpot.OnSpotEnter(); //free spot - get in
                 }
+                //someone ELSE is in there: do nothing, and still return so we don't fall through to another spot
                 return;
             }
         }
