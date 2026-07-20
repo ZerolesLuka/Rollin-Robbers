@@ -29,6 +29,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private NetworkObject runManagerPrefab;
 
     private string roomCode = ""; //the code players type in to join the same game, acts as the session name
+    private string connectError = ""; //why the last connect attempt failed - shown on the menu so a friend with a typo'd code isn't staring at nothing
 
     public void OnConnectedToServer(NetworkRunner runner)
     {
@@ -134,7 +135,28 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
     {
-        
+        //the session died out from under us (host gone, network dropped, ...) - clean up so the menu
+        //comes back instead of a frozen world. full "kick to menu" session flow is deferred; this just
+        //makes a dead session recoverable. an Ok shutdown still clears the runner so reconnecting works.
+        if (shutdownReason != ShutdownReason.Ok)
+        {
+            connectError = $"Disconnected: {shutdownReason}";
+        }
+        ClearRunner();
+    }
+
+    private void ClearRunner() //tear down a dead/failed runner so OnGUI shows the menu again and a fresh connect starts clean
+    {
+        if (networkRunner != null)
+        {
+            Destroy(networkRunner); //a shut-down runner can't be restarted - remove it so the next connect adds a fresh one
+            networkRunner = null;
+        }
+        foreach (NetworkSceneManagerDefault sceneManager in GetComponents<NetworkSceneManagerDefault>())
+        {
+            Destroy(sceneManager); //each connect attempt AddComponents a fresh one - don't let dead ones pile up across retries
+        }
+        if (lobbyCamera != null) lobbyCamera.gameObject.SetActive(true); //bring the menu camera back so the player isn't staring at a void
     }
 
     public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message)
@@ -153,6 +175,11 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         {
             if (!string.IsNullOrWhiteSpace(roomCode)) ConnectToRoom(); //only connect if they actually typed something
         }
+
+        if (!string.IsNullOrEmpty(connectError))
+        {
+            GUI.Label(new Rect(20, 140, 400, 30), connectError); //why the last attempt failed, so a typo'd code isn't a silent mystery
+        }
     }
 
     private async void ConnectToRoom()
@@ -163,13 +190,20 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             networkRunner = gameObject.AddComponent<NetworkRunner>();
         }
         networkRunner.AddCallbacks(this); //tells the Network Runner to use this script for its callbacks, which are functions that are called in response to certain events in the network
-        await networkRunner.StartGame(new StartGameArgs() //wait to start game before calling this code
+        StartGameResult result = await networkRunner.StartGame(new StartGameArgs() //wait to start game before calling this code
         {
             GameMode = GameMode.Shared,
             SessionName = roomCode,
             PlayerCount = 4, //hard cap the lobby at 4 - matches the van's 4 seats
             SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(), //required for Runner.LoadScene to preserve spawned NetworkObjects across scene loads
         });
+        if (!result.Ok) //connect failed (full room, dead network, Photon down, ...) - without this the menu hides forever because networkRunner is non-null
+        {
+            connectError = $"Couldn't connect: {result.ShutdownReason}";
+            ClearRunner(); //back to the menu with the reason on screen, ready for another attempt
+            return;
+        }
+        connectError = ""; //made it in - clear any stale failure message
         if(networkRunner.IsSharedModeMasterClient)
         {
             networkRunner.Spawn(runManagerPrefab, Vector3.zero, Quaternion.identity, PlayerRef.None); //spawn the run manager BEFORE the local player, so the master's own player registers into it
