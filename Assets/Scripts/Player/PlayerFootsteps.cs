@@ -1,6 +1,5 @@
 using UnityEngine;
 using Fusion;
-using UnityEngine.InputSystem.Controls;
 
 public class PlayerFootsteps : NetworkBehaviour
 {

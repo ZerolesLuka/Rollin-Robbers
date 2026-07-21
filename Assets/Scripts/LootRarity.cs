@@ -53,9 +53,4 @@ public static class LootRarityTable
     {
         return ColorFor(Classify(value));
     }
-
-    public static string DisplayName(LootRarity rarity)
-    {
-        return rarity.ToString();
-    }
 }
