@@ -21,6 +21,8 @@ public class RunManager : NetworkBehaviour
     [Networked] public int EntrySpawnPointId { get; private set; } // which PlayerSpawnN to teleport to after a scene load - set by whichever door triggers the transition
     [SerializeField] private int outdoorSceneBuildIndex = 0; // the scene the van lives in - everyone gets pulled here when the run ends, even players still indoors
 
+    [Networked] public PlayerRef Host { get; private set; } // whoever CREATED this room. stamped once at spawn and replicated, so every client can recognise the host leaving - you can't detect it by watching master-client status, because Fusion instantly promotes a replacement and only that one client would notice
+
     [Networked] public PlayerRef ComputerUser { get; private set; } // who's currently at the van computer; PlayerRef.None = free. Locks it to one person at a time
     public bool IsComputerFree => ComputerUser == PlayerRef.None;
 
@@ -44,7 +46,11 @@ public class RunManager : NetworkBehaviour
         DontDestroyOnLoad(gameObject); //survive scene loads
         Instance = this;
         State = RunState.InProgress;
-        if (HasStateAuthority) FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
+        if (HasStateAuthority)
+        {
+            Host = Runner.LocalPlayer; //we spawned this, so we're the room's creator - remember it for everyone
+            FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
+        }
     }
 
     public void RegisterPlayer()
@@ -92,6 +98,14 @@ public class RunManager : NetworkBehaviour
         else
         {
             playersAlive = Mathf.Max(0, playersAlive - 1); //a live player disconnected - drop them from the count so the run can still resolve for the rest
+
+            //that may have been the LAST person still in play. a catch checks this, but a disconnect never did,
+            //so the run sat in InProgress forever - and anyone already eliminated is frozen (IsEliminated returns
+            //early from FixedUpdateNetwork) with no way out, because the van ride only fires once the run is over.
+            if (playersAlive <= 0 && State == RunState.InProgress)
+            {
+                ChangeState(RunState.Caught); //nobody left to escape - end it, which releases the eliminated players to the van
+            }
         }
         if (ComputerUser == player)
         {

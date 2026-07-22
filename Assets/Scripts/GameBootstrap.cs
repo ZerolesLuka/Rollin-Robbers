@@ -27,6 +27,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     [SerializeField] private Transform playerSpawn;
 
     [SerializeField] private NetworkObject runManagerPrefab;
+    [SerializeField] private int menuSceneBuildIndex = 0; //the scene the room-code menu + LobbyCamera live in; we come back here whenever a session ends
 
     private string roomTitle = "";    //human-readable room name friends type to find each other
     private string roomPassword = ""; //optional - folded into the session name (see SessionKey), NOT stored as a readable session property
@@ -117,7 +118,20 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
     {
-        if (RunManager.Instance != null) RunManager.Instance.OnPlayerLeft(player); //keep the alive count honest when someone disconnects, and free the computer if they were on it
+        bool runManagerLive = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid;
+
+        //the room's creator left - the session dies for EVERYONE rather than migrating to a new master.
+        //Fusion's default is to promote a replacement, which we explicitly don't want: the guard/dog were
+        //spawned with their NavMeshAgent disabled on every non-master client and Spawned() never runs again
+        //on an authority handover, so a migrated guard would just be a broken statue anyway.
+        if (runManagerLive && player == RunManager.Instance.Host)
+        {
+            connectError = "Host left the game.";
+            if (networkRunner != null) networkRunner.Shutdown(); //OnShutdown does the teardown + drops us back on the menu
+            return;
+        }
+
+        if (runManagerLive) RunManager.Instance.OnPlayerLeft(player); //keep the alive count honest when someone disconnects, and free the computer if they were on it
     }
 
     public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress)
@@ -158,9 +172,18 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         //makes a dead session recoverable. an Ok shutdown still clears the runner so reconnecting works.
         if (shutdownReason != ShutdownReason.Ok)
         {
-            connectError = $"Disconnected: {shutdownReason}";
+            connectError = $"Disconnected: {shutdownReason}"; //a deliberate Shutdown() reports Ok, so a reason set by the caller (e.g. "Host left the game.") survives this
         }
         ClearRunner();
+        ReturnToMenuScene();
+    }
+
+    private void ReturnToMenuScene() //the session is over - if we're still standing in the house, get back to the scene the menu lives in. reloading it also restores a live LobbyCamera, since the serialized reference goes stale across scene loads
+    {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex != menuSceneBuildIndex)
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(menuSceneBuildIndex);
+        }
     }
 
     private void ClearRunner() //tear down a dead/failed runner so OnGUI shows the menu again and a fresh connect starts clean
