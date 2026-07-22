@@ -259,15 +259,22 @@ public partial class Player : NetworkBehaviour
 
         if (isBeingDragged) //the guard is hauling us to the closet - no control, trail behind him on his path
         {
-            if (draggingGuard != null)
+            //the drag normally ends when he reaches the closet (RPC_GetLockedUp). but he can VANISH mid-haul -
+            //every scene change despawns him (an exit door, the van computer) - and then nothing would ever clear
+            //this: frozen, input ignored, and not IsLockedUp so teammates can't even rescue us. so the drag owns
+            //its own exit condition: no guard, no drag.
+            if (draggingGuard == null || draggingGuard.Object == null || !draggingGuard.Object.IsValid)
             {
-                dragTrail.Enqueue(draggingGuard.transform.position); //remember where the guard is each tick
-                while (dragTrail.Count > dragTrailLag)
-                {
-                    dragTrail.Dequeue(); //keep only the last few positions
-                }
-                transform.position = dragTrail.Peek(); //sit where the guard was a few ticks ago - behind him, ON his valid path (no clipping, not inside him)
+                ReleaseFromDrag();
+                return; //free again next tick
             }
+
+            dragTrail.Enqueue(draggingGuard.transform.position); //remember where the guard is each tick
+            while (dragTrail.Count > dragTrailLag)
+            {
+                dragTrail.Dequeue(); //keep only the last few positions
+            }
+            transform.position = dragTrail.Peek(); //sit where the guard was a few ticks ago - behind him, ON his valid path (no clipping, not inside him)
             NoiseLevel = 0f; //can't make useful noise while grabbed
             return;
         }
@@ -360,6 +367,15 @@ public partial class Player : NetworkBehaviour
         dragTrail.Clear();                   // fresh trail for this drag
         verticalVelocity = 0f;               // don't bank fall velocity while pinned
         characterController.enabled = false; // off so we can be positioned along the guard's path without the CC fighting it
+    }
+
+    private void ReleaseFromDrag() //the haul ended without us reaching the closet (the guard despawned) - hand control back instead of leaving us a statue
+    {
+        isBeingDragged = false;
+        draggingGuard = null;
+        dragTrail.Clear();
+        verticalVelocity = 0f;              // don't drop with banked fall speed from however long the drag lasted
+        characterController.enabled = true; // RPC_GetDragged turned this off to position us along his path - we own our body again
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine
