@@ -28,8 +28,27 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     [SerializeField] private NetworkObject runManagerPrefab;
 
-    private string roomCode = ""; //the code players type in to join the same game, acts as the session name
+    private string roomTitle = "";    //human-readable room name friends type to find each other
+    private string roomPassword = ""; //optional - folded into the session name (see SessionKey), NOT stored as a readable session property
     private string connectError = ""; //why the last connect attempt failed - shown on the menu so a friend with a typo'd code isn't staring at nothing
+
+    //The room's real Photon session name: the title, plus a hash of the password when there is one.
+    //Doing it this way means the password never travels as readable data and there's no client-side
+    //check to patch out - a wrong password simply resolves to a DIFFERENT session, so you land in your
+    //own empty room rather than in your friends'. The trade: no "wrong password" error is possible,
+    //which is why the menu says so out loud.
+    private static string SessionKey(string title, string password)
+    {
+        string trimmedTitle = title.Trim();
+        if (string.IsNullOrEmpty(password)) return trimmedTitle; //no password - anyone with the title joins
+
+        using (System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create())
+        {
+            byte[] hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(password));
+            string hex = System.BitConverter.ToString(hash).Replace("-", ""); //BitConverter, not Convert.ToHexString - available on every Unity scripting backend
+            return trimmedTitle + "#" + hex.Substring(0, 12); //12 hex chars is plenty to separate rooms without making the name unwieldy
+        }
+    }
 
     public void OnConnectedToServer(NetworkRunner runner)
     {
@@ -167,17 +186,31 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     {
         if (networkRunner != null) return; //already connecting or connected, hide the menu
 
-        GUI.Label(new Rect(20, 20, 200, 30), "Room Code:");
-        roomCode = GUI.TextField(new Rect(20, 50, 200, 30), roomCode); //text box the player types their code into
+        GUI.Label(new Rect(20, 20, 300, 30), "Room Title:");
+        roomTitle = GUI.TextField(new Rect(20, 45, 200, 30), roomTitle); //friends type the SAME title to land together
 
-        if (GUI.Button(new Rect(20, 90, 200, 40), "Connect"))
+        GUI.Label(new Rect(20, 85, 300, 30), "Password (optional):");
+        roomPassword = GUI.PasswordField(new Rect(20, 110, 200, 30), roomPassword, '*'); //masked so it isn't readable over a shoulder or on stream
+
+        if (GUI.Button(new Rect(20, 150, 200, 40), "Connect"))
         {
-            if (!string.IsNullOrWhiteSpace(roomCode)) ConnectToRoom(); //only connect if they actually typed something
+            if (string.IsNullOrWhiteSpace(roomTitle))
+            {
+                connectError = "Enter a room title."; //fail loudly instead of a dead button that does nothing
+            }
+            else
+            {
+                ConnectToRoom();
+            }
         }
+
+        //say this out loud: a wrong password can't be detected (it just resolves to another session), so a
+        //player who ends up alone needs to know the likely reason instead of assuming the game is broken
+        GUI.Label(new Rect(20, 195, 420, 40), "Everyone must type the title AND password exactly.\nA mismatch puts you in your own empty room.");
 
         if (!string.IsNullOrEmpty(connectError))
         {
-            GUI.Label(new Rect(20, 140, 400, 30), connectError); //why the last attempt failed, so a typo'd code isn't a silent mystery
+            GUI.Label(new Rect(20, 240, 400, 30), connectError); //why the last attempt failed, so a typo isn't a silent mystery
         }
     }
 
@@ -192,7 +225,8 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         StartGameResult result = await networkRunner.StartGame(new StartGameArgs() //wait to start game before calling this code
         {
             GameMode = GameMode.Shared,
-            SessionName = roomCode,
+            SessionName = SessionKey(roomTitle, roomPassword), //title + hashed password - see SessionKey
+            IsVisible = false, //private game: never list this room in a lobby browser, so nobody can enumerate room names
             PlayerCount = 4, //hard cap the lobby at 4 - matches the van's 4 seats
             SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>(), //required for Runner.LoadScene to preserve spawned NetworkObjects across scene loads
         });
