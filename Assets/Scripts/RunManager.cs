@@ -30,6 +30,8 @@ public class RunManager : NetworkBehaviour
 
     [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
 
+    [Networked] public NetworkBool VanBackClosed { get; private set; } // true while a run is over and everyone's pooled in the van - a scene barrier seals the van's back so nobody wanders off before picking a destination. any route button reopens it. networked so every client's barrier agrees
+
     //master-only bookkeeping so a loot tally belongs to exactly ONE scene load. every ItemSpawner runs its
     //Start on every load, and ReportHouseLoot adds - so without this, walking back into the house through a
     //door tallies the house on top of itself and the guard ends up half as suspicious as he should be.
@@ -129,6 +131,7 @@ public class RunManager : NetworkBehaviour
     public void RPC_Route(int buildIndex, int spawnPointId, bool startNewRun) //van computer buttons - route the crew to the house or the pawn shop
     {
         EntrySpawnPointId = spawnPointId;
+        VanBackClosed = false; //picked a destination - the van's back opens onto whatever scene we're routing to. this runs BEFORE the scene load, and the flag survives it (RunManager is DontDestroyOnLoad + networked), so the destination van starts open
         if (startNewRun)
         {
             ResetForNewRun(); //House button - back to InProgress so the run-over van ride doesn't instantly re-trigger
@@ -212,6 +215,13 @@ public class RunManager : NetworkBehaviour
     {
         State = newState;
         Debug.Log($"Run ended: {newState}"); // TEMP: trigger end screen / return to lobby here
+
+        //run's over - everyone rides to the van, so seal its back until they pick where to go next. this one line
+        //covers both ways a run ends: pressing E on the van (Success) and the whole team getting caught (Caught).
+        if (newState == RunState.Success || newState == RunState.Caught)
+        {
+            VanBackClosed = true;
+        }
 
         if (newState == RunState.Success && HouseLootTotal > 0) //remember the crew's best clear-out across every run
         {
