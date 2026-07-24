@@ -67,7 +67,8 @@ public partial class Player
         //noise comes AFTER speed is finalized
         float movementNoise = (inputVector.magnitude > 0.1f) ? speed : 0f; //moving = your speed, still = 0
         float voiceNoise = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
-        NoiseLevel = Mathf.Max(movementNoise, Mathf.Max(voiceNoise, landingNoise)); //loudest of moving, talking, or a fresh landing
+        float crackNoise = (CrackingSafeId != Safe.NoSafe) ? crackNoiseAmount : 0f; //working a safe is loud - holding interact on one (CrackingSafeId set) leaks noise every tick, even standing dead still
+        NoiseLevel = Mathf.Max(Mathf.Max(movementNoise, crackNoise), Mathf.Max(voiceNoise, landingNoise)); //loudest of moving, cracking, talking, or a fresh landing
         landingNoise = Mathf.MoveTowards(landingNoise, 0f, landNoiseDecayRate * Runner.DeltaTime); //the landing spike rings out over a moment instead of a single tick
     }
 

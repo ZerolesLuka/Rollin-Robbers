@@ -12,6 +12,33 @@ using UnityEngine.SceneManagement;
 // or enter/exit a hiding spot. First match wins and returns.
 public partial class Player
 {
+    private void HandleCracking(bool interactHeld)
+    {
+        //cracking is a HOLD, not a tap. we don't fill the meter here - we just publish WHICH un-opened safe we're
+        //standing on via networked CrackingSafeId (same one-source-of-truth idea as the hiding spots). the safe
+        //itself reads every player's CrackingSafeId in its FixedUpdateNetwork and advances its own meter. stop
+        //holding, or walk out of range, and CrackingSafeId clears - the meter just pauses, it never resets.
+        Safe target = null;
+        if (interactHeld)
+        {
+            float nearestDistance = float.MaxValue;
+            foreach (Safe safe in Safe.AllSafes)
+            {
+                if (safe.IsOpen)
+                {
+                    continue; //already cracked
+                }
+                float distance = Vector3.Distance(transform.position, safe.transform.position);
+                if (distance <= safe.CrackRange && distance < nearestDistance)
+                {
+                    nearestDistance = distance;
+                    target = safe;
+                }
+            }
+        }
+        SetCrackingSafe(target != null ? target.SafeId : Safe.NoSafe);
+    }
+
     private void HandleInteract(bool interacting)
     {
         bool pressed = interacting && !interactHeldLastTick; //rising edge only - one action per press

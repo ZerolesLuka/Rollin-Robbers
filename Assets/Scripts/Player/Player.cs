@@ -45,6 +45,7 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float landNoiseAmount = 30f;      //how loud a hard landing is to the guard - way above walking (7) or sprinting (10.5), so a jump-land near him gives you away
     [SerializeField] private float landNoiseDecayRate = 60f;   //how fast that landing spike rings out, units per second
     [SerializeField] private float minLandingFallSpeed = 4f;   //must be dropping at least this fast to count as a landing - stepping off a small lip stays quiet
+    [SerializeField] private float crackNoiseAmount = 14f;     //how loud cracking a safe is to the guard - above walking (7) and sprinting (10.5), so working a safe near him draws him in. that's the risk: you're pinned AND loud
     private float landingNoise;                                //current landing-noise spike; decays each tick and folds into NoiseLevel
     private bool wasGroundedForLanding;                        //grounded state last tick, to catch the airborne -> grounded moment
     private PlayerFootsteps playerFootsteps;                   //cached so a landing can fire the thud through the footstep audio pipeline
@@ -69,6 +70,7 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
+    [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     private bool wasHiding;
 
@@ -332,7 +334,8 @@ public partial class Player : NetworkBehaviour
         {
             HandleMovement(networkInputData.movementInput, networkInputData.sprintInput, networkInputData.jumpInput); //hands off movement input from the network to handle movement, which is where inputVector uses it
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
-            HandleInteract(networkInputData.interactInput); //E to free a trapped teammate
+            HandleInteract(networkInputData.interactInput); //E to free a trapped teammate (tap)
+            HandleCracking(networkInputData.interactInput); //E HELD next to a safe cracks it (hold) - separate from the tap above
             HandleFlashlight(networkInputData.flashlightInput); //F to toggle the flashlight
             HandleDrop(networkInputData.dropInput); //G to drop an item on the floor
         }
@@ -348,6 +351,11 @@ public partial class Player : NetworkBehaviour
     {
         IsHiding = hiding;
         HidingSpotId = hiding ? spotId : HidingSpot.NoSpot;
+    }
+
+    public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
+    {
+        CrackingSafeId = safeId;
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
