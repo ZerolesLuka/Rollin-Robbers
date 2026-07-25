@@ -17,6 +17,7 @@ public class DogAI : NetworkBehaviour
     [Networked] public DogState State { get; private set; }
 
     [SerializeField] private float standoffDistance = 4f;     //the dog HOLDS this far from the player and barks - it doesn't close in and tackle. bigger = hangs further back, smaller = more in your face
+    [SerializeField] private float doorSuspicionRange = 2.5f; //if he loses a player this close to a SHUT door, he decides they went through it and barks at it until the guard comes. he can't open doors himself
     [SerializeField] private float chaseSenseRange = 6f;       //keeps chasing a bit past losing direct sight, same trick GuardPatrol uses
     [SerializeField] private float cornerAlertCooldown = 6f;   //don't spam AlertTo every tick while cornering someone
     [SerializeField] private float reachDistance = 0.5f;
@@ -245,7 +246,33 @@ public class DogAI : NetworkBehaviour
         }
         else if (!canSeeTarget && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
         {
+            //we were watching them and now they're gone from right here. if there's a SHUT door where we lost them,
+            //they went through it and pulled it closed - that's the only case the dog gets fixated on a door, so he
+            //never barks at random shut doors he merely walks past, only ones a player vanished behind.
+            Door slammedDoor = Door.FindClosedDoorNear(lastKnownPosition, doorSuspicionRange);
+            if (slammedDoor != null)
+            {
+                BarkAtShutDoor(slammedDoor);
+                return;
+            }
             ChangeState(DogState.Investigating, null); //lost them, sniff around the last known spot instead of chasing forever
+        }
+    }
+
+    private void BarkAtShutDoor(Door door) //he watched someone duck through and pull it shut, and he has no hands - so he parks there making noise until the guard comes and opens it
+    {
+        lastKnownPosition = door.transform.position; //Investigating paths to lastKnownPosition, so point it at the door
+        ChangeState(DogState.Investigating, null);   //trots over and sniffs around the door
+        if (dogAudio != null)
+        {
+            dogAudio.Bark(GuardAudio.BarkType.Search);
+        }
+        if (GuardPatrol.Instance != null)
+        {
+            //alertDog:false - the dog IS the one reporting, no point pinging himself. this routes the guard into
+            //Searching, which deliberately does NOT raise his anger: a barking dog is worth a look, not a rage.
+            //he only really escalates if he opens up and spots someone himself (that's the Chasing anger bump).
+            GuardPatrol.Instance.AlertTo(door.transform.position, false);
         }
     }
 

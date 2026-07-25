@@ -15,6 +15,7 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float wakeThresholdMax = 6f;
     [SerializeField] private float catchRange = 2f; //how close he has to get to grab you
     [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
+    [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
     private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
@@ -121,6 +122,7 @@ public class GuardPatrol : NetworkBehaviour
 
         TickAnger(); //rise while chasing, cool while calm
         CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
+        OpenDoorInMyWay(); //shove open any shut door he walks into, so he isn't clipping through solid doors
 
         if (floorboardCreakCount > 0) //let the creak count fade if the creaking stops
         {
@@ -413,6 +415,25 @@ public class GuardPatrol : NetworkBehaviour
         {
             Anger = Mathf.Max(0f, Anger - angerDecayRate * Runner.DeltaTime);
         }
+    }
+
+    private void OpenDoorInMyWay() //he walks the NavMesh, which ignores door colliders - so without this he'd stroll straight THROUGH a shut door. now he pushes it open and walks through the gap like a person
+    {
+        if (RunManager.Instance == null) return;
+        if (State == GuardState.Asleep) return; //dead asleep at his post - doors drifting open on their own would look haunted
+
+        Door shutDoor = Door.FindClosedDoorNear(transform.position, doorOpenRange);
+        if (shutDoor == null) return;
+
+        //only shove open a door he's actually walking INTO. without this he flings open every door he passes in a
+        //hallway, which both looks mad and hands the players a lit-up trail of where he's been.
+        Vector3 towardDoor = shutDoor.transform.position - transform.position;
+        towardDoor.y = 0f;
+        if (Vector3.Dot(transform.forward, towardDoor.normalized) < 0.5f) return; //not roughly ahead of him (~60 degree cone)
+
+        shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
+        RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true);  //and tell every other client to swing their copy
+        //deliberately never closed behind him - a door left open is a free tell to the players that he came through here
     }
 
     private void CheckForMissingLoot() //a new sensing mode: notices his valuables disappearing even with zero noise or sightings - ties threat directly to how much you've stolen

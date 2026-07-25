@@ -8,8 +8,8 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
 // Player - the E key. One press runs down a priority list: free a trapped teammate, pick up a world item,
-// open/close a door, use an exit door, start the getaway van, sit at the computer, sell at the pawn shop,
-// or enter/exit a hiding spot. First match wins and returns.
+// use an exit door OR swing a door (whichever is closer), start the getaway van, sit at the computer, sell at
+// the pawn shop, or enter/exit a hiding spot. First match wins and returns.
 public partial class Player
 {
     private void HandleCracking(bool interactHeld)
@@ -74,27 +74,50 @@ public partial class Player
             }
         }
 
-        //openable doors: swing on E. doesn't need RunManager, and the toggle is broadcast so every client's copy matches
-        foreach (Door door in Door.AllDoors)
-        {
-            if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)
-            {
-                RPC_ToggleDoor(door.transform.position);
-                return; //toggled a door, done for this press
-            }
-        }
-
         //everything below this point needs the RunManager
         if (RunManager.Instance == null) return;
 
-        //exit door: only runs if no rescue or pickup happened
-        foreach (ExitDoor door in ExitDoor.AllDoors)
+        //a scene-changing ExitDoor and a swinging Door often sit right on top of each other (the front threshold
+        //has both), so don't pick by a fixed order - use whichever you're actually CLOSEST to, the same way the van
+        //and the van computer resolve. a fixed order would make the loser permanently unreachable.
+        ExitDoor nearestExit = null;
+        float nearestExitDistance = float.MaxValue;
+        foreach (ExitDoor exitDoor in ExitDoor.AllDoors)
         {
-            if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)
+            float distanceToExit = Vector3.Distance(transform.position, exitDoor.transform.position);
+            if (distanceToExit <= exitDoor.interactRange && distanceToExit < nearestExitDistance)
             {
-                RunManager.Instance.RPC_LoadScene(door.targetSceneBuildIndex, door.spawnPointId);
-                return;
+                nearestExit = exitDoor;
+                nearestExitDistance = distanceToExit;
             }
+        }
+
+        Door nearestSwingDoor = null;
+        float nearestSwingDistance = float.MaxValue;
+        foreach (Door swingDoor in Door.AllDoors)
+        {
+            float distanceToDoor = Vector3.Distance(transform.position, swingDoor.transform.position);
+            if (distanceToDoor <= swingDoor.interactRange && distanceToDoor < nearestSwingDistance)
+            {
+                nearestSwingDoor = swingDoor;
+                nearestSwingDistance = distanceToDoor;
+            }
+        }
+
+        if (nearestExit != null || nearestSwingDoor != null)
+        {
+            //a tie goes to the swinging door on purpose - it's harmless and reversible, whereas an ExitDoor yanks
+            //the whole crew into another scene. accidentally opening a door beats accidentally ending the burgle.
+            bool useSwingDoor = nearestSwingDoor != null && (nearestExit == null || nearestSwingDistance <= nearestExitDistance);
+            if (useSwingDoor)
+            {
+                RunManager.Instance.RPC_SetDoorOpen(nearestSwingDoor.transform.position, !nearestSwingDoor.IsOpen);
+            }
+            else
+            {
+                RunManager.Instance.RPC_LoadScene(nearestExit.targetSceneBuildIndex, nearestExit.spawnPointId);
+            }
+            return;
         }
 
         //the getaway van (driver's seat, ends the run for everyone) and the van computer (routing) sit right next to

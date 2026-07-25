@@ -165,6 +165,27 @@ public class RunManager : NetworkBehaviour
         }
     }
 
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_SetDoorOpen(Vector3 doorPosition, NetworkBool open) //ONE path for every door change - players pressing E, and the guard/dog shoving one open. doors aren't NetworkObjects, so we identify one by WHERE it is: static scene geometry sits at identical coordinates on every client, so "nearest door to this point" resolves the same for everyone, with nothing to configure per door
+    {
+        const float maxDoorMatchDistance = 1f; //the match must be essentially exact. without a cap, "nearest" would happily grab a door on the far side of the house - or one lingering in the static list from the scene we just left (SpawnPoint hit exactly that) - and swing the wrong one
+        Door nearest = null;
+        float nearestDistance = maxDoorMatchDistance;
+        foreach (Door door in Door.AllDoors)
+        {
+            float distance = Vector3.Distance(door.transform.position, doorPosition);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = door;
+            }
+        }
+        if (nearest != null)
+        {
+            nearest.SetOpen(open);
+        }
+    }
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_SellItems(int value) //a player sold their carried inventory at the pawn shop - add its worth to the shared money
     {
