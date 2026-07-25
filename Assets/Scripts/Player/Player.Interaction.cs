@@ -8,7 +8,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
 // Player - the E key. One press runs down a priority list: free a trapped teammate, pick up a world item,
-// use an exit door, start the getaway van, sit at the computer, sell at the pawn shop,
+// open/close a door, use an exit door, start the getaway van, sit at the computer, sell at the pawn shop,
 // or enter/exit a hiding spot. First match wins and returns.
 public partial class Player
 {
@@ -71,6 +71,16 @@ public partial class Player
                     item.RPC_PickUp();
                     return; //picked up, done for this press
                 }
+            }
+        }
+
+        //openable doors: swing on E. doesn't need RunManager, and the toggle is broadcast so every client's copy matches
+        foreach (Door door in Door.AllDoors)
+        {
+            if (Vector3.Distance(transform.position, door.transform.position) <= door.interactRange)
+            {
+                RPC_ToggleDoor(door.transform.position);
+                return; //toggled a door, done for this press
             }
         }
 

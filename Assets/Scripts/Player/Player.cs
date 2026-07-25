@@ -358,6 +358,29 @@ public partial class Player : NetworkBehaviour
         CrackingSafeId = safeId;
     }
 
+    [Rpc(RpcSources.InputAuthority, RpcTargets.All)] //any player can open a door; every client swings its own copy so they stay in sync (doors aren't NetworkObjects)
+    public void RPC_ToggleDoor(Vector3 doorPosition)
+    {
+        //identify the door by WHERE it is rather than by a hand-assigned id. doors are static scene geometry sitting
+        //at the same coordinates on every client, so "the door nearest this point" resolves to the same door for
+        //everyone - and there's nothing to set up per door, so it can't be misconfigured the way spotIds could.
+        Door nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (Door door in Door.AllDoors)
+        {
+            float distance = Vector3.Distance(door.transform.position, doorPosition);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = door;
+            }
+        }
+        if (nearest != null)
+        {
+            nearest.Toggle();
+        }
+    }
+
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // any caller; runs on the caught player's own machine
     public void RPC_GetCaught()
     {
