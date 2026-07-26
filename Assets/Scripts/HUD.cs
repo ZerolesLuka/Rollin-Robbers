@@ -13,6 +13,13 @@ public class HUD : MonoBehaviour
     [SerializeField] private Text[] inventorySlotTexts; //4 slot labels; each shows the held item's name or empty
     [SerializeField] private Color emptySlotColor = new Color(0.5f, 0.5f, 0.5f, 0.5f); //dim tint for an empty inventory slot
 
+    [SerializeField] private Text interactPromptText; //"E  Open the door" etc, near the crosshair. optional - leave unassigned to hide it. the text comes from Player.InteractPrompt, which is derived from the SAME scan that E acts on, so it can't lie
+
+    [Header("Safe cracking - shown only while this player is holding a safe open")]
+    [SerializeField] private GameObject crackPanel;  //parent of the meter; toggled on/off. optional
+    [SerializeField] private Image crackFillImage;   //set Image Type to Filled - fillAmount is driven from the safe's networked CrackProgress
+    [SerializeField] private Text crackText;         //optional percentage readout
+
     [SerializeField] private GameObject caughtPanel;    //shown when the whole team gets caught
     [SerializeField] private CanvasGroup caughtCanvasGroup; //on the same panel - drives the fade
     [SerializeField] private Image caughtBackground;    //the panel's background image - flashes red then settles dark
@@ -89,6 +96,32 @@ public class HUD : MonoBehaviour
                     inventorySlotTexts[slot].color = emptySlotColor;
                 }
             }
+        }
+
+        bool localPlayerLive = Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid;
+
+        if (interactPromptText != null)
+        {
+            interactPromptText.text = localPlayerLive ? Player.LocalPlayer.InteractPrompt : "";
+        }
+
+        //safe meter: the player publishes WHICH safe they're holding (networked CrackingSafeId), we look it up and
+        //read its shared CrackProgress. that means a teammate tagging in on the same safe moves YOUR bar too - the
+        //meter belongs to the safe, not to whoever happens to be standing there.
+        bool showCrackMeter = false;
+        if (localPlayerLive)
+        {
+            Safe crackingSafe = Safe.FindById(Player.LocalPlayer.CrackingSafeId);
+            if (crackingSafe != null && !crackingSafe.IsOpen)
+            {
+                showCrackMeter = true;
+                if (crackFillImage != null) crackFillImage.fillAmount = crackingSafe.CrackProgress;
+                if (crackText != null) crackText.text = $"Cracking  {Mathf.RoundToInt(crackingSafe.CrackProgress * 100f)}%";
+            }
+        }
+        if (crackPanel != null && crackPanel.activeSelf != showCrackMeter)
+        {
+            crackPanel.SetActive(showCrackMeter);
         }
 
         bool caught = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid

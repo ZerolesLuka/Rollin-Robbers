@@ -36,6 +36,16 @@ public class Safe : NetworkBehaviour
 
     public float CrackRange => crackRange; // the player's hold-to-crack check reads this
 
+    public static Safe FindById(int safeId) // the HUD turns a player's networked CrackingSafeId back into the safe itself, to read its meter
+    {
+        if (safeId == NoSafe) return null;
+        foreach (Safe safe in AllSafes)
+        {
+            if (safe.SafeId == safeId) return safe;
+        }
+        return null;
+    }
+
     public override void Spawned()
     {
         AllSafes.Add(this);

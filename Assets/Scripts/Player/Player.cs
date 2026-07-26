@@ -168,6 +168,7 @@ public partial class Player : NetworkBehaviour
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
+        UpdateInteractPrompt(); //what E would do from where we're standing - the HUD reads InteractPrompt. runs before the computer bail-out because it has to clear itself when we sit down
         if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
         HandleLook(); //our player only
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS

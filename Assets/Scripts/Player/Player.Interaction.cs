@@ -18,32 +18,63 @@ public partial class Player
         //standing on via networked CrackingSafeId (same one-source-of-truth idea as the hiding spots). the safe
         //itself reads every player's CrackingSafeId in its FixedUpdateNetwork and advances its own meter. stop
         //holding, or walk out of range, and CrackingSafeId clears - the meter just pauses, it never resets.
-        Safe target = null;
-        if (interactHeld)
-        {
-            float nearestDistance = float.MaxValue;
-            foreach (Safe safe in Safe.AllSafes)
-            {
-                if (safe.IsOpen)
-                {
-                    continue; //already cracked
-                }
-                float distance = Vector3.Distance(transform.position, safe.transform.position);
-                if (distance <= safe.CrackRange && distance < nearestDistance)
-                {
-                    nearestDistance = distance;
-                    target = safe;
-                }
-            }
-        }
+        Safe target = interactHeld ? FindCrackableSafe() : null;
         SetCrackingSafe(target != null ? target.SafeId : Safe.NoSafe);
     }
 
-    private void HandleInteract(bool interacting)
+    private bool IsLootWithinReach() //loot we could take if our hands were empty. only used to explain a full bag, never to act
     {
-        bool pressed = interacting && !interactHeldLastTick; //rising edge only - one action per press
-        interactHeldLastTick = interacting;
-        if (!pressed) return;
+        foreach (WorldItem item in WorldItem.AllItems)
+        {
+            if (item.pendingRemoval) continue;
+            if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange) return true;
+        }
+        return false;
+    }
+
+    private Safe FindCrackableSafe() //nearest un-cracked safe we're standing close enough to work on, or null
+    {
+        Safe nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (Safe safe in Safe.AllSafes)
+        {
+            if (safe.IsOpen)
+            {
+                continue; //already cracked
+            }
+            float distance = Vector3.Distance(transform.position, safe.transform.position);
+            if (distance <= safe.CrackRange && distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = safe;
+            }
+        }
+        return nearest;
+    }
+
+    //What E would act on right now. HandleInteract performs it and the HUD prompt describes it, both off THIS one
+    //scan - so the prompt can never promise something different from what the key actually does. Add an interactable
+    //here once and both halves pick it up.
+    private enum InteractKind { None, Rescue, Pickup, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
+
+    private InteractKind FindInteraction(out Component target)
+    {
+        target = null;
+
+        //shut inside a wardrobe: climbing out is the ONLY thing E may do. without this the normal priority order
+        //still applies, so a hiding spot placed near a door traps you - E swings the door instead of letting you out.
+        if (IsHiding)
+        {
+            foreach (HidingSpot occupied in HidingSpot.AllHidingSpots)
+            {
+                if (occupied.IsOccupiedByLocalPlayer)
+                {
+                    target = occupied;
+                    return InteractKind.Hide;
+                }
+            }
+            return InteractKind.None;
+        }
 
         //rescue takes priority: free the nearest trapped teammate. you can NEVER free yourself (locked player returns before this runs, and we skip self below)
         foreach (Player other in ActivePlayers)
@@ -52,12 +83,14 @@ public partial class Player
             if (!other.IsLockedUp) continue;
             if (Vector3.Distance(transform.position, other.transform.position) <= rescueRange)
             {
-                other.RPC_Rescue();
-                return; //rescued, done for this press
+                target = other;
+                return InteractKind.Rescue;
             }
         }
 
-        //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check
+        //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check.
+        //a FULL bag deliberately falls straight through this block rather than blocking - otherwise loot lying by the
+        //exit door would make the door unopenable exactly when you're loaded up and trying to leave.
         if (inventory.Count < maxInventorySlots)
         {
             foreach (WorldItem item in WorldItem.AllItems)
@@ -65,18 +98,14 @@ public partial class Player
                 if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
-                    //ASK, don't take. the item's owner decides who actually gets it and reports the theft once,
-                    //then sends it back to the winner (RPC_GrantPickup). doing it locally let two players grabbing
-                    //the same item on the same tick both keep it and both sell it - a straight money dupe.
-                    item.pendingRemoval = true; //local guard so our own scan doesn't fire a second request while this one's in flight
-                    item.RPC_RequestPickUp(Object.InputAuthority);
-                    return; //requested, done for this press
+                    target = item;
+                    return InteractKind.Pickup;
                 }
             }
         }
 
         //everything below this point needs the RunManager
-        if (RunManager.Instance == null) return;
+        if (RunManager.Instance == null) return InteractKind.None;
 
         //a scene-changing ExitDoor and a swinging Door often sit right on top of each other (the front threshold
         //has both), so don't pick by a fixed order - use whichever you're actually CLOSEST to, the same way the van
@@ -112,13 +141,11 @@ public partial class Player
             bool useSwingDoor = nearestSwingDoor != null && (nearestExit == null || nearestSwingDistance <= nearestExitDistance);
             if (useSwingDoor)
             {
-                RunManager.Instance.RPC_SetDoorOpen(nearestSwingDoor.transform.position, !nearestSwingDoor.IsOpen);
+                target = nearestSwingDoor;
+                return InteractKind.SwingDoor;
             }
-            else
-            {
-                RunManager.Instance.RPC_LoadScene(nearestExit.targetSceneBuildIndex, nearestExit.spawnPointId);
-            }
-            return;
+            target = nearestExit;
+            return InteractKind.ExitDoor;
         }
 
         //the getaway van (driver's seat, ends the run for everyone) and the van computer (routing) sit right next to
@@ -155,48 +182,174 @@ public partial class Player
             bool useComputer = nearestTerminal != null && (nearestVan == null || nearestTerminalDistance <= nearestVanDistance);
             if (useComputer)
             {
-                if (RunManager.Instance.IsComputerFree) //networked lock - we claim it and enter once granted (see UpdateComputerClaim)
-                {
-                    pendingTerminal = nearestTerminal;
-                    RunManager.Instance.RPC_ClaimComputer(Object.InputAuthority);
-                }
+                target = nearestTerminal;
+                return InteractKind.Computer;
             }
-            else
-            {
-                RunManager.Instance.RPC_StartGetaway(); //start the van - the run ends successfully for everyone
-            }
-            return;
+            target = nearestVan;
+            return InteractKind.Van;
         }
 
-       //pawn shop counter: sell the team's haul for money
+        //pawn shop counter: sell the team's haul for money
         foreach (SellCounter counter in SellCounter.AllCounters)
         {
             if (Vector3.Distance(transform.position, counter.transform.position) <= counter.interactRange)
             {
-                if (inventory.Count > 0)
-                {
-                    RunManager.Instance.RPC_SellItems(CarriedValue); //bank the worth of my haul into the shared money
-                    inventory.Clear();                                //handed it all over
-                }
-                return;
+                target = counter;
+                return InteractKind.Sell;
             }
         }
 
         foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
         {
-            if(Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)
+            if (Vector3.Distance(transform.position, hidingSpot.transform.position) <= hidingSpot.interactRange)
             {
-                if (hidingSpot.IsOccupiedByLocalPlayer)
-                {
-                    hidingSpot.OnSpotExit(); //we're the one inside - climb out
-                }
-                else if (!hidingSpot.IsOccupied)
-                {
-                    hidingSpot.OnSpotEnter(); //free spot - get in
-                }
-                //someone ELSE is in there: do nothing, and still return so we don't fall through to another spot
-                return;
+                target = hidingSpot;
+                return InteractKind.Hide;
             }
+        }
+
+        return InteractKind.None;
+    }
+
+    private void HandleInteract(bool interacting)
+    {
+        bool pressed = interacting && !interactHeldLastTick; //rising edge only - one action per press
+        interactHeldLastTick = interacting;
+        if (!pressed) return;
+
+        InteractKind kind = FindInteraction(out Component target);
+        switch (kind)
+        {
+            case InteractKind.Rescue:
+                ((Player)target).RPC_Rescue();
+                break;
+
+            case InteractKind.Pickup:
+                //ASK, don't take. the item's owner decides who actually gets it and reports the theft once,
+                //then sends it back to the winner (RPC_GrantPickup). doing it locally let two players grabbing
+                //the same item on the same tick both keep it and both sell it - a straight money dupe.
+                WorldItem item = (WorldItem)target;
+                item.pendingRemoval = true; //local guard so our own scan doesn't fire a second request while this one's in flight
+                item.RPC_RequestPickUp(Object.InputAuthority);
+                break;
+
+            case InteractKind.SwingDoor:
+                Door door = (Door)target;
+                RunManager.Instance.RPC_SetDoorOpen(door.transform.position, !door.IsOpen);
+                break;
+
+            case InteractKind.ExitDoor:
+                ExitDoor exitDoor = (ExitDoor)target;
+                RunManager.Instance.RPC_LoadScene(exitDoor.targetSceneBuildIndex, exitDoor.spawnPointId);
+                break;
+
+            case InteractKind.Computer:
+                if (RunManager.Instance.IsComputerFree) //networked lock - we claim it and enter once granted (see UpdateComputerClaim)
+                {
+                    pendingTerminal = (ComputerTerminal)target;
+                    RunManager.Instance.RPC_ClaimComputer(Object.InputAuthority);
+                }
+                break;
+
+            case InteractKind.Van:
+                RunManager.Instance.RPC_StartGetaway(); //start the van - the run ends successfully for everyone
+                break;
+
+            case InteractKind.Sell:
+                if (inventory.Count > 0)
+                {
+                    RunManager.Instance.RPC_SellItems(CarriedValue); //bank the worth of my haul into the shared money
+                    inventory.Clear();                                //handed it all over
+                }
+                break;
+
+            case InteractKind.Hide:
+                HidingSpot spot = (HidingSpot)target;
+                if (spot.IsOccupiedByLocalPlayer)
+                {
+                    spot.OnSpotExit(); //we're the one inside - climb out
+                }
+                else if (!spot.IsOccupied)
+                {
+                    spot.OnSpotEnter(); //free spot - get in
+                }
+                //someone ELSE is in there: do nothing. we still consumed the press rather than falling through to another spot
+                break;
+        }
+    }
+
+    public string InteractPrompt { get; private set; } = ""; //what the HUD shows. local only - each client describes its own player's reach
+
+    public void UpdateInteractPrompt() //called every render frame from Player.Update for the local player, so the line tracks the crosshair smoothly rather than stepping at the 32Hz tick
+    {
+        if (isUsingComputer || IsEliminated || IsLockedUp || isBeingDragged)
+        {
+            InteractPrompt = ""; //no reach while parked, out, jailed or being hauled off
+            return;
+        }
+
+        InteractKind kind = FindInteraction(out Component target);
+
+        //nothing tappable in reach, so fall back to the two things that aren't tap-actions: a safe (which is a HOLD)
+        //and loot we can SEE but can't carry. checked in that order and only here, so standing at a safe next to a
+        //door doesn't flip the line back and forth between two things that are both true.
+        if (kind == InteractKind.None)
+        {
+            if (FindCrackableSafe() != null)
+            {
+                InteractPrompt = "Hold E to crack the safe";
+            }
+            else if (inventory.Count >= maxInventorySlots && IsLootWithinReach())
+            {
+                InteractPrompt = "Hands full - drop something with G"; //the pickup scan skipped this loot entirely, so say why rather than showing nothing
+            }
+            else
+            {
+                InteractPrompt = "";
+            }
+            return;
+        }
+
+        InteractPrompt = LabelFor(kind, target);
+    }
+
+    private string LabelFor(InteractKind kind, Component target)
+    {
+        switch (kind)
+        {
+            case InteractKind.Rescue:
+                return "E  Free your teammate";
+
+            case InteractKind.Pickup:
+                WorldItem item = target as WorldItem;
+                return item != null ? $"E  Take {item.ItemName} (${item.Value})" : "E  Take";
+
+            case InteractKind.SwingDoor:
+                Door door = target as Door;
+                return (door != null && door.IsOpen) ? "E  Close the door" : "E  Open the door";
+
+            case InteractKind.ExitDoor:
+                return "E  Go through";
+
+            case InteractKind.Van:
+                return "E  Drive off (ends the run)"; //spelled out: this one is irreversible and ends everyone's heist
+
+            case InteractKind.Computer:
+                return (RunManager.Instance != null && !RunManager.Instance.IsComputerFree)
+                    ? "Someone else is on the computer"
+                    : "E  Use the computer";
+
+            case InteractKind.Sell:
+                return inventory.Count > 0 ? $"E  Sell your haul (${CarriedValue})" : "Nothing to sell";
+
+            case InteractKind.Hide:
+                HidingSpot spot = target as HidingSpot;
+                if (spot == null) return "";
+                if (spot.IsOccupiedByLocalPlayer) return "E  Climb out";
+                return spot.IsOccupied ? "Someone's already hiding here" : "E  Hide";
+
+            default:
+                return "";
         }
     }
 }
