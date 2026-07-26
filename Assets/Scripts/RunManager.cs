@@ -28,6 +28,15 @@ public class RunManager : NetworkBehaviour
 
     [Networked] public int Money { get; private set; } // the team's banked cash - persists across runs, grows when they sell loot at the pawn shop
 
+    //the guard is despawned and respawned on EVERY scene load (he can't navigate the outdoor NavMesh), so without
+    //this, stepping out an exit door and back in handed you a brand-new guard: anger wiped, ears reset, fast asleep.
+    //that made a door a panic button that deleted all the tension you'd built. he now carries his mood across the
+    //trip and only forgets it when a genuinely new run starts.
+    [Networked] public NetworkBool HasSavedGuardState { get; set; } // false = no guard has been saved this run, roll him fresh
+    [Networked] public float SavedGuardAnger { get; set; }
+    [Networked] public float SavedGuardNoiseThreshold { get; set; }
+    [Networked] public int SavedGuardAsleepChances { get; set; }
+
     [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
 
     [Networked] public NetworkBool VanBackClosed { get; private set; } // true while a run is over and everyone's pooled in the van - a scene barrier seals the van's back so nobody wanders off before picking a destination. any route button reopens it. networked so every client's barrier agrees
@@ -47,9 +56,9 @@ public class RunManager : NetworkBehaviour
     {
         DontDestroyOnLoad(gameObject); //survive scene loads
         Instance = this;
-        State = RunState.InProgress;
         if (HasStateAuthority)
         {
+            State = RunState.InProgress; //only the authority may write networked state. a joining client used to run this too, which is an unauthorized write Fusion just discards
             Host = Runner.LocalPlayer; //we spawned this, so we're the room's creator - remember it for everyone
             FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
         }
@@ -132,10 +141,8 @@ public class RunManager : NetworkBehaviour
     {
         EntrySpawnPointId = spawnPointId;
         VanBackClosed = false; //picked a destination - the van's back opens onto whatever scene we're routing to. this runs BEFORE the scene load, and the flag survives it (RunManager is DontDestroyOnLoad + networked), so the destination van starts open
-        if (startNewRun)
-        {
-            ResetForNewRun(); //House button - back to InProgress so the run-over van ride doesn't instantly re-trigger
-        }
+        //despawn BEFORE any reset. the guard saves his mood into this RunManager as he despawns, so resetting first
+        //would just get overwritten by the guard he was a second ago and he'd walk into the new house still furious.
         if (GuardPatrol.Instance != null)
         {
             Runner.Despawn(GuardPatrol.Instance.Object);
@@ -143,6 +150,10 @@ public class RunManager : NetworkBehaviour
         if (DogAI.Instance != null)
         {
             Runner.Despawn(DogAI.Instance.Object);
+        }
+        if (startNewRun)
+        {
+            ResetForNewRun(); //House button - back to InProgress so the run-over van ride doesn't instantly re-trigger
         }
         LoadSceneForEveryone(buildIndex);
     }
@@ -210,6 +221,12 @@ public class RunManager : NetworkBehaviour
         {
             HouseLootTotal = 0;
             lastTalliedSceneLoad = sceneLoadCounter;
+
+            //the house just RE-STOCKED (walking back in through an exit door respawns every item), so the theft
+            //count has to start over with it. leaving it running while the total resets let clear-% climb past
+            //100% on a second trip in, which then wrote an unbeatable number into BestClearPercent forever.
+            //both numbers now always describe the SAME house instance, so the percentage can't exceed 100.
+            GatheredLootValue = 0;
         }
 
         HouseLootTotal += value;
@@ -218,7 +235,21 @@ public class RunManager : NetworkBehaviour
     private void LoadSceneForEveryone(int buildIndex) //every scene load goes through here so the loot tally always gets scoped - see ReportHouseLoot
     {
         sceneLoadCounter++;
+        CloseSessionToLateJoiners();
         Runner.LoadScene(SceneRef.FromIndex(buildIndex));
+    }
+
+    private void CloseSessionToLateJoiners() //the crew has left the starting area, so lock the door behind them
+    {
+        //a mid-run joiner is broken by design here: GameBootstrap spawns them at a serialized Transform that lives in
+        //the menu scene, and that object no longer exists once we've loaded the house - so they either NRE on spawn or
+        //land at stale outdoor coordinates inside the geometry. doors are the other half: they aren't NetworkObjects,
+        //so a joiner missed every RPC_SetDoorOpen and would see a shut house everyone else is walking through.
+        //rather than patch both, refuse the join. joining is still open the whole time the crew is at the van.
+        if (Runner != null && Runner.SessionInfo != null && Runner.SessionInfo.IsOpen)
+        {
+            Runner.SessionInfo.IsOpen = false;
+        }
     }
 
     private void ResetForNewRun() //fresh heist: run active again, everyone counted alive, the house re-stocked. Money and each player's carried inventory are kept - only the house resets
@@ -228,6 +259,7 @@ public class RunManager : NetworkBehaviour
         playersAlive = Player.ActivePlayers.Count; //everyone was revived on the van ride, so they all count again
         GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
         HouseLootTotal = 0; //ItemSpawner re-tallies the new run's loot when the indoor scene reloads
+        HasSavedGuardState = false; //genuinely new heist: the guard forgets last run's mood and gets rolled fresh
         RunTime = 0f; //fresh clock for the new heist
         FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run
     }
