@@ -62,7 +62,7 @@ public class GuardVision : MonoBehaviour
         bool sees = false;
         if (Application.isPlaying)
         {
-            foreach (Player pl in FindObjectsByType<Player>(FindObjectsSortMode.None))
+            foreach (Player pl in Player.ActivePlayers) //the self-registered list, same as every other sensor. never scan the scene for players, not even in editor-only code
             {
                 if (CanSee(pl.transform))
                 {
