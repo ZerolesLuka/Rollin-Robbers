@@ -65,11 +65,12 @@ public partial class Player
                 if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
-                    inventory.Add(new InventoryItem(item.ItemName.ToString(), item.Value));
-                    if (!item.CountedAsStolen && RunManager.Instance != null) RunManager.Instance.RPC_ReportLootTaken(item.Value, item.transform.position); //FIRST lift only - the house is now missing this, which feeds the guard's suspicion and tells him WHERE it went. re-picking something a teammate dropped isn't a fresh theft
-                    item.pendingRemoval = true; //so we don't re-grab it before it despawns
-                    item.RPC_PickUp();
-                    return; //picked up, done for this press
+                    //ASK, don't take. the item's owner decides who actually gets it and reports the theft once,
+                    //then sends it back to the winner (RPC_GrantPickup). doing it locally let two players grabbing
+                    //the same item on the same tick both keep it and both sell it - a straight money dupe.
+                    item.pendingRemoval = true; //local guard so our own scan doesn't fire a second request while this one's in flight
+                    item.RPC_RequestPickUp(Object.InputAuthority);
+                    return; //requested, done for this press
                 }
             }
         }

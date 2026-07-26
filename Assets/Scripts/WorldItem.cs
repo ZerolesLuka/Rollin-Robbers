@@ -50,9 +50,14 @@ public class WorldItem : NetworkBehaviour
 
     private IEnumerator PlaceOnceSpawnPointArrives()
     {
-        //the deferred spawn replicates SpawnPoint a tick or two after Spawned; until it lands it reads as zero
-        while (SpawnPoint == Vector3.zero)
+        //the deferred spawn replicates SpawnPoint a tick or two after Spawned; until it lands it reads as zero.
+        //the frame cap matters: (0,0,0) is being used as a "hasn't arrived yet" sentinel, so an item that genuinely
+        //belongs at the world origin would wait here forever - frozen kinematic and stuck at the origin, invisible
+        //as a bug. after the cap we just go with whatever we have rather than hanging.
+        int framesWaited = 0;
+        while (SpawnPoint == Vector3.zero && framesWaited < 120)
         {
+            framesWaited++;
             yield return null;
         }
 
@@ -82,10 +87,32 @@ public class WorldItem : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_PickUp() // routed to whoever owns this item (scene master, or the player who dropped it); they despawn it
+    public void RPC_RequestPickUp(PlayerRef requester) // routed to whoever owns this item (scene master, or the player who dropped it)
     {
+        //ONE machine decides who gets this item. Previously each client added the item to its own inventory and
+        //reported the theft itself, so two players grabbing the same vase on the same tick BOTH kept it and BOTH
+        //reported it - the house read as over-looted and the money was duplicated when they each sold it. `claimed`
+        //only ever guarded the despawn, not the payout. Now the loser's request simply arrives second and is dropped.
         if (claimed) return;
         claimed = true;
+
+        //count the theft here too, on the same single machine, so it can't be double-counted either. dropped loot
+        //arrives with CountedAsStolen already true, so re-picking a teammate's drop still isn't a fresh theft.
+        if (!CountedAsStolen && RunManager.Instance != null)
+        {
+            RunManager.Instance.RPC_ReportLootTaken(Value, transform.position);
+        }
+
+        //hand it to exactly one player - the winner puts it in their bag when this lands on their machine
+        foreach (Player player in Player.ActivePlayers)
+        {
+            if (player != null && player.Object != null && player.Object.InputAuthority == requester)
+            {
+                player.RPC_GrantPickup(ItemName, Value);
+                break;
+            }
+        }
+
         Runner.Despawn(Object);
     }
 }

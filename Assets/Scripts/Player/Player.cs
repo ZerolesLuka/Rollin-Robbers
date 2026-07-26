@@ -249,6 +249,11 @@ public partial class Player : NetworkBehaviour
                 hasRiddenVanForRunEnd = true;
                 IsEliminated = false;  //pull caught/dead players back in for the next run (their loot was already stripped at capture; a clean getaway keeps its haul). sticks because we're in FUN
                 IsLockedUp = false;
+                //someone still tucked in a closet when the run ended used to ride to the van STILL hiding, and that
+                //is a hard softlock: IsHiding freezes movement and hides playerVisuals, and the only way out is
+                //pressing E while standing next to a hiding spot - which doesn't exist in the van scene. Invisible,
+                //immobile, forever. clearing the spot id too, or that closet reads as occupied all next run.
+                SetHiding(false, HidingSpot.NoSpot);
                 isBeingDragged = false;
                 draggingGuard = null;
                 dragTrail.Clear();
@@ -356,6 +361,13 @@ public partial class Player : NetworkBehaviour
     public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
     {
         CrackingSafeId = safeId;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
+    public void RPC_GrantPickup(NetworkString<_32> itemName, int value)
+    {
+        if (inventory.Count >= maxInventorySlots) return; //bag filled while the request was in flight
+        inventory.Add(new InventoryItem(itemName.ToString(), value));
     }
 
 

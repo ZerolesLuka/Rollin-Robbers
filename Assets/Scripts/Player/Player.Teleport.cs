@@ -39,6 +39,15 @@ public partial class Player
     private void OnSceneChanged(Scene previous, Scene next)
     {
         Cursor.lockState = CursorLockMode.Locked;
+
+        //safety net: any terminal we were sat at died with the scene we just left, and isUsingComputer freezes
+        //movement with no way to clear it once currentTerminal is a destroyed object. the route buttons stand us up
+        //properly now, but anything else that changes scene mid-session would otherwise strand us frozen here.
+        if (isUsingComputer)
+        {
+            ExitComputer();
+        }
+
         StartCoroutine(TeleportAfterLoad());
     }
 

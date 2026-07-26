@@ -54,9 +54,13 @@ public class Safe : NetworkBehaviour
     private IEnumerator PlaceOnceSpawnPointArrives()
     {
         //the deferred spawn replicates SpawnPoint a tick or two after Spawned; until it lands it reads (0,0,0).
-        //a safe is static furniture (no rigidbody), so unlike WorldItem there's nothing to freeze - just wait, then snap.
-        while (SpawnPoint == Vector3.zero)
+        //a safe is static furniture (no rigidbody), so unlike WorldItem there's nothing to freeze - just wait, then
+        //snap. capped like WorldItem's: (0,0,0) doubles as the "not arrived" sentinel, so a safe genuinely placed at
+        //the world origin would otherwise spin here forever.
+        int framesWaited = 0;
+        while (SpawnPoint == Vector3.zero && framesWaited < 120)
         {
+            framesWaited++;
             yield return null;
         }
         transform.position = SpawnPoint;
