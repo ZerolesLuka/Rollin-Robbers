@@ -15,6 +15,14 @@ public class HidingSpot : MonoBehaviour
     [SerializeField] public float interactRange = 3f;
     [SerializeField] public int spotId = 0; //unique WITHIN a scene - duplicates break occupancy, so we shout about them on enable
 
+    private void Start()
+    {
+        //force the spot's camera off at load, exactly like ComputerTerminal does. its priority is deliberately
+        //HIGHER than the player's (that's what makes it take over when you climb in), so if it's left enabled in
+        //the scene it wins from frame one and you spawn staring into a wardrobe. enter/exit toggle it from here.
+        SetSpotCamera(false);
+    }
+
     private void OnEnable()
     {
         AllHidingSpots.Add(this);
@@ -50,13 +58,23 @@ public class HidingSpot : MonoBehaviour
     public void OnSpotEnter()
     {
         Player.LocalPlayer.SetHiding(true, spotId); //publishes WHICH spot we're in, which is what makes it occupied for everyone else
-        if (virtualCamera != null) virtualCamera.enabled = true;
+        SetSpotCamera(true);
     }
 
     public void OnSpotExit()
     {
         Player.LocalPlayer.SetHiding(false, NoSpot); //frees the spot for everyone the moment it replicates
-        if (virtualCamera != null) virtualCamera.enabled = false;
+        SetSpotCamera(false);
+    }
+
+    private void SetSpotCamera(bool on)
+    {
+        if (virtualCamera == null) return;
+
+        //toggle the OBJECT as well as the component. enabling the component on a deactivated GameObject silently
+        //does nothing, so this works whichever way the camera was switched off in the scene.
+        virtualCamera.gameObject.SetActive(on);
+        virtualCamera.enabled = on;
     }
 
     public const int NoSpot = -1; //"not in any hiding spot" - what a free player's HidingSpotId reads as
