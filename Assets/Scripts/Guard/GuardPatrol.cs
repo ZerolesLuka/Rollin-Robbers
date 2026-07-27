@@ -107,21 +107,7 @@ public class GuardPatrol : NetworkBehaviour
         Instance = this; //only the master's guard - sensors ping this one
         spawnPosition = transform.position;
         State = GuardState.Asleep; //guard starts asleep
-
-        //every scene load despawns and respawns him, so a fresh roll here would mean walking out an exit door and
-        //back in handed the players a brand-new guard with no anger and factory-reset ears. carry his mood over
-        //instead; RunManager only clears it when a genuinely new run begins.
-        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
-            && RunManager.Instance.HasSavedGuardState)
-        {
-            Anger = RunManager.Instance.SavedGuardAnger;
-            noiseThreshold = RunManager.Instance.SavedGuardNoiseThreshold;
-            asleepChances = RunManager.Instance.SavedGuardAsleepChances;
-        }
-        else
-        {
-            noiseThreshold = Random.Range(wakeThresholdMin, wakeThresholdMax); //random wake threshold so players cant memorize the exact amount
-        }
+        noiseThreshold = Random.Range(wakeThresholdMin, wakeThresholdMax); //random wake threshold so players cant memorize the exact amount
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
         agent.Warp(transform.position); 
     }
@@ -315,23 +301,6 @@ public class GuardPatrol : NetworkBehaviour
         }
         transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
     }
-    public override void Despawned(NetworkRunner runner, bool hasState) //he's despawned on every scene change, so this is where his mood gets banked for the trip
-    {
-        if (Instance == this)
-        {
-            Instance = null; //don't leave sensors pinging a destroyed guard
-        }
-        if (!hasState || !HasStateAuthority) return; //hasState false = the session is tearing down, nothing worth saving
-
-        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
-        {
-            RunManager.Instance.SavedGuardAnger = Anger;
-            RunManager.Instance.SavedGuardNoiseThreshold = noiseThreshold;
-            RunManager.Instance.SavedGuardAsleepChances = asleepChances;
-            RunManager.Instance.HasSavedGuardState = true;
-        }
-    }
-
     public void SetWaypoints(Transform[] points)
     {
         waypoints = points; //set the waypoints from the spawner, since we cant set them in the inspector for the guard prefab

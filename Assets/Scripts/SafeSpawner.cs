@@ -10,12 +10,6 @@ public class SafeSpawner : MonoBehaviour
 {
     [SerializeField] private NetworkObject safePrefab;
 
-    //STATIC on purpose. a per-spawner counter restarted at 1 in every spawner, so a second SafeSpawner in the same
-    //house would hand out ids that already existed - and since a safe advances whenever ANY player's CrackingSafeId
-    //matches its own, cracking one safe would quietly crack its twin across the map. ids only need to be unique, not
-    //stable, because a player's CrackingSafeId is recomputed from proximity every tick.
-    private static int nextSafeId = 1; //starts at 1 so a player's default CrackingSafeId of 0 (Safe.NoSafe) never matches a real safe
-
     private IEnumerator Start()
     {
         //wait until RunManager is spawned + valid - proves the sim's spawn system is fully up (same guard ItemSpawner uses)
@@ -30,6 +24,7 @@ public class SafeSpawner : MonoBehaviour
             yield break; //only the master spawns; the safes replicate to everyone
         }
 
+        int nextSafeId = 1; //ids start at 1 so a player's default CrackingSafeId of 0 (NoSafe) never matches a real safe
         foreach (Transform marker in transform)
         {
             int safeId = nextSafeId; //captured per-iteration for the closure below
