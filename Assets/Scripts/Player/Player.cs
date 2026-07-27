@@ -288,7 +288,10 @@ public partial class Player : NetworkBehaviour
 
         if (IsHiding) // locked inside a hiding spot - can't move, but can still press E to exit
         {
-            NoiseLevel = 0f;
+            //a closet door isn't soundproof. movement noise is gone (you're not moving), but your VOICE still
+            //carries out - so chattering on the mic while the guard walks past is what gives you away. staying
+            //quiet in there is a real choice, not just a wait.
+            NoiseLevel = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
             if (GetInput(out NetworkInputData hidingInput))
                 HandleInteract(hidingInput.interactInput);
             return;
@@ -361,6 +364,12 @@ public partial class Player : NetworkBehaviour
     public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
     {
         CrackingSafeId = safeId;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //the guard yanks the door open. has to be an RPC: in Shared Mode only WE own our own networked state, so he can't clear IsHiding for us directly
+    public void RPC_PulledFromHiding()
+    {
+        SetHiding(false, HidingSpot.NoSpot);
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp

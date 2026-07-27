@@ -18,6 +18,9 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
+    [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
+    [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe
+    private bool sawTargetEnterHiding;                          //did we have eyes on the chase target the moment they dove into a spot? if so we know which one
     private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
@@ -136,6 +139,7 @@ public class GuardPatrol : NetworkBehaviour
         TickAnger(); //rise while chasing, cool while calm
         CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
         OpenDoorInMyWay(); //shove open any shut door he walks into, so he isn't clipping through solid doors
+        CheckNoisyHidingSpots(); //someone running their mouth inside a wardrobe he's stood next to
 
         if (floorboardCreakCount > 0) //let the creak count fade if the creaking stops
         {
@@ -252,16 +256,27 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Chasing:
-                if (chaseTarget == null || chaseTarget.IsHiding || chaseTarget.IsLockedUp || chaseTarget.IsEliminated) //target left, hid, or is already caught (jailed/out) - stop chasing so he never re-grabs or re-eliminates someone he's already dealt with
+                if (chaseTarget == null || chaseTarget.IsLockedUp || chaseTarget.IsEliminated) //target left or is already caught (jailed/out) - stop chasing so he never re-grabs someone he's already dealt with
                 {
                     ChangeState(GuardState.Searching);
                     break;
                 }
+
+                //they dove into a hiding spot. if we had eyes on them the instant they did it we know exactly which
+                //one, so keep coming and haul them out. break line of sight FIRST and it's a clean escape - that's
+                //what makes losing him the actual skill, instead of the closet being a panic button.
+                if (chaseTarget.IsHiding && !sawTargetEnterHiding)
+                {
+                    ChangeState(GuardState.Searching);
+                    break;
+                }
+
                 Vector3 toTarget = chaseTarget.transform.position - transform.position;
                 toTarget.y = 0f; //ignore height difference
                 float distanceToTarget = toTarget.magnitude;
 
-                if (vision.CanSee(chaseTarget.transform) || distanceToTarget < chaseSenseRange) //see the target or close enough to sense them
+                bool canSeeTargetNow = vision.CanSee(chaseTarget.transform);
+                if (canSeeTargetNow || distanceToTarget < chaseSenseRange || chaseTarget.IsHiding) //see them, close enough to sense them, or they're in a spot we watched them climb into
                 {
                     Vector3 currentTargetPosition = chaseTarget.transform.position;
                     targetVelocity = (currentTargetPosition - lastTargetPosition) / Runner.DeltaTime; //crude per-tick velocity estimate
@@ -269,15 +284,26 @@ public class GuardPatrol : NetworkBehaviour
 
                     lastKnownPosition = currentTargetPosition; //still the real last-seen spot, used if we lose the target entirely
                     Vector3 predictedPosition = currentTargetPosition + targetVelocity * predictionLeadTime; //aim a little ahead instead of exactly where they are right now
-                    agent.SetDestination(predictedPosition);
+                    agent.SetDestination(chaseTarget.IsHiding ? currentTargetPosition : predictedPosition); //no point leading a target who's stood still in a wardrobe
                 }
                 if (distanceToTarget < catchRange)
                 {
+                    if (chaseTarget.IsHiding)
+                    {
+                        chaseTarget.RPC_PulledFromHiding(); //door yanked open - out you come, then the normal catch handles the rest
+                    }
                     ChangeState(GuardState.Caught);
                 }
-                else if (!vision.CanSee(chaseTarget.transform) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                else if (!canSeeTargetNow && !chaseTarget.IsHiding && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
                     ChangeState(GuardState.Searching);
+                }
+
+                //remember whether we can see them RIGHT NOW, so if they vanish into a spot next tick we know whether
+                //we watched it happen. only meaningful while they're still out in the open.
+                if (!chaseTarget.IsHiding)
+                {
+                    sawTargetEnterHiding = canSeeTargetNow;
                 }
                 break;
             case GuardState.Caught:
@@ -408,6 +434,7 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;
                 Anger = Mathf.Min(angerMax, Anger + angerPerAlert); //spotting a player really sets him off
+                sawTargetEnterHiding = false; //fresh chase - he hasn't watched THIS target hide anywhere yet. leaving a stale true here would let him rip open a spot he never actually saw anyone enter
                 if (chaseTarget != null)
                 {
                     lastTargetPosition = chaseTarget.transform.position; //reset so the first velocity sample isn't computed against stale data from a previous chase
@@ -458,6 +485,24 @@ public class GuardPatrol : NetworkBehaviour
         shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
         RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true);  //and tell every other client to swing their copy
         //deliberately never closed behind him - a door left open is a free tell to the players that he came through here
+    }
+
+    private void CheckNoisyHidingSpots() //a hiding spot only hides you if you SHUT UP in it
+    {
+        if (State == GuardState.Caught || State == GuardState.Escorting) return; //already got someone, hands full
+
+        foreach (Player player in Player.ActivePlayers)
+        {
+            if (player == null || !player.IsHiding || player.IsEliminated || player.IsLockedUp) continue;
+            if (player.NoiseLevel <= hidingNoiseTolerance) continue; //quiet in there - he walks right past
+            if (Vector3.Distance(transform.position, player.transform.position) > hidingSearchRange) continue; //heard something, but not from close enough to place which spot
+
+            //talking, and he's right next to the door. that's the whole tell - open it.
+            player.RPC_PulledFromHiding();
+            chaseTarget = player;
+            ChangeState(GuardState.Caught);
+            return;
+        }
     }
 
     private void CheckForMissingLoot() //a new sensing mode: notices his valuables disappearing even with zero noise or sightings - ties threat directly to how much you've stolen
