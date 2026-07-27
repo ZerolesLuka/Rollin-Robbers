@@ -73,6 +73,8 @@ public class GuardPatrol : NetworkBehaviour
     private float sweepLookRange = 45f; //how far left/right of center he turns while waiting at a search point
     private float sweepLookSpeed = 90f;  //degrees per second the look oscillates back and forth
     private bool isSweepingSearchPoint;
+    [SerializeField] private float turnSpeed = 540f; //degrees per second he turns to face his direction of travel. lower = he leans into corners, higher = snappier
+    private Vector3 lastFacingPosition;              //where he was last tick, so we can work out which way he actually moved
     private float sweepBaseYaw;    //the direction he was facing when he arrived - the look oscillates around this, not world-forward
     private float sweepPhaseTimer;
 
@@ -132,6 +134,8 @@ public class GuardPatrol : NetworkBehaviour
             noiseThreshold = Random.Range(wakeThresholdMin, wakeThresholdMax); //random wake threshold so players cant memorize the exact amount
         }
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
+        agent.updateRotation = false; //and we turn him too - see FaceMovementDirection. the agent's own rotation aims at where it WANTS to go, which drifts from where we actually put him
+        lastFacingPosition = transform.position;
         agent.Warp(transform.position); 
     }
 
@@ -236,7 +240,7 @@ public class GuardPatrol : NetworkBehaviour
                     if (!isSweepingSearchPoint) //just arrived - lock in facing direction and take manual control of rotation while we look around
                     {
                         isSweepingSearchPoint = true;
-                        agent.updateRotation = false; //nothing to path toward right now anyway, so this can't fight the agent's own auto-rotate
+                        //rotation is ours now (see FaceMovementDirection); isSweepingSearchPoint is what tells it to back off
                         sweepBaseYaw = transform.eulerAngles.y;
                         sweepPhaseTimer = 0f;
                     }
@@ -248,7 +252,7 @@ public class GuardPatrol : NetworkBehaviour
                     {
                         searchSweepWaitTimer = 0f;
                         isSweepingSearchPoint = false;
-                        agent.updateRotation = true; //hand facing back to the agent now that he's about to move again
+                        //done scanning - FaceMovementDirection takes over again as soon as he starts moving
                         searchSweepPointsChecked++;
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
@@ -346,6 +350,7 @@ public class GuardPatrol : NetworkBehaviour
                 break;
         }
         transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
+        FaceMovementDirection(); //and point him where he's actually going, not where the agent wishes it were going
     }
     public override void Despawned(NetworkRunner runner, bool hasState) //he's despawned on every scene change, so this is where his mood gets banked for the trip
     {
@@ -406,9 +411,8 @@ public class GuardPatrol : NetworkBehaviour
     {
         State = newState;
 
-        //default rotation control back to the agent on every transition - Searching re-claims it manually, but only while actually idle at a sweep point.
-        //covers spotting a player mid-sweep (Searching -> Chasing without ever reaching the sweep-timeout code below)
-        agent.updateRotation = true;
+        //clear the manual scan on every transition, so FaceMovementDirection takes his facing back. covers spotting a
+        //player mid-sweep (Searching -> Chasing without ever reaching the sweep-timeout code below)
         isSweepingSearchPoint = false;
 
         switch (newState)
@@ -484,12 +488,41 @@ public class GuardPatrol : NetworkBehaviour
         }
     }
 
+    private void FaceMovementDirection() //turn him to look where he's actually travelling
+    {
+        if (isSweepingSearchPoint)
+        {
+            return; //he's deliberately scanning a room from a standstill - that code owns his head, leave it alone
+        }
+
+        Vector3 movedThisTick = transform.position - lastFacingPosition;
+        lastFacingPosition = transform.position;
+        movedThisTick.y = 0f; //ignore the climb, or going up stairs would tip him backwards
+
+        if (movedThisTick.sqrMagnitude < 0.000001f)
+        {
+            return; //standing still - hold the last facing rather than snapping to some arbitrary direction
+        }
+
+        //this replaces agent.updateRotation, which turned him toward the direction the AGENT wanted to travel. we run
+        //with updatePosition = false and move the transform ourselves, so those two diverge - most visibly on stairs,
+        //where he'd stroll up sideways. facing the real movement delta always matches what's on screen, and it matters
+        //for more than looks: GuardVision builds his view cone from transform.forward.
+        Quaternion wantedFacing = Quaternion.LookRotation(movedThisTick.normalized, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, wantedFacing, turnSpeed * Runner.DeltaTime);
+    }
+
     private void OpenDoorInMyWay() //he walks the NavMesh, which ignores door colliders - so without this he'd stroll straight THROUGH a shut door. now he pushes it open and walks through the gap like a person
     {
         if (RunManager.Instance == null) return;
         if (State == GuardState.Asleep) return; //dead asleep at his post - doors drifting open on their own would look haunted
 
-        Door shutDoor = Door.FindClosedDoorNear(transform.position, doorOpenRange);
+        //reach further ahead the faster he's moving. a fixed 1.8m is fine at a stroll, but at chase speed he covers
+        //that in under a third of a second - about how long the door takes to swing - so he'd reach the doorway
+        //while it was still opening and clip straight through it. giving him roughly half a second of lead fixes it.
+        float lookAhead = Mathf.Max(doorOpenRange, agent.speed * 0.5f);
+
+        Door shutDoor = Door.FindClosedDoorNear(transform.position, lookAhead);
         if (shutDoor == null) return;
 
         //only shove open a door he's actually walking INTO. without this he flings open every door he passes in a
