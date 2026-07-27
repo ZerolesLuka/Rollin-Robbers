@@ -70,7 +70,7 @@ NavMeshAgent:
   m_GameObject: {fileID: 2371217306020104725}
   m_Enabled: 1
   m_AgentTypeID: 0
-  m_Radius: 1.5
+  m_Radius: 0.93
   m_Speed: 40
   m_Acceleration: 30
   avoidancePriority: 50
@@ -79,7 +79,7 @@ NavMeshAgent:
   m_AutoTraverseOffMeshLink: 1
   m_AutoBraking: 1
   m_AutoRepath: 1
-  m_Height: 2
+  m_Height: 3.93
   m_BaseOffset: 0
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
@@ -101,6 +101,10 @@ MonoBehaviour:
   catchRange: 2
   chaseSenseRange: 5
   doorOpenRange: 1.8
+  patrolRadius: 25
+  minPatrolStepDistance: 4
+  hidingSearchRange: 3.5
+  hidingNoiseTolerance: 5
   alertConfirmTime: 1.5
   maximumSearchSweepPoints: 3
   relaxSpeed: 1.5
@@ -237,7 +241,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GuardVision
   sightRange: 10
   fovAngle: 120
-  eyeHeight: 1.6
+  eyeHeight: 3.5
   obstacleMask:
     serializedVersion: 2
     m_Bits: 8
@@ -355,6 +359,50 @@ PrefabInstance:
     - target: {fileID: 919132149155446097, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
       propertyPath: m_Name
       value: GUARDV4
+      objectReference: {fileID: 0}
+    - target: {fileID: 3742407835892290726, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.00037
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[0]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[8]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[9]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[10]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[15]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[16]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[20]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[36]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[53]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[57]'
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

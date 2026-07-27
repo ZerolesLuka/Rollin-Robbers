@@ -18,17 +18,20 @@ public class Safe : NetworkBehaviour
 
     [SerializeField] private float crackSeconds = 8f;  // how long a single cracker takes to open it. two crackers don't stack - it's presence, not headcount
     [SerializeField] private float crackRange = 2.2f;  // how close a player must stay to keep the meter moving
-    [SerializeField] private GameObject openVisual;    // optional: shown when open (a swung door). leave empty for none
-    [SerializeField] private GameObject closedVisual;  // optional: hidden when open (the closed door)
+    [SerializeField] private SwingingHinge doorHinge;  // the safe's door. leave EMPTY and it finds a SwingingHinge on any child by itself - just add that component to the door mesh. only assign this by hand if the safe has more than one hinged part
 
-    [Header("Loot it spits out when cracked")]
-    [SerializeField] private NetworkObject worldItemPrefab; // the SAME WorldItem prefab the loot system uses
-    [SerializeField] private string lootName = "Cash";
-    [SerializeField] private int lootValueMin = 1500;
-    [SerializeField] private int lootValueMax = 4000;
-    [SerializeField] private int lootItemCount = 3;
+    //LOOT IS DEFERRED ON PURPOSE. A safe spitting its own items meant two systems spawning loot, with two sets of
+    //value/rarity settings to keep in step. It'll go through ItemSpawner like everything else instead - the safe just
+    //opens, and the spawner decides what's inside. Keeping the fields here (unused) so the wiring is obvious later.
+    // [Header("Loot it spits out when cracked")]
+    // [SerializeField] private NetworkObject worldItemPrefab;
+    // [SerializeField] private string lootName = "Jewellery";
+    // [SerializeField] private int lootValueMin = 1500;
+    // [SerializeField] private int lootValueMax = 4000;
+    // [SerializeField] private int lootItemCount = 3;
 
     [Networked] public int SafeId { get; set; }                 // unique per safe, assigned by the spawner. Player.CrackingSafeId points at this
+    [Networked] public int Code { get; set; }                   // 4-digit combination, rolled by the spawner. networked so the note, the keypad and the safe all agree on one number
     [Networked] public float CrackProgress { get; private set; } // 0..1 - drive a progress bar off this
     [Networked] public NetworkBool IsOpen { get; private set; }
     [Networked] public Vector3 SpawnPoint { get; set; }          // same deferred-spawn safeguard as WorldItem - a deferred spawn drops the position arg
@@ -39,6 +42,14 @@ public class Safe : NetworkBehaviour
     public override void Spawned()
     {
         AllSafes.Add(this);
+
+        //the inspector's object picker only lists things that ALREADY have a SwingingHinge, which makes wiring this
+        //by hand a chicken-and-egg annoyance. so: if it's empty, just go find one on a child. drop SwingingHinge on
+        //the door mesh and the safe sorts itself out.
+        if (doorHinge == null)
+        {
+            doorHinge = GetComponentInChildren<SwingingHinge>();
+        }
         if (UseSpawnPoint)
         {
             StartCoroutine(PlaceOnceSpawnPointArrives());
@@ -103,53 +114,51 @@ public class Safe : NetworkBehaviour
         return false;
     }
 
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_TryCode(int attempt, PlayerRef sender) //keypad entry - the RIGHT number skips the whole crack instantly and silently
+    {
+        if (IsOpen) return;
+
+        if (attempt == Code)
+        {
+            CrackProgress = 1f; //jump the meter so anything reading it (a future progress bar) shows a completed safe
+            Open();
+            return;
+        }
+
+        //wrong code just fails. no penalty beyond the time you wasted standing there in the open, which in a stealth
+        //game is penalty enough - and it keeps brute-forcing the keypad strictly worse than brute-forcing the dial.
+        RPC_CodeRejected(sender);
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_CodeRejected(PlayerRef sender) //tell just the person who typed it that it was wrong
+    {
+        if (Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.InputAuthority == sender)
+        {
+            Player.LocalPlayer.OnSafeCodeRejected();
+        }
+    }
+
     private void Open() //runs on the state authority only (gated in FixedUpdateNetwork)
     {
-        IsOpen = true;
+        IsOpen = true; //networked - every client's Render swings their own door off the back of this
 
-        int totalSpawnedValue = 0;
-        for (int itemIndex = 0; itemIndex < lootItemCount; itemIndex++)
-        {
-            int value = Random.Range(lootValueMin, lootValueMax + 1); //declared inside the loop so each closure captures its own value
-            totalSpawnedValue += value;
-
-            Vector3 spawnAt = transform.position + transform.forward * 0.5f + Vector3.up * 0.6f + Random.insideUnitSphere * 0.15f; //shove it out the front so the pile doesn't stack in one spot
-            Runner.Spawn(worldItemPrefab, spawnAt, Random.rotation, PlayerRef.None, (runner, spawnedObject) =>
-            {
-                WorldItem item = spawnedObject.GetComponent<WorldItem>();
-                if (item != null)
-                {
-                    item.ItemName = lootName;
-                    item.Value = value;
-                    item.SpawnPoint = spawnAt;
-                    item.UseSpawnPoint = true;
-                }
-            });
-        }
-
-        //fold the safe's contents into the house total the moment they exist, so the success screen's clear-% counts
-        //them AND can't run over 100% (an uncracked safe simply never enters the tally). ReportHouseLoot adds within
-        //this same scene load, so it sums with whatever ItemSpawner already reported.
-        if (RunManager.Instance != null)
-        {
-            RunManager.Instance.ReportHouseLoot(totalSpawnedValue);
-        }
+        //loot deliberately not spawned here. it'll come from ItemSpawner so there's ONE loot pipeline instead of two
+        //sets of value settings drifting apart. when that lands, tell the spawner the safe opened and let it decide
+        //what's inside - and remember to ReportHouseLoot the total, or the safe's contents push clear-% over 100%.
     }
 
     public override void Render()
     {
-        ApplyVisual(); //keep the open/closed look matched to the networked IsOpen on every client, even as it replicates in
+        ApplyVisual(); //keep the door matched to the networked IsOpen on every client, even as it replicates in
     }
 
     private void ApplyVisual()
     {
-        if (openVisual != null)
+        if (doorHinge != null)
         {
-            openVisual.SetActive(IsOpen);
-        }
-        if (closedVisual != null)
-        {
-            closedVisual.SetActive(!IsOpen);
+            doorHinge.SetOpen(IsOpen); //SwingingHinge ignores a repeat of the state it's already in, so calling this every frame is free
         }
     }
 }

@@ -12,31 +12,52 @@ using UnityEngine.SceneManagement;
 // the pawn shop, or enter/exit a hiding spot. First match wins and returns.
 public partial class Player
 {
-    private void HandleCracking(bool interactHeld)
+    private Safe NearestCrackableSafe()
     {
-        //cracking is a HOLD, not a tap. we don't fill the meter here - we just publish WHICH un-opened safe we're
-        //standing on via networked CrackingSafeId (same one-source-of-truth idea as the hiding spots). the safe
-        //itself reads every player's CrackingSafeId in its FixedUpdateNetwork and advances its own meter. stop
-        //holding, or walk out of range, and CrackingSafeId clears - the meter just pauses, it never resets.
-        Safe target = null;
-        if (interactHeld)
+        Safe nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (Safe safe in Safe.AllSafes)
         {
-            float nearestDistance = float.MaxValue;
-            foreach (Safe safe in Safe.AllSafes)
+            if (safe.IsOpen)
             {
-                if (safe.IsOpen)
-                {
-                    continue; //already cracked
-                }
-                float distance = Vector3.Distance(transform.position, safe.transform.position);
-                if (distance <= safe.CrackRange && distance < nearestDistance)
-                {
-                    nearestDistance = distance;
-                    target = safe;
-                }
+                continue; //already cracked
+            }
+            float distance = Vector3.Distance(transform.position, safe.transform.position);
+            if (distance <= safe.CrackRange && distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = safe;
             }
         }
-        SetCrackingSafe(target != null ? target.SafeId : Safe.NoSafe);
+        return nearest;
+    }
+
+    private void HandleCracking(bool interactHeld)
+    {
+        //E does two different things at a safe. TAP it and the keypad comes up - type the code off the note and it
+        //pops instantly and silently. HOLD it and you brute-force the dial instead: slow, loud, and a genuinely bad
+        //idea with the guard awake. That's the whole risk/reward - go find the note, or gamble that he's far enough away.
+        Safe nearbySafe = NearestCrackableSafe();
+
+        if (interactHeld && nearbySafe != null)
+        {
+            safeInteractHoldTime += Runner.DeltaTime;
+        }
+        else if (!interactHeld)
+        {
+            //released. a SHORT press near a safe was a tap, so bring the keypad up instead of cracking.
+            if (safeInteractHoldTime > 0f && safeInteractHoldTime < safeHoldToCrackTime && nearbySafe != null)
+            {
+                OpenSafeKeypad(nearbySafe);
+            }
+            safeInteractHoldTime = 0f;
+        }
+
+        //only publish that we're cracking once the hold passes the threshold, so a tap never nudges the meter.
+        //the safe reads every player's CrackingSafeId in its own FixedUpdateNetwork and advances itself; let go or
+        //walk out of range and this clears, which PAUSES the meter rather than resetting it.
+        bool actuallyCracking = interactHeld && nearbySafe != null && safeInteractHoldTime >= safeHoldToCrackTime;
+        SetCrackingSafe(actuallyCracking ? nearbySafe.SafeId : Safe.NoSafe);
     }
 
     private void HandleInteract(bool interacting)

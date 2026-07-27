@@ -71,6 +71,8 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
+    [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
+    private float safeInteractHoldTime;                         //how long E has been held at a safe this press
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     private bool wasHiding;
 
@@ -167,6 +169,7 @@ public partial class Player : NetworkBehaviour
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
+        UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
         if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
         HandleLook(); //our player only
