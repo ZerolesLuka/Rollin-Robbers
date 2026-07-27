@@ -424,7 +424,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 7.88, y: -2.252, z: 10.99}
-  m_LocalScale: {x: 1.5, y: 1.5, z: 1.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 4127994732517883691}
@@ -466,10 +466,13 @@ MonoBehaviour:
   landNoiseAmount: 30
   landNoiseDecayRate: 60
   minLandingFallSpeed: 4
+  crackNoiseAmount: 14
   verticalVelocity: 0
   _IsEliminated: 0
   _IsLockedUp: 0
   _IsHiding: 0
+  _HidingSpotId: 0
+  _CrackingSafeId: 0
   playerVisuals: {fileID: 2020982582522420744}
   _IsFlashlightOn: 0
   flashlight: {fileID: 8160274470397713396}
