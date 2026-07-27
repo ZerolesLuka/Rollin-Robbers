@@ -272,7 +272,7 @@ public class DogAI : NetworkBehaviour
             //alertDog:false - the dog IS the one reporting, no point pinging himself. this routes the guard into
             //Searching, which deliberately does NOT raise his anger: a barking dog is worth a look, not a rage.
             //he only really escalates if he opens up and spots someone himself (that's the Chasing anger bump).
-            GuardPatrol.Instance.AlertTo(door.transform.position, false);
+            GuardPatrol.Instance.AlertTo(door.transform.position);
         }
     }
 

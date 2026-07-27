@@ -16,6 +16,8 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float catchRange = 2f; //how close he has to get to grab you
     [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
+    [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
+    [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
     private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
@@ -25,7 +27,6 @@ public class GuardPatrol : NetworkBehaviour
     private Player chaseTarget;//last seen player
     private Player escortTarget; //who he's currently dragging to the closet
     private Vector3 lastKnownPosition; //playerpos
-    private bool alertShouldPingDog = true; //whether the current alert also pulls the dog in - AlertTo sets this; the camera sets it false so it wakes ONLY the guard
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
     private int asleepChancesMax = 3; //false alarms he shrugs off before he stays permanently alert (never drops fully back to sleep)
     private float relaxPatrolTimer;
@@ -33,7 +34,6 @@ public class GuardPatrol : NetworkBehaviour
     private float relaxIdleMax = 8f;
 
     private NavMeshAgent agent; //guard
-    private Transform[] waypoints; //guard patrol
     private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
 
@@ -91,7 +91,6 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates you for the run instead of just jailing you. higher = more forgiving
     [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
 
-    private int currentWaypoint = 0; //used in modulo
 
     public override void Spawned()
     {
@@ -158,9 +157,9 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Relaxed:
                 ListenForNoise();
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
-                if (relaxPatrolTimer <= 0f && waypoints != null && waypoints.Length > 0 && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                if (relaxPatrolTimer <= 0f && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    PickNextWaypoint(); //random non-repeating pick instead of a fixed cycle - a memorized loop is a stealth game's biggest exploit
+                    PickWanderPoint(); //no fixed route at all - he drifts to random reachable spots, so there's nothing to memorise
                     relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit then move again
                 }
                 break;
@@ -332,22 +331,16 @@ public class GuardPatrol : NetworkBehaviour
         }
     }
 
-    public void SetWaypoints(Transform[] points)
-    {
-        waypoints = points; //set the waypoints from the spawner, since we cant set them in the inspector for the guard prefab
-    }
-
     public void SetCloset(Transform spot)
     {
-        closetSpot = spot; //closet lives in the scene, handed over by the spawner like the waypoints
+        closetSpot = spot; //closet lives in the scene, handed over by the spawner at spawn (a prefab can't hold a scene ref)
     }
 
-    public void AlertTo(Vector3 spot, bool alertDog = true) //any sensor (squeaky toy, camera, ...) pings this to send the guard to investigate a spot. pass alertDog=false to wake ONLY the guard (the camera does this)
+    public void AlertTo(Vector3 spot) //any sensor (squeaky toy, camera, the dog barking at a door) pings this to send the guard to investigate a spot. he never passes the alert on to the dog - they hunt independently
     {
         if (!HasStateAuthority) return; //only the master drives the guard
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
-        alertShouldPingDog = alertDog; //the Searching entry reads this to decide whether to pull the dog in too
         ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
     }
 
@@ -408,8 +401,9 @@ public class GuardPatrol : NetworkBehaviour
                 searchPointsThisSweep.Clear(); //fresh search - forget spots checked on a previous alert
                 searchPointsThisSweep.Add(lastKnownPosition); //count the first spot he's heading to so later sweep points don't cluster around it either
                 PlayStateSound(newState); //bark whenever he changes state
-                if (alertShouldPingDog && DogAI.Instance != null) DogAI.Instance.AlertTo(lastKnownPosition); //a confirmed noise pulls the dog toward it too - unless this alert opted out (the camera)
-                alertShouldPingDog = true; //reset: by default the next thing that starts a search DOES pull the dog
+                //the guard deliberately does NOT summon the dog. one mistake pulling BOTH threats onto you spent all
+                //the tension at once and made a single creak feel like a death sentence. they hunt independently now -
+                //the dog can still fetch the guard (that's its whole job), but never the other way round.
                 break;
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;
@@ -418,7 +412,6 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     lastTargetPosition = chaseTarget.transform.position; //reset so the first velocity sample isn't computed against stale data from a previous chase
                     targetVelocity = Vector3.zero;
-                    if (DogAI.Instance != null) DogAI.Instance.AlertTo(chaseTarget.transform.position); //a confirmed sighting pulls the dog in too - two threats converging is meaningfully scarier
                 }
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
@@ -576,22 +569,27 @@ public class GuardPatrol : NetworkBehaviour
         }
     }
 
-    private void PickNextWaypoint() //random non-repeating pick instead of a fixed cycle, so the patrol route can't be memorized
+    private void PickWanderPoint() //no waypoint list: he strolls to random reachable spots around the house instead
     {
-        if (waypoints.Length == 1)
+        //sampling from his SPAWN rather than his current position stops him drifting into a far corner and staying
+        //there - the bed stays the centre of gravity, so he keeps circulating through the house he's guarding.
+        for (int attempt = 0; attempt < 8; attempt++)
         {
-            currentWaypoint = 0;
-            agent.SetDestination(waypoints[0].position);
+            Vector2 randomCircle = Random.insideUnitCircle * patrolRadius;
+            Vector3 candidate = spawnPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
+
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, patrolRadius, NavMesh.AllAreas)) continue;
+            if (Vector3.Distance(hit.position, transform.position) < minPatrolStepDistance) continue; //too close to be worth walking to
+
+            //make sure he can actually GET there. an unreachable point leaves him walking into a wall forever,
+            //because remainingDistance never drops under reachDistance and the Relaxed tick never picks a new spot.
+            NavMeshPath path = new NavMeshPath();
+            if (!agent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete) continue;
+
+            agent.SetPath(path);
             return;
         }
-
-        int nextWaypoint;
-        do
-        {
-            nextWaypoint = Random.Range(0, waypoints.Length);
-        } while (nextWaypoint == currentWaypoint); //never immediately repeat the spot we're already at
-
-        currentWaypoint = nextWaypoint;
-        agent.SetDestination(waypoints[currentWaypoint].position);
+        //nothing valid found this time - just idle, the timer will bring us straight back here
     }
+
 }

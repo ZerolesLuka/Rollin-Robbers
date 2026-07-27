@@ -6,8 +6,7 @@ using UnityEngine;
 public class GuardBootstrap : MonoBehaviour
 {
     [SerializeField] private NetworkObject guardPrefab;
-    [SerializeField] private Transform guardSpawn;
-    [SerializeField] private Transform[] guardWaypoints;
+    [SerializeField] private Transform guardSpawn;   //also the centre of his patrol - he wanders a radius around this, no waypoint list needed
     [SerializeField] private Transform closetSpot;
 
     [SerializeField] private NetworkObject dogPrefab;     //leave null to skip the dog entirely - not every house needs one
@@ -22,7 +21,6 @@ public class GuardBootstrap : MonoBehaviour
             (spawnRunner, obj) =>
             {
                 GuardPatrol guard = obj.GetComponent<GuardPatrol>();
-                guard.SetWaypoints(guardWaypoints);
                 guard.SetCloset(closetSpot);
             });
 
