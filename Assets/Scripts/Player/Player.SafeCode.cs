@@ -15,6 +15,7 @@ public partial class Player
     private Safe keypadSafe;              // which safe we're typing at
     private string typedDigits = "";
     private float codeRejectedFlashTimer; // >0 = show the "wrong" flash
+    private int knownSafeCode;            // a code we've read off a note. 0 = we haven't found one
 
     private const int SafeCodeLength = 4;
 
@@ -37,6 +38,15 @@ public partial class Player
     {
         codeRejectedFlashTimer = 1f;
         typedDigits = "";
+    }
+
+    public void LearnSafeCode(int code) //read a note - the number stays on OUR hud for the rest of the run
+    {
+        if (code <= 0)
+        {
+            return; //the safe this note belonged to is gone
+        }
+        knownSafeCode = code; //local only on purpose. teammates don't magically learn it; you have to say it out loud
     }
 
     private void UpdateSafeKeypad() //called from Update, local player only
@@ -118,6 +128,11 @@ public partial class Player
         if (!HasInputAuthority)
         {
             return; //only our own player draws this
+        }
+
+        if (knownSafeCode > 0) //a code we've read off a note - parked in the corner so you can read it out mid-run
+        {
+            GUI.Label(new Rect(14f, Screen.height - 34f, 260f, 24f), $"Safe code: {knownSafeCode}");
         }
 
         if (codeRejectedFlashTimer > 0f)

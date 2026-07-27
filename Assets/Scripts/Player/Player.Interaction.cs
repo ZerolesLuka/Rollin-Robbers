@@ -96,6 +96,17 @@ public partial class Player
             }
         }
 
+        //reading a safe-code note. doesn't need RunManager, and it's above the doors/van so a note lying on a desk
+        //next to something else still wins - it's a tiny target and the most annoying thing to fail to pick up.
+        foreach (SafeNote note in SafeNote.AllNotes)
+        {
+            if (Vector3.Distance(transform.position, note.transform.position) <= note.ReadRange)
+            {
+                LearnSafeCode(note.ReadCode()); //onto OUR hud only - the whole point is reading it out to whoever's at the safe
+                return;
+            }
+        }
+
         //everything below this point needs the RunManager
         if (RunManager.Instance == null) return;
 
