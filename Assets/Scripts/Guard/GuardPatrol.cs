@@ -21,6 +21,7 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
     [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe
     private bool sawTargetEnterHiding;                          //did we have eyes on the chase target the moment they dove into a spot? if so we know which one
+    private int myRunGeneration;                                //which heist this guard instance belongs to - captured at spawn, stamped onto his saved mood at despawn
     private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
@@ -112,9 +113,15 @@ public class GuardPatrol : NetworkBehaviour
 
         //every scene load despawns and respawns him, so a fresh roll here would mean walking out an exit door and
         //back in handed the players a brand-new guard with no anger and factory-reset ears. carry his mood over
-        //instead; RunManager only clears it when a genuinely new run begins.
-        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
-            && RunManager.Instance.HasSavedGuardState)
+        //instead - but ONLY if it belongs to the run we're currently in.
+        bool runManagerLive = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid;
+        myRunGeneration = runManagerLive ? RunManager.Instance.RunGeneration : 0; //remember which run WE live in, so our own Despawned can stamp the mood correctly
+
+        //the generation check is what makes this safe: Fusion fires Despawned() a tick or more AFTER Runner.Despawn(),
+        //so the old guard banks his mood AFTER ResetForNewRun has already cleared it. Comparing generations means a
+        //mood from the previous heist simply doesn't match, no matter which order the two things happen in.
+        if (runManagerLive && RunManager.Instance.HasSavedGuardState
+            && RunManager.Instance.SavedGuardRunGeneration == RunManager.Instance.RunGeneration)
         {
             Anger = RunManager.Instance.SavedGuardAnger;
             noiseThreshold = RunManager.Instance.SavedGuardNoiseThreshold;
@@ -353,6 +360,7 @@ public class GuardPatrol : NetworkBehaviour
             RunManager.Instance.SavedGuardAnger = Anger;
             RunManager.Instance.SavedGuardNoiseThreshold = noiseThreshold;
             RunManager.Instance.SavedGuardAsleepChances = asleepChances;
+            RunManager.Instance.SavedGuardRunGeneration = myRunGeneration; //stamp it with the run we LIVED in, captured at spawn - not the current one, which a new heist may already have bumped
             RunManager.Instance.HasSavedGuardState = true;
         }
     }
@@ -362,8 +370,15 @@ public class GuardPatrol : NetworkBehaviour
         closetSpot = spot; //closet lives in the scene, handed over by the spawner at spawn (a prefab can't hold a scene ref)
     }
 
+    //Runner.Despawn only QUEUES the despawn - Despawned() (which nulls Instance) runs a tick or more later. In that
+    //window every sensor still sees a non-null Instance while the networked properties are already dead, and reading
+    //State throws "Networked properties can only be accessed when Spawned() has been called". Every public entry
+    //point checks this first.
+    private bool IsLive => Object != null && Object.IsValid;
+
     public void AlertTo(Vector3 spot) //any sensor (squeaky toy, camera, the dog barking at a door) pings this to send the guard to investigate a spot. he never passes the alert on to the dog - they hunt independently
     {
+        if (!IsLive) return; //despawned or mid-despawn - touching State here would throw
         if (!HasStateAuthority) return; //only the master drives the guard
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
@@ -372,6 +387,7 @@ public class GuardPatrol : NetworkBehaviour
 
     public void RegisterFloorboardCreak(Vector3 spot) //floorboards don't alert on a single creak - it takes several in a row before he bothers to come look
     {
+        if (!IsLive) return; //same mid-despawn guard as AlertTo
         if (!HasStateAuthority) return;
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //busy - ignore creaks
 
