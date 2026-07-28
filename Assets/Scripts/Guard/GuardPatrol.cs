@@ -18,6 +18,8 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
+    [SerializeField] private float wakeUpHoldTime = 1.5f;       //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
+    private float wakeUpHoldTimer;                              //counts down while he's climbing to his feet
     [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
     [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe
     private bool sawTargetEnterHiding;                          //did we have eyes on the chase target the moment they dove into a spot? if so we know which one
@@ -45,6 +47,7 @@ public class GuardPatrol : NetworkBehaviour
     private GuardHearing hearing; //reusable ears component - noise perception config (range/threshold) lives there
 
     private GuardAudio guardAudio; //reusable voice component - AudioSource + bark clips + the networked bark RPC live there
+    private GuardAnimation guardAnimation; //drives the Animator; we ask it whether the get-up clip is still running
 
     private float searchSweepRadius = 6f;
     [SerializeField] private int maximumSearchSweepPoints = 3; //spots he checks before giving up a search - bigger = he hunts longer
@@ -104,6 +107,7 @@ public class GuardPatrol : NetworkBehaviour
         vision = GetComponent<GuardVision>(); //reusable sight component sits on the same GameObject
         hearing = GetComponent<GuardHearing>(); //reusable ears component sits on the same GameObject
         guardAudio = GetComponent<GuardAudio>(); //reusable voice component sits on the same GameObject
+        guardAnimation = GetComponent<GuardAnimation>(); //optional - he still works headless, just without the clip-length hold
         if (!HasStateAuthority)
         {
             agent.enabled = false;
@@ -146,6 +150,28 @@ public class GuardPatrol : NetworkBehaviour
             searchNoiseReactionTimer -= Runner.DeltaTime;
         }
         if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
+
+        //just woken - pin him in place until the standing-up animation has played out. without this he'd be pathing
+        //off to investigate while the clip still has him flat on the floor, which reads as him sliding through the
+        //ground. he's a free hit for a moment, which is a fair trade for it not looking broken.
+        //
+        //the timer covers the gap before the Animator has actually entered the get-up state (the bool takes a tick or
+        //two to propagate); GuardAnimation then holds him for as long as the clip really runs. that way the clip
+        //length is the source of truth and there's no magic number to keep in sync when the animation is swapped.
+        bool stillGettingUp = guardAnimation != null && guardAnimation.IsGettingUp;
+        if (wakeUpHoldTimer > 0f || stillGettingUp)
+        {
+            if (wakeUpHoldTimer > 0f)
+            {
+                wakeUpHoldTimer -= Runner.DeltaTime;
+            }
+            agent.ResetPath();                     //drop whatever destination woke him; he'll re-path once he's up
+            //push the AGENT to us, not us to the agent. it used to be the other way round, and that was the bug:
+            //his bed isn't on the NavMesh, so the agent sits on the floor beside it - and dragging the transform onto
+            //the agent every tick slid him off the mattress the instant he started waking.
+            agent.nextPosition = transform.position;
+            return;
+        }
 
         TickAnger(); //rise while chasing, cool while calm
         CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
@@ -409,6 +435,13 @@ public class GuardPatrol : NetworkBehaviour
 
     private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry
     {
+        //leaving Asleep means he's climbing off the floor - start the hold BEFORE State changes, since we need to
+        //know what he was, not what he's becoming
+        if (State == GuardState.Asleep && newState != GuardState.Asleep)
+        {
+            wakeUpHoldTimer = wakeUpHoldTime;
+        }
+
         State = newState;
 
         //clear the manual scan on every transition, so FaceMovementDirection takes his facing back. covers spotting a

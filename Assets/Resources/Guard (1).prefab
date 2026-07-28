@@ -104,6 +104,7 @@ MonoBehaviour:
   doorOpenRange: 1.8
   patrolRadius: 25
   minPatrolStepDistance: 4
+  wakeUpHoldTime: 3
   hidingSearchRange: 3.5
   hidingNoiseTolerance: 5
   alertConfirmTime: 1.5
@@ -307,8 +308,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GuardAnimation
   animator: {fileID: 1668768764583884663}
+  guard: {fileID: 304236841041207335}
   speedSmoothing: 8
   speedParameter: Speed
+  asleepParameter: Asleep
+  sleepSpeedThreshold: 0.15
+  maxPlausibleSpeed: 12
+  modelRoot: {fileID: 4740184349271911693}
+  sleepPositionOffset: {x: 2.57, y: -0.15, z: -1.08}
+  sleepRotationOffset: {x: 14, y: 10.77, z: 0}
+  sleepOffsetBlendSpeed: 0.33
+  wakingStateName: WakingUp
 --- !u!1001 &5062677033906768614
 PrefabInstance:
   m_ObjectHideFlags: 0
