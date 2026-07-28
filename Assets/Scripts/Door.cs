@@ -44,19 +44,62 @@ public class Door : MonoBehaviour
         }
     }
 
-    public static Door FindClosedDoorNear(Vector3 position, float range) //used by the AIs to spot a shut door in their way
+    public static Door FindClosedDoorNear(Vector3 position, float range) //nearest shut door, any direction. the dog uses this to sniff at a door someone slammed
     {
+        Door nearest = null;
+        float nearestDistance = float.MaxValue;
         foreach (Door door in AllDoors)
         {
             if (door.IsOpen)
             {
                 continue;
             }
-            if (Vector3.Distance(door.transform.position, position) <= range)
+            float distance = Vector3.Distance(door.transform.position, position);
+            if (distance <= range && distance < nearestDistance)
             {
-                return door;
+                nearestDistance = distance;
+                nearest = door;
             }
         }
-        return null;
+        return nearest;
+    }
+
+    //Nearest shut door that's also roughly in FRONT of the walker - the one they're about to walk into, rather than
+    //one they're strolling past. Kept separate from the plain distance search because the guard needs the direction
+    //test and the dog doesn't.
+    //
+    //minFacingDot has to be forgiving, and here's why: this script sits on the HINGE, not the middle of the doorway.
+    //Walk straight at a door and its pivot is off to one side, so the angle from your forward to the pivot is wide -
+    //nearly 90 degrees by the time you're close. A tight cone therefore rejects every door you're actually heading
+    //through, which is exactly how the guard ended up ignoring all of them.
+    public static Door FindClosedDoorAhead(Vector3 position, Vector3 facing, float range, float minFacingDot)
+    {
+        Door best = null;
+        float bestDistance = float.MaxValue;
+        foreach (Door door in AllDoors)
+        {
+            if (door.IsOpen)
+            {
+                continue;
+            }
+
+            Vector3 towardDoor = door.transform.position - position;
+            towardDoor.y = 0f;
+            float distance = towardDoor.magnitude;
+            if (distance > range)
+            {
+                continue;
+            }
+            if (distance > 0.01f && Vector3.Dot(facing, towardDoor / distance) < minFacingDot)
+            {
+                continue; //behind him, or well off to the side - not one he's walking into
+            }
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = door;
+            }
+        }
+        return best;
     }
 }

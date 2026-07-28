@@ -555,14 +555,13 @@ public class GuardPatrol : NetworkBehaviour
         //while it was still opening and clip straight through it. giving him roughly half a second of lead fixes it.
         float lookAhead = Mathf.Max(doorOpenRange, agent.speed * 0.5f);
 
-        Door shutDoor = Door.FindClosedDoorNear(transform.position, lookAhead);
+        //only shove open a door he's actually walking INTO, so he doesn't fling open every door in a hallway and hand
+        //the players a lit-up trail of where he's been. that direction test used to live here with a 0.5 dot (a 60
+        //degree cone) and it rejected essentially every door in the house - the Door script sits on the HINGE, which
+        //is off at the EDGE of the doorway, so walking straight through one puts its pivot almost side-on to him.
+        //0.1 is "anything not actually behind me", which is the honest version of the question we're asking.
+        Door shutDoor = Door.FindClosedDoorAhead(transform.position, transform.forward, lookAhead, 0.1f);
         if (shutDoor == null) return;
-
-        //only shove open a door he's actually walking INTO. without this he flings open every door he passes in a
-        //hallway, which both looks mad and hands the players a lit-up trail of where he's been.
-        Vector3 towardDoor = shutDoor.transform.position - transform.position;
-        towardDoor.y = 0f;
-        if (Vector3.Dot(transform.forward, towardDoor.normalized) < 0.5f) return; //not roughly ahead of him (~60 degree cone)
 
         shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
         RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true);  //and tell every other client to swing their copy

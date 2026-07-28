@@ -160,10 +160,23 @@ public partial class Player : NetworkBehaviour
     {
         UpdateVoiceMuffle(); //taped mouth: low-pass this player's runtime voice Speaker while locked up. Runs on ALL clients so every teammate hears the muffle, driven by the [Networked] IsLockedUp
 
-        if (playerVisuals != null && Object != null && Object.IsValid && IsHiding != wasHiding)
+        //hiding has to switch off the BODY as well as the mesh. it used to only hide the visuals, which left a live
+        //CharacterController standing in the closet - teammates walked into an invisible person blocking the doorway.
+        //runs on every client, because it's the remote copy of you that everyone else actually collides with.
+        if (Object != null && Object.IsValid && IsHiding != wasHiding)
         {
             wasHiding = IsHiding;
-            playerVisuals.SetActive(!IsHiding); // runs on all clients so other players see you vanish
+            if (playerVisuals != null)
+            {
+                playerVisuals.SetActive(!IsHiding); // runs on all clients so other players see you vanish
+            }
+            if (characterController != null)
+            {
+                //climbing OUT only gives the body back if nothing else is holding it - being ripped from a closet by
+                //the guard clears IsHiding on the same tick he starts dragging you, and re-enabling here would undo
+                //the freeze he just applied.
+                characterController.enabled = !IsHiding && !IsLockedUp && !IsEliminated && !isBeingDragged;
+            }
         }
 
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
