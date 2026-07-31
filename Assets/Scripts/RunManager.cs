@@ -179,18 +179,20 @@ public class RunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]
-    public void RPC_SetDoorOpen(Vector3 doorPosition, NetworkBool open) //ONE path for every door change - players pressing E, and the guard/dog shoving one open. doors aren't NetworkObjects, so we identify one by WHERE it is: static scene geometry sits at identical coordinates on every client, so "nearest door to this point" resolves the same for everyone, with nothing to configure per door
+    public void RPC_SetDoorOpen(Vector3 doorPosition, NetworkBool open) //ONE path for EVERY openable - house doors, cupboards, drawers, jewellery boxes - whether a player pressed E or the guard shoved it. none of them are NetworkObjects, so we identify one by WHERE it is: static scene geometry sits at identical coordinates on every client, so "nearest hinge to this point" resolves the same for everyone, with nothing to configure per object
     {
-        const float maxDoorMatchDistance = 1f; //the match must be essentially exact. without a cap, "nearest" would happily grab a door on the far side of the house - or one lingering in the static list from the scene we just left (SpawnPoint hit exactly that) - and swing the wrong one
-        Door nearest = null;
+        //searches SwingingHinge rather than Door on purpose. every door owns a hinge, so doors are still covered, but
+        //a prop no longer needs a Door component bolted on just to be openable - one script per object, as intended.
+        const float maxDoorMatchDistance = 1f; //the match must be essentially exact. without a cap, "nearest" would happily grab something on the far side of the house - or one lingering in the static list from the scene we just left (SpawnPoint hit exactly that) - and swing the wrong one
+        SwingingHinge nearest = null;
         float nearestDistance = maxDoorMatchDistance;
-        foreach (Door door in Door.AllDoors)
+        foreach (SwingingHinge hinge in SwingingHinge.AllHinges)
         {
-            float distance = Vector3.Distance(door.transform.position, doorPosition);
+            float distance = Vector3.Distance(hinge.transform.position, doorPosition);
             if (distance < nearestDistance)
             {
                 nearestDistance = distance;
-                nearest = door;
+                nearest = hinge;
             }
         }
         if (nearest != null)

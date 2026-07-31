@@ -1,70 +1,109 @@
+using System.Collections.Generic;
 using UnityEngine;
 
-// A thing that swings open on a hinge: house doors, safe doors, cupboards. Pure presentation - it owns the rotation,
-// the settle wobble and the sound, and nothing else. WHO is allowed to open it, and how that syncs across the
-// network, is the caller's problem (Door routes through RunManager.RPC_SetDoorOpen; Safe opens itself once its
-// crack meter fills). Put this on the object that should rotate, with its pivot at the hinge edge.
+// Anything that opens: house doors, cupboards, drawers, the safe, a jewellery box lid. Put this on the part that
+// MOVES, with its pivot at the hinge (or at the closed position, for a drawer) - the parent body gets nothing.
 //
-// Every hinge rolls its own personality (open angle, swing speed, wobble) from its POSITION rather than a plain
-// Random. These aren't networked, so independent rolls would leave the same door resting at a different angle on
-// every screen. Hashing the position means every machine derives identical numbers with zero syncing - and a given
-// hinge always behaves like itself, which is how a real door with a real weight actually works.
+// This is the whole interaction: a prop needs NOTHING but this component to be openable. Door is a separate marker
+// that only tells the guard AI "this particular openable is a house door worth shoving through".
+//
+// It's NOT a NetworkObject. Every change routes through RunManager.RPC_SetDoorOpen, which finds the hinge by its
+// POSITION - static scene geometry sits at identical coordinates on every machine, so the same object resolves for
+// everyone with nothing to number or wire per object.
+//
+// Each hinge also rolls its own personality from that position rather than a plain Random. Every client hashes the
+// same coordinates and derives identical numbers, so a given drawer behaves like itself on every screen with zero
+// syncing. Swapping this for UnityEngine.Random would leave the same drawer resting at a different depth per player.
 public class SwingingHinge : MonoBehaviour
 {
-    [SerializeField] private float openAngle = 90f;   // how far it swings, degrees around local up. negative swings the other way
-    [SerializeField] private float swingSpeed = 300f; // degrees per second
+    //which local axis it turns around (swing) or travels along (slide)
+    public enum HingeAxis
+    {
+        X,
+        Y,
+        Z
+    }
 
-    [Header("Per-hinge character - rolled from its position, so it's identical on every client")]
-    [SerializeField] private float angleVariation = 8f;    // +/- degrees off openAngle, so they don't all rest at exactly 90
-    [SerializeField] private float speedVariation = 0.25f; // +/- fraction of swingSpeed - some are heavy, some light
+    public static readonly List<SwingingHinge> AllHinges = new List<SwingingHinge>();
 
-    [Header("Settle wobble once it finishes opening")]
-    [SerializeField] private float minSwayAngle = 1.5f;
-    [SerializeField] private float maxSwayAngle = 4f;
-    [SerializeField] private float minSwayFrequency = 0.8f;
-    [SerializeField] private float maxSwayFrequency = 1.6f;
-    [SerializeField] private float swayDamping = 1.8f;     // higher = settles quicker
+    [SerializeField] private float interactRange = 2f;  // how close a player must be. tighten this for small props
+    [SerializeField] private HingeAxis axis = HingeAxis.Y;
+    [SerializeField] private bool slidesOpen;           // TICK FOR CABINETS AND DRAWERS - pushes straight out along the axis instead of swinging round it
+    [SerializeField] private float openAngle = 90f;     // swing mode: degrees. negative goes the other way
+    [SerializeField] private float slideDistance = 0.4f; // slide mode: metres. negative goes the other way
+    [SerializeField] private float openSpeed = 3f;      // how many times per second it could open fully. 3 = about a third of a second
 
     [Header("Sound - drop in as many clips as you like, one is picked at random")]
     [SerializeField] private AudioClip[] openClips;
-    [SerializeField] private AudioClip[] closeClips;  // leave empty and it reuses the open clips
-    [SerializeField, Range(0f, 1f)] private float volume = 0.7f;
-    [SerializeField] private float minPitch = 0.92f;  // every play is pitched slightly differently, so the same clip
-    [SerializeField] private float maxPitch = 1.08f;  // never sounds copy-pasted across a house full of doors
-    [SerializeField] private float soundMaxDistance = 18f;
+    [SerializeField] private AudioClip[] closeClips;    // leave empty and it reuses the open clips
+
+    //not worth an inspector slot each - these are feel constants, identical on every openable in the game
+    private const float SpeedVariation = 0.25f;      // +/- fraction of openSpeed, so some are heavy and some are light
+    private const float MinOpenFraction = 0.85f;     // an open never goes FURTHER than authored, just sometimes less
+    private const float Volume = 0.7f;
+    private const float MinPitch = 0.92f;
+    private const float MaxPitch = 1.08f;
+    private const float SoundMaxDistance = 18f;
 
     private Quaternion closedRotation;
+    private Vector3 closedPosition;
     private bool isOpen;
     private AudioSource hingeAudio;
 
-    private float currentAngle;      // degrees from closed, driven toward the target each frame
-    private float myOpenAngle;
-    private float mySwingSpeed;
-    private float mySwayAngle;
-    private float mySwayFrequency;
-    private float swayTimer = -1f;   // -1 = not wobbling; counts up while the settle plays out
+    private float openProgress;      // 0 = shut, 1 = fully open. drives both modes, so one speed covers degrees and metres alike
+    private float mySpeed;
+    private float thisOpenFraction = 1f; // re-rolled each time it opens, so it doesn't land in exactly the same spot twice
+    private int openCount;           // feeds the per-open roll. bumped in SetOpen, which every client runs off the same RPC
+    private int positionSeed;
 
     public bool IsOpen => isOpen;
+    public float InteractRange => interactRange;
+
+    private void OnEnable()
+    {
+        AllHinges.Add(this);
+    }
+
+    private void OnDisable()
+    {
+        AllHinges.Remove(this); //a scene change destroys these, and a stale entry would have the player reaching for something that no longer exists
+    }
+
+    //Nearest openable within its OWN interact range - each carries its own, because a wardrobe and a jewellery box
+    //shouldn't be grabbable from the same distance.
+    public static SwingingHinge FindNearest(Vector3 position)
+    {
+        SwingingHinge nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (SwingingHinge hinge in AllHinges)
+        {
+            float distance = Vector3.Distance(hinge.transform.position, position);
+            if (distance <= hinge.interactRange && distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = hinge;
+            }
+        }
+        return nearest;
+    }
 
     private void Awake()
     {
-        closedRotation = transform.localRotation; // wherever it's placed in the scene = the closed pose
+        closedRotation = transform.localRotation; // wherever it's placed in the scene IS the closed pose, for both modes
+        closedPosition = transform.localPosition;
 
         //round the coordinates to centimetres FIRST, then multiply. multiplying the float by a huge prime and only
         //then converting overflows int (a house at x=-71 gives -71 * 73856093, about -5.2 billion against an int
         //ceiling of 2.1 billion) - everything clamps to the same value and comes out identical. int overflow on the
         //multiply below is fine: C# wraps it deterministically, so every machine still lands on the same seed.
-        int positionSeed = (Mathf.RoundToInt(transform.position.x * 100f) * 73856093)
-                         ^ (Mathf.RoundToInt(transform.position.y * 100f) * 83492791)
-                         ^ (Mathf.RoundToInt(transform.position.z * 100f) * 19349663);
+        positionSeed = (Mathf.RoundToInt(transform.position.x * 100f) * 73856093)
+                     ^ (Mathf.RoundToInt(transform.position.y * 100f) * 83492791)
+                     ^ (Mathf.RoundToInt(transform.position.z * 100f) * 19349663);
+
         System.Random hingeRandom = new System.Random(positionSeed & 0x7FFFFFFF); //force non-negative: System.Random(int.MinValue) throws on some runtimes
+        mySpeed = openSpeed * RollBetween(hingeRandom, 1f - SpeedVariation, 1f + SpeedVariation);
 
-        myOpenAngle = openAngle + RollBetween(hingeRandom, -angleVariation, angleVariation);
-        mySwingSpeed = swingSpeed * RollBetween(hingeRandom, 1f - speedVariation, 1f + speedVariation);
-        mySwayAngle = RollBetween(hingeRandom, minSwayAngle, maxSwayAngle);
-        mySwayFrequency = RollBetween(hingeRandom, minSwayFrequency, maxSwayFrequency);
-
-        //built in code so a hinge needs nothing wired in the inspector beyond the clips. 3D on purpose: one swinging
+        //built in code so a hinge needs nothing wired in the inspector beyond the clips. 3D on purpose: one opening
         //across the house should be faint, one behind you should make you jump.
         hingeAudio = gameObject.AddComponent<AudioSource>();
         hingeAudio.playOnAwake = false;
@@ -72,7 +111,7 @@ public class SwingingHinge : MonoBehaviour
         hingeAudio.spatialBlend = 1f;
         hingeAudio.rolloffMode = AudioRolloffMode.Linear;
         hingeAudio.minDistance = 1.5f;
-        hingeAudio.maxDistance = soundMaxDistance;
+        hingeAudio.maxDistance = SoundMaxDistance;
     }
 
     private static float RollBetween(System.Random source, float min, float max)
@@ -80,38 +119,41 @@ public class SwingingHinge : MonoBehaviour
         return min + (float)source.NextDouble() * (max - min);
     }
 
+    private Vector3 AxisVector()
+    {
+        switch (axis)
+        {
+            case HingeAxis.X:
+            {
+                return Vector3.right;
+            }
+            case HingeAxis.Z:
+            {
+                return Vector3.forward;
+            }
+            default:
+            {
+                return Vector3.up;
+            }
+        }
+    }
+
     private void Update()
     {
-        //ease toward the current state every frame - a clean swing, not a snap. any collider rides along with the
-        //object, so as it rotates open the gap physically clears; rotate closed and it blocks again.
-        float targetAngle = isOpen ? myOpenAngle : 0f;
-        float angleBeforeThisFrame = currentAngle;
-        currentAngle = Mathf.MoveTowards(currentAngle, targetAngle, mySwingSpeed * Time.deltaTime);
+        //one 0-to-1 progress value drives both modes, which is why a single speed field can cover degrees and metres
+        //without caring which. ease toward it every frame - a clean movement, not a snap. any collider rides along,
+        //so as it opens the gap physically clears and closing blocks it again.
+        float target = isOpen ? 1f : 0f;
+        openProgress = Mathf.MoveTowards(openProgress, target, mySpeed * Time.deltaTime);
 
-        //the exact frame it finishes swinging OPEN, kick off the settle wobble. closing doesn't wobble - a shut door
-        //is stopped dead by its own frame. the "moved this frame" half stops it re-triggering while it rests.
-        bool justFinishedOpening = isOpen && angleBeforeThisFrame != currentAngle && Mathf.Approximately(currentAngle, targetAngle);
-        if (justFinishedOpening)
+        if (slidesOpen)
         {
-            swayTimer = 0f;
+            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * openProgress);
         }
-
-        float swayOffset = 0f;
-        if (swayTimer >= 0f)
+        else
         {
-            swayTimer += Time.deltaTime;
-            float decay = Mathf.Exp(-swayDamping * swayTimer); //exponential decay = wobbles hard, then noticeably less, then stops
-            if (decay < 0.01f)
-            {
-                swayTimer = -1f; //settled - switch the whole calculation off rather than drift forever at invisible amplitudes
-            }
-            else
-            {
-                swayOffset = mySwayAngle * decay * Mathf.Sin(swayTimer * mySwayFrequency * Mathf.PI * 2f);
-            }
+            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * openProgress, AxisVector());
         }
-
-        transform.localRotation = closedRotation * Quaternion.Euler(0f, currentAngle + swayOffset, 0f);
     }
 
     public void SetOpen(bool open)
@@ -119,6 +161,16 @@ public class SwingingHinge : MonoBehaviour
         if (isOpen == open)
         {
             return; //already in that state - bail before the sound, so a caller re-asserting "open" every tick can't machine-gun the creak
+        }
+
+        if (open)
+        {
+            //re-roll how far it goes THIS time, so the same drawer never lands in quite the same spot twice. seeded
+            //from position AND how many times it's been opened, so every client rolls the same number - they all run
+            //this off the same RPC, so their open counts advance together.
+            openCount++;
+            System.Random openRandom = new System.Random((positionSeed ^ (openCount * 73856093)) & 0x7FFFFFFF);
+            thisOpenFraction = RollBetween(openRandom, MinOpenFraction, 1f);
         }
 
         isOpen = open; //explicit state, not a toggle - two callers on the same tick can't flip it twice and cancel out
@@ -140,7 +192,7 @@ public class SwingingHinge : MonoBehaviour
             return; //an empty slot in the array
         }
 
-        hingeAudio.pitch = Random.Range(minPitch, maxPitch); //random pitch per play - the cheapest way to stop repetition fatigue
-        hingeAudio.PlayOneShot(clip, volume);
+        hingeAudio.pitch = Random.Range(MinPitch, MaxPitch); //random pitch per play - the cheapest way to stop repetition fatigue
+        hingeAudio.PlayOneShot(clip, Volume);
     }
 }

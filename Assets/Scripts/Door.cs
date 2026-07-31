@@ -1,21 +1,24 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// A house door. Players open it with E; the guard and dog shove it open when they walk into one. It's NOT a
+// Marks a SwingingHinge as a HOUSE DOOR, which matters only to the AI.
+//
+// This script does NOT make something openable - SwingingHinge does that on its own, and props (cupboards, drawers,
+// jewellery boxes) need nothing but the hinge. Door exists purely so the guard and dog can ask "where's the nearest
+// shut door in my way" without also being handed every kitchen drawer in the house. Add it ONLY to real doors.
+//
+// The swinging, wobble and sound all live in SwingingHinge, which the safe and every prop use too. It's NOT a
 // NetworkObject - every change goes through RunManager.RPC_SetDoorOpen and each client swings its OWN copy, so
 // scene-placed doors sidestep Fusion's scene-object enrolment problem the loot ran into. That RPC identifies a
 // door by its POSITION, so there's nothing to number or wire per door. Doors start closed on scene load.
 //
-// The actual swinging, wobble and sound all live in SwingingHinge, which the safe uses too. This script is just the
-// door-specific part: the registry the AIs search, and the interact range. The hinge MUST sit at the door's pivot -
-// if a door's pivot is at its centre it'll spin in place, so parent the mesh under an empty placed at the hinge.
-// Put the door on the guard's obstacle layer (Enviorment) so a CLOSED door blocks his line of sight.
+// The hinge MUST sit at the door's pivot - if a door's pivot is at its centre it'll spin in place, so parent the
+// mesh under an empty placed at the hinge. Put the door on the guard's obstacle layer (Enviorment) so a CLOSED door
+// blocks his line of sight.
 [RequireComponent(typeof(SwingingHinge))]
 public class Door : MonoBehaviour
 {
     public static readonly List<Door> AllDoors = new List<Door>();
-
-    [SerializeField] public float interactRange = 2f;
 
     private SwingingHinge hinge;
 

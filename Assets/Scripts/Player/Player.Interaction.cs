@@ -125,17 +125,13 @@ public partial class Player
             }
         }
 
-        Door nearestSwingDoor = null;
-        float nearestSwingDistance = float.MaxValue;
-        foreach (Door swingDoor in Door.AllDoors)
-        {
-            float distanceToDoor = Vector3.Distance(transform.position, swingDoor.transform.position);
-            if (distanceToDoor <= swingDoor.interactRange && distanceToDoor < nearestSwingDistance)
-            {
-                nearestSwingDoor = swingDoor;
-                nearestSwingDistance = distanceToDoor;
-            }
-        }
+        //ANY openable, not just doors. searching SwingingHinge instead of Door means a cupboard, a drawer or a
+        //jewellery box is interactive with that one component on it - no Door script bolted on to props that aren't
+        //doors. house doors still turn up here because every door owns a hinge.
+        SwingingHinge nearestSwingDoor = SwingingHinge.FindNearest(transform.position);
+        float nearestSwingDistance = nearestSwingDoor != null
+            ? Vector3.Distance(transform.position, nearestSwingDoor.transform.position)
+            : float.MaxValue;
 
         if (nearestExit != null || nearestSwingDoor != null)
         {
