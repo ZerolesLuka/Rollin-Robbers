@@ -3,45 +3,58 @@ using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 
-// A tripwire the GUARD leaves behind. He drops one at the spot he just finished searching and found nothing - so the
-// rooms you keep robbing are the rooms that quietly fill up with these. Walk into one and it snaps, and he comes
-// straight back to it. That's the whole loop: the house gets more dangerous in exactly the places you keep working.
+// Something nasty the guard leaves behind after he loses sight of you. He doesn't wire the exact spot he searched -
+// he remembers roughly WHERE he last saw someone and seeds that area, so the parts of the house you keep working
+// slowly turn hostile without him ever being clairvoyant about it.
 //
-// Runtime-spawned by GuardPatrol, never scene-placed - Fusion Shared Mode doesn't enrol scene NetworkObjects
-// reliably, same reason Safe and the loot are spawned too.
+// Three kinds, and the kind is baked into the PREFAB rather than networked - every client loads the same prefab, so
+// they already agree on what it is with nothing sent over the wire. Give each kind its own prefab, mesh and clip:
+//   Tripwire       - strung across a doorway. Alerts him, nothing else. Cheap and everywhere.
+//   BearTrap       - on open floor. PINS you where you stand and you make a racket doing it. The genuinely scary one.
+//   ProximityAlarm - wide radius, no physical grab, but it screams and brings the dog too.
 //
-// Detection is the SqueakyToy trick rather than a physics trigger: trigger events don't fire for remote players
-// (they move by NetworkTransform, not CharacterController.Move), so we read replicated positions on the authority
-// instead. Works for everyone, needs no collider.
+// Runtime-spawned, never scene-placed: Fusion Shared Mode doesn't enrol scene NetworkObjects reliably, same reason
+// Safe and the loot are spawned. Detection reads replicated positions on the authority rather than using a trigger
+// collider, because trigger events never fire for remote players (they move by NetworkTransform, not
+// CharacterController.Move) - the same trick SqueakyToy uses.
 [RequireComponent(typeof(NetworkObject))]
 public class GuardTrap : NetworkBehaviour
 {
+    public enum TrapKind { Tripwire, BearTrap, ProximityAlarm }
+
     public static readonly List<GuardTrap> AllTraps = new List<GuardTrap>();
 
-    [SerializeField] private float triggerRadius = 1.2f;   // how close you have to step. small on purpose - this should feel like bad luck or bad looking, not an aura
-    [SerializeField] private float disarmRange = 2f;       // how close you must be to defuse it with E. bigger than the trigger radius would be a joke, so keep it modest
-    [SerializeField] private float armDelay = 1.5f;        // he's stood right next to it as he sets it, and so might you be. don't let it fire the instant it lands
-    [SerializeField] private AudioClip snapClip;           // the sound of it going off. heard by everyone nearby, 3D
-    [SerializeField] private AudioClip disarmClip;         // optional, plays when a player defuses it
+    [SerializeField] private TrapKind kind = TrapKind.Tripwire; //set per PREFAB. not networked - the prefab is identical on every machine, so they already agree
+    [SerializeField] private float triggerRadius = 1.2f;        //how close you have to step. keep it tight for a tripwire, wide for an alarm
+    [SerializeField] private float disarmRange = 2f;            //reach to defuse it with E. should be comfortably bigger than triggerRadius or you'd have to stand ON it to disarm it
+    [SerializeField] private float armDelay = 1.5f;             //he's stood right next to it as he sets it, and so might you be. don't let it fire the instant it lands
+
+    [Header("BearTrap only")]
+    [SerializeField] private float holdSeconds = 4f;            //how long it pins you. long enough for him to cover a room, short enough not to feel like a death sentence
+
+    [Header("Sound")]
+    [SerializeField] private AudioClip springClip;              //it going off. 3D, so the room it happened in is the information
+    [SerializeField] private AudioClip disarmClip;              //optional - defusing it
     [SerializeField, Range(0f, 1f)] private float volume = 0.85f;
     [SerializeField] private float soundMaxDistance = 25f;
 
-    [Networked] public Vector3 SpawnPoint { get; set; }      // same deferred-spawn safeguard as Safe/SafeNote/WorldItem - a deferred spawn silently drops the position argument
+    [Networked] public Vector3 SpawnPoint { get; set; }      //same deferred-spawn safeguard as Safe/SafeNote/WorldItem - a deferred spawn silently drops the position argument
     [Networked] public NetworkBool UseSpawnPoint { get; set; }
-    [Networked] private NetworkBool tripped { get; set; }    // stops a second player triggering it in the tick before it despawns
+    [Networked] private NetworkBool sprung { get; set; }     //stops a second player setting it off in the tick before it despawns
 
     private float armTimer;
     private AudioSource trapAudio;
 
-    public float DisarmRange => disarmRange; // the player's interaction scan reads this
+    public TrapKind Kind => kind;              //the guard reads this off a prefab to decide which one suits a spot
+    public float DisarmRange => disarmRange;   //the player's interaction scan reads this
 
     public override void Spawned()
     {
         AllTraps.Add(this);
         armTimer = armDelay;
 
-        //built in code so the prefab needs nothing wired but the clips. 3D so you can hear WHICH room it went off in -
-        //that's the information the sound is actually carrying.
+        //built in code so a trap prefab needs nothing wired but its clips. 3D on purpose - hearing WHICH room it went
+        //off in is the whole point of the sound.
         trapAudio = gameObject.AddComponent<AudioSource>();
         trapAudio.playOnAwake = false;
         trapAudio.loop = false;
@@ -76,7 +89,7 @@ public class GuardTrap : NetworkBehaviour
 
     public override void FixedUpdateNetwork()
     {
-        if (!HasStateAuthority || tripped)
+        if (!HasStateAuthority || sprung)
         {
             return; //only the master decides it went off, and it only ever goes off once
         }
@@ -98,15 +111,30 @@ public class GuardTrap : NetworkBehaviour
                 continue;
             }
 
-            tripped = true;
-            RPC_Snap();                                              //everyone hears it, wherever they are in the house
-            if (GuardPatrol.Instance != null)
-            {
-                GuardPatrol.Instance.AlertTo(transform.position);    //and he comes straight back to the spot he set it
-            }
-            StartCoroutine(DespawnAfterSound());
+            Spring(player);
             return;
         }
+    }
+
+    private void Spring(Player victim)
+    {
+        sprung = true;
+        RPC_Spring(); //everyone hears it, wherever they are in the house
+
+        //a tripwire is a snitch, not a threat - it wakes HIM and nobody else. the alarm is the loud one and drags the
+        //dog in too, which is what makes it worth the guard's remaining trap slots.
+        bool pullTheDogIn = kind != TrapKind.Tripwire;
+        if (GuardPatrol.Instance != null)
+        {
+            GuardPatrol.Instance.AlertTo(transform.position, pullTheDogIn);
+        }
+
+        if (kind == TrapKind.BearTrap)
+        {
+            victim.RPC_CaughtInBearTrap(holdSeconds); //pinned where they stand, and loud about it - see Player
+        }
+
+        StartCoroutine(DespawnAfterSound());
     }
 
     private IEnumerator DespawnAfterSound() //let the snap actually play before the object carrying the AudioSource disappears
@@ -119,19 +147,19 @@ public class GuardTrap : NetworkBehaviour
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
-    private void RPC_Snap()
+    private void RPC_Spring()
     {
-        PlayClip(snapClip);
+        PlayClip(springClip);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_Disarm() //a player defused it. the authority owns the despawn, same as every other world object
     {
-        if (tripped)
+        if (sprung)
         {
-            return; //already gone off - too late to be clever
+            return; //already went off - too late to be clever
         }
-        tripped = true;
+        sprung = true;
         RPC_Disarmed();
         StartCoroutine(DespawnAfterSound());
     }
@@ -139,7 +167,7 @@ public class GuardTrap : NetworkBehaviour
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_Disarmed()
     {
-        PlayClip(disarmClip != null ? disarmClip : snapClip);
+        PlayClip(disarmClip != null ? disarmClip : springClip);
     }
 
     private void PlayClip(AudioClip clip)
@@ -157,7 +185,7 @@ public class GuardTrap : NetworkBehaviour
         float nearestDistance = float.MaxValue;
         foreach (GuardTrap trap in AllTraps)
         {
-            if (trap.tripped) continue;
+            if (trap.sprung) continue;
             float distance = Vector3.Distance(trap.transform.position, position);
             if (distance <= trap.disarmRange && distance < nearestDistance)
             {
@@ -166,5 +194,27 @@ public class GuardTrap : NetworkBehaviour
             }
         }
         return nearest;
+    }
+
+    public static bool AnyTrapNear(Vector3 position, float range) //so he doesn't pile a second trap on top of one he already set
+    {
+        foreach (GuardTrap trap in AllTraps)
+        {
+            if (Vector3.Distance(trap.transform.position, position) <= range) return true;
+        }
+        return false;
+    }
+
+    public string DisplayName //what the interaction prompt calls it
+    {
+        get
+        {
+            switch (kind)
+            {
+                case TrapKind.BearTrap: return "bear trap";
+                case TrapKind.ProximityAlarm: return "alarm";
+                default: return "tripwire";
+            }
+        }
     }
 }

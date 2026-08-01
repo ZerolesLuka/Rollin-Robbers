@@ -69,6 +69,9 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
     [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
+    [Networked] public bool IsBearTrapped { get; private set; } //jaws round your ankle - can't move until it lets go, and you're LOUD the whole time
+    private float bearTrapTimer;                                //counts down on our own machine while pinned
+    [SerializeField] private float bearTrapNoiseAmount = 26f;   //thrashing to get free is nearly as loud as a hard landing (30) - that's the real damage, not the delay
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
@@ -303,6 +306,20 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
+        if (IsBearTrapped) //pinned. no control at all, and thrashing about broadcasts exactly where you are
+        {
+            if (HasStateAuthority)
+            {
+                NoiseLevel = bearTrapNoiseAmount; //the point of the trap: it doesn't just hold you, it TELLS him
+                bearTrapTimer -= Runner.DeltaTime;
+                if (bearTrapTimer <= 0f)
+                {
+                    IsBearTrapped = false; //worked your foot loose
+                }
+            }
+            return;
+        }
+
         if (IsHiding) // locked inside a hiding spot - can't move, but can still press E to exit
         {
             //a closet door isn't soundproof. movement noise is gone (you're not moving), but your VOICE still
@@ -435,6 +452,15 @@ public partial class Player : NetworkBehaviour
         characterController.enabled = true;
         IsLockedUp = true;
         suffocateTimer = suffocateDuration; //start the air clock the moment the closet closes
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //fired by the trap; runs on the victim's own machine, which owns their movement in Shared Mode
+    public void RPC_CaughtInBearTrap(float seconds)
+    {
+        if (IsEliminated || IsLockedUp) return; //already out of the run - nothing left to catch
+        IsBearTrapped = true;
+        bearTrapTimer = seconds;
+        verticalVelocity = 0f; //don't bank fall speed while pinned in place
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //any caller (the rescuer); runs on the freed player's own machine

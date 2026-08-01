@@ -99,11 +99,18 @@ public class GuardPatrol : NetworkBehaviour
     private float angerDecayRate = 5f;           //cools per second while calm
     [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates you for the run instead of just jailing you. higher = more forgiving
 
-    [Header("Tripwires he leaves behind")]
-    [SerializeField] private NetworkObject trapPrefab;      //leave EMPTY to turn traps off entirely - not every house needs them
-    [SerializeField] private float angerToSetTraps = 25f;   //he has to be rattled first. one quiet noise early on shouldn't start him wiring the place
-    [SerializeField] private int maxTrapsPerRun = 4;        //he only carries so many. also stops a long run turning the house into a minefield
-    private int trapsSetThisRun;                            //runtime count, not a tuning value
+    [Header("Traps he sets after losing sight of someone")]
+    //one prefab per kind, and any of them can be left EMPTY - that kind simply never gets used. all three empty and
+    //traps are off for this house entirely.
+    [SerializeField] private NetworkObject tripwirePrefab;     //strung across a doorway
+    [SerializeField] private NetworkObject bearTrapPrefab;     //dropped on open floor - the one that pins you
+    [SerializeField] private NetworkObject alarmPrefab;        //wide radius, screams, brings the dog
+    [SerializeField] private float angerToSetTraps = 25f;      //he has to be rattled first. one quiet noise early on shouldn't start him wiring the place
+    [SerializeField] private int maxTrapsPerRun = 5;           //everything he's carrying. also stops a long run turning the house into a minefield
+    [SerializeField] private float doorwayTrapRange = 5f;      //a door this close to where he lost you counts as "the way they went", and gets the tripwire
+    [SerializeField] private float trapScatterRadius = 4f;     //how far from that spot a floor trap can end up. he's guessing, not tracking - this is the guess
+    [SerializeField] private float minTrapSpacing = 3f;        //don't stack a second trap on ground he's already covered
+    private int trapsSetThisRun;                               //runtime count, not a tuning value
     [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
 
 
@@ -289,7 +296,9 @@ public class GuardPatrol : NetworkBehaviour
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
                         {
-                            TryLeaveTrapHere(); //searched, found nothing, walking away annoyed - so he leaves a tripwire behind him
+                            //giving up the hunt. he doesn't wire where he's stood - he wires around where he last had
+                            //eyes on someone, which is a guess about your route rather than knowledge of your position
+                            TryPlaceTrapNear(lastKnownPosition);
                             ChangeState(GuardState.Relaxed);
                         }
                         else
@@ -552,16 +561,71 @@ public class GuardPatrol : NetworkBehaviour
         transform.rotation = Quaternion.RotateTowards(transform.rotation, wantedFacing, turnSpeed * Runner.DeltaTime);
     }
 
-    private void TryLeaveTrapHere() //he gave up on a search: no sighting, nothing found. so he wires the spot instead of just wandering off
+    //He lost someone around here. Rather than wiring the exact tile they vanished from - which would be uncanny - he
+    //seeds the AREA: if there's a door nearby that's probably how they went, so string a wire across it; otherwise
+    //drop something on the floor somewhere in the vicinity and hope. He's guessing at your route, not tracking you.
+    private void TryPlaceTrapNear(Vector3 seenPosition)
     {
-        if (trapPrefab == null) return;                              //no prefab assigned - traps are simply off for this house
-        if (Anger < angerToSetTraps) return;                         //calm enough to shrug it off. only a rattled guard bothers
-        if (trapsSetThisRun >= maxTrapsPerRun) return;               //he only carries so many
-        if (GuardTrap.FindDisarmableNear(transform.position) != null) return; //already one here from a previous search - don't stack them
+        if (Anger < angerToSetTraps) return;             //calm enough to shrug it off. only a rattled guard bothers
+        if (trapsSetThisRun >= maxTrapsPerRun) return;   //that's everything he was carrying
 
+        //the doorway they most likely used. a wire across it is the obvious thing a person would actually do.
+        Door escapeDoor = null;
+        float nearestDoorDistance = doorwayTrapRange;
+        foreach (Door door in Door.AllDoors)
+        {
+            float distance = Vector3.Distance(door.transform.position, seenPosition);
+            if (distance < nearestDoorDistance)
+            {
+                nearestDoorDistance = distance;
+                escapeDoor = door;
+            }
+        }
+
+        //a doorway gets the wire about two times in three - the rest of the time he does something less predictable,
+        //because a guard who ALWAYS wires the door is a guard you can route around forever.
+        if (escapeDoor != null && tripwirePrefab != null && Random.value < 0.66f)
+        {
+            SpawnTrapAt(tripwirePrefab, escapeDoor.transform.position);
+            return;
+        }
+
+        //no door, or he fancied something else: put a floor trap somewhere in the vicinity. sampled onto the NavMesh
+        //so it can't end up inside furniture or through a wall.
+        NetworkObject floorTrap = PickFloorTrapPrefab();
+        if (floorTrap == null)
+        {
+            //nothing else assigned - fall back to the wire so a half-configured guard still does something
+            if (escapeDoor != null && tripwirePrefab != null) SpawnTrapAt(tripwirePrefab, escapeDoor.transform.position);
+            return;
+        }
+
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            Vector2 randomCircle = Random.insideUnitCircle * trapScatterRadius;
+            Vector3 candidate = seenPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, trapScatterRadius, NavMesh.AllAreas)) continue;
+            if (GuardTrap.AnyTrapNear(hit.position, minTrapSpacing)) continue; //already covered this ground
+
+            SpawnTrapAt(floorTrap, hit.position);
+            return;
+        }
+    }
+
+    private NetworkObject PickFloorTrapPrefab() //bear trap or alarm, whichever are assigned. a coin flip when both are
+    {
+        if (bearTrapPrefab != null && alarmPrefab != null)
+        {
+            return Random.value < 0.5f ? bearTrapPrefab : alarmPrefab;
+        }
+        return bearTrapPrefab != null ? bearTrapPrefab : alarmPrefab;
+    }
+
+    private void SpawnTrapAt(NetworkObject prefab, Vector3 position)
+    {
         trapsSetThisRun++;
-        Vector3 trapPosition = transform.position;
-        Runner.Spawn(trapPrefab, trapPosition, Quaternion.identity, PlayerRef.None, (spawnRunner, spawnedObject) =>
+        Vector3 trapPosition = position;
+        Runner.Spawn(prefab, trapPosition, Quaternion.identity, PlayerRef.None, (spawnRunner, spawnedObject) =>
         {
             GuardTrap trap = spawnedObject.GetComponent<GuardTrap>();
             if (trap != null)

@@ -320,9 +320,9 @@ public partial class Player
 
     public void UpdateInteractPrompt() //called every render frame from Player.Update for the local player, so the line tracks the crosshair smoothly rather than stepping at the 32Hz tick
     {
-        if (isUsingComputer || IsEliminated || IsLockedUp || isBeingDragged)
+        if (isUsingComputer || IsEliminated || IsLockedUp || isBeingDragged || IsBearTrapped)
         {
-            InteractPrompt = ""; //no reach while parked, out, jailed or being hauled off
+            InteractPrompt = ""; //no reach while parked, out, jailed, hauled off, or pinned by the ankle
             return;
         }
 
@@ -359,7 +359,8 @@ public partial class Player
                 return "E  Free your teammate";
 
             case InteractKind.Disarm:
-                return "E  Disarm the tripwire";
+                GuardTrap trap = target as GuardTrap;
+                return trap != null ? $"E  Disarm the {trap.DisplayName}" : "E  Disarm";
 
             case InteractKind.Pickup:
                 WorldItem item = target as WorldItem;
