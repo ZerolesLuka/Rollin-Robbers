@@ -73,7 +73,7 @@ public partial class Player
     //What E would act on right now. HandleInteract performs it and the HUD prompt describes it, both off THIS one
     //scan - so the prompt can never promise something different from what the key actually does. Add an interactable
     //here once and both halves pick it up.
-    private enum InteractKind { None, Rescue, Pickup, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
+    private enum InteractKind { None, Rescue, Disarm, Pickup, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
 
     private InteractKind FindInteraction(out Component target)
     {
@@ -104,6 +104,15 @@ public partial class Player
                 target = other;
                 return InteractKind.Rescue;
             }
+        }
+
+        //a guard's tripwire outranks loot on purpose: if you're stood on one AND there's something shiny next to it,
+        //you want E to make you safe rather than make you richer. doesn't need RunManager either.
+        GuardTrap armedTrap = GuardTrap.FindDisarmableNear(transform.position);
+        if (armedTrap != null)
+        {
+            target = armedTrap;
+            return InteractKind.Disarm;
         }
 
         //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check.
@@ -249,6 +258,10 @@ public partial class Player
                 ((Player)target).RPC_Rescue();
                 break;
 
+            case InteractKind.Disarm:
+                ((GuardTrap)target).RPC_Disarm();
+                break;
+
             case InteractKind.Pickup:
                 //ASK, don't take. the item's owner decides who actually gets it and reports the theft once,
                 //then sends it back to the winner (RPC_GrantPickup). doing it locally let two players grabbing
@@ -344,6 +357,9 @@ public partial class Player
         {
             case InteractKind.Rescue:
                 return "E  Free your teammate";
+
+            case InteractKind.Disarm:
+                return "E  Disarm the tripwire";
 
             case InteractKind.Pickup:
                 WorldItem item = target as WorldItem;

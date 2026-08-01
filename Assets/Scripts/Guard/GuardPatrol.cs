@@ -98,6 +98,12 @@ public class GuardPatrol : NetworkBehaviour
     private float angerChaseRate = 12f;          //builds per second while actively chasing
     private float angerDecayRate = 5f;           //cools per second while calm
     [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates you for the run instead of just jailing you. higher = more forgiving
+
+    [Header("Tripwires he leaves behind")]
+    [SerializeField] private NetworkObject trapPrefab;      //leave EMPTY to turn traps off entirely - not every house needs them
+    [SerializeField] private float angerToSetTraps = 25f;   //he has to be rattled first. one quiet noise early on shouldn't start him wiring the place
+    [SerializeField] private int maxTrapsPerRun = 4;        //he only carries so many. also stops a long run turning the house into a minefield
+    private int trapsSetThisRun;                            //runtime count, not a tuning value
     [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
 
 
@@ -283,6 +289,7 @@ public class GuardPatrol : NetworkBehaviour
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
                         {
+                            TryLeaveTrapHere(); //searched, found nothing, walking away annoyed - so he leaves a tripwire behind him
                             ChangeState(GuardState.Relaxed);
                         }
                         else
@@ -543,6 +550,26 @@ public class GuardPatrol : NetworkBehaviour
         //for more than looks: GuardVision builds his view cone from transform.forward.
         Quaternion wantedFacing = Quaternion.LookRotation(movedThisTick.normalized, Vector3.up);
         transform.rotation = Quaternion.RotateTowards(transform.rotation, wantedFacing, turnSpeed * Runner.DeltaTime);
+    }
+
+    private void TryLeaveTrapHere() //he gave up on a search: no sighting, nothing found. so he wires the spot instead of just wandering off
+    {
+        if (trapPrefab == null) return;                              //no prefab assigned - traps are simply off for this house
+        if (Anger < angerToSetTraps) return;                         //calm enough to shrug it off. only a rattled guard bothers
+        if (trapsSetThisRun >= maxTrapsPerRun) return;               //he only carries so many
+        if (GuardTrap.FindDisarmableNear(transform.position) != null) return; //already one here from a previous search - don't stack them
+
+        trapsSetThisRun++;
+        Vector3 trapPosition = transform.position;
+        Runner.Spawn(trapPrefab, trapPosition, Quaternion.identity, PlayerRef.None, (spawnRunner, spawnedObject) =>
+        {
+            GuardTrap trap = spawnedObject.GetComponent<GuardTrap>();
+            if (trap != null)
+            {
+                trap.SpawnPoint = trapPosition;  //networked-position safeguard - a deferred spawn drops the position argument and dumps it at world origin
+                trap.UseSpawnPoint = true;
+            }
+        });
     }
 
     private void OpenDoorInMyWay() //he walks the NavMesh, which ignores door colliders - so without this he'd stroll straight THROUGH a shut door. now he pushes it open and walks through the gap like a person
