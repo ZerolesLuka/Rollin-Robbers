@@ -768,6 +768,11 @@ public class GuardPatrol : NetworkBehaviour
     {
         if (State == GuardState.Caught || State == GuardState.Escorting) return; //already got someone, hands full
 
+        //NOT while he's asleep. the noise still wakes him the normal way (ListenForNoise -> Suspicious), but jumping
+        //straight from Asleep to Caught skips the get-up hold entirely, so he'd rip the door open while the animator
+        //still has him lying flat on his bed. let him stand up first, then deal with whoever's shouting.
+        if (State == GuardState.Asleep) return;
+
         foreach (Player player in Player.ActivePlayers)
         {
             if (player == null || !player.IsHiding || player.IsEliminated || player.IsLockedUp) continue;

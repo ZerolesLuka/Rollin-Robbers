@@ -55,20 +55,35 @@ public class HidingSpot : MonoBehaviour
 
     public bool IsOccupiedByLocalPlayer => Player.LocalPlayer != null && Player.LocalPlayer.IsHiding && Player.LocalPlayer.HidingSpotId == spotId;
 
+    //The camera is DERIVED from the networked state, not switched on and off by the enter/exit calls. It used to be
+    //the latter, and then anything that cleared IsHiding without going through OnSpotExit left the vcam running: get
+    //ripped out of the wardrobe by the guard and you'd be hauled to the closet still staring at the coats, because
+    //RPC_PulledFromHiding only clears the flag. Same hole on the run-end van ride. Reading the state every frame
+    //means every exit path restores the view for free, however it happened.
+    private void Update()
+    {
+        bool shouldBeInside = IsOccupiedByLocalPlayer;
+        if (shouldBeInside != cameraIsOn)
+        {
+            SetSpotCamera(shouldBeInside);
+        }
+    }
+
     public void OnSpotEnter()
     {
-        Player.LocalPlayer.SetHiding(true, spotId); //publishes WHICH spot we're in, which is what makes it occupied for everyone else
-        SetSpotCamera(true);
+        Player.LocalPlayer.SetHiding(true, spotId); //publishes WHICH spot we're in, which is what makes it occupied for everyone else. Update picks the camera up from there
     }
 
     public void OnSpotExit()
     {
         Player.LocalPlayer.SetHiding(false, NoSpot); //frees the spot for everyone the moment it replicates
-        SetSpotCamera(false);
     }
+
+    private bool cameraIsOn; //cached so Update isn't poking SetActive on the vcam every single frame
 
     private void SetSpotCamera(bool on)
     {
+        cameraIsOn = on;
         if (virtualCamera == null) return;
 
         //toggle the OBJECT as well as the component. enabling the component on a deactivated GameObject silently
