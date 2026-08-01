@@ -20,15 +20,19 @@ public class Safe : NetworkBehaviour
     [SerializeField] private float crackRange = 2.2f;  // how close a player must stay to keep the meter moving
     [SerializeField] private SwingingHinge doorHinge;  // the safe's door. leave EMPTY and it finds a SwingingHinge on any child by itself - just add that component to the door mesh. only assign this by hand if the safe has more than one hinged part
 
-    //LOOT IS DEFERRED ON PURPOSE. A safe spitting its own items meant two systems spawning loot, with two sets of
-    //value/rarity settings to keep in step. It'll go through ItemSpawner like everything else instead - the safe just
-    //opens, and the spawner decides what's inside. Keeping the fields here (unused) so the wiring is obvious later.
-    // [Header("Loot it spits out when cracked")]
-    // [SerializeField] private NetworkObject worldItemPrefab;
-    // [SerializeField] private string lootName = "Jewellery";
-    // [SerializeField] private int lootValueMin = 1500;
-    // [SerializeField] private int lootValueMax = 4000;
-    // [SerializeField] private int lootItemCount = 3;
+    //THE LOOT IS ALREADY IN THERE. It spawns inside the safe the moment the safe does, sat behind a shut door -
+    //cracking doesn't CREATE anything, it just reveals what was always there. That matters for two reasons: the
+    //contents count toward the house total from the start (so an uncracked safe is the difference between a good run
+    //and a perfect one, rather than quietly not existing), and the payoff reads as opening a box rather than as items
+    //materialising out of nothing.
+    [Header("What's inside")]
+    [SerializeField] private NetworkObject worldItemPrefab; // the SAME WorldItem prefab everything else uses
+    [SerializeField] private Transform lootAnchor;          // where the contents sit. leave empty and they stack just above the safe's own origin
+    [SerializeField] private string lootName = "Jewellery";
+    [SerializeField] private int lootValueMin = 1500;
+    [SerializeField] private int lootValueMax = 4000;
+    [SerializeField] private int lootItemCount = 3;
+    [SerializeField] private float lootScatter = 0.12f;     // tiny - they're in a box, not thrown across a room
 
     [Networked] public int SafeId { get; set; }                 // unique per safe, assigned by the spawner. Player.CrackingSafeId points at this
     [Networked] public int Code { get; set; }                   // 4-digit combination, rolled by the spawner. networked so the note, the keypad and the safe all agree on one number
@@ -62,7 +66,11 @@ public class Safe : NetworkBehaviour
         }
         if (UseSpawnPoint)
         {
-            StartCoroutine(PlaceOnceSpawnPointArrives());
+            StartCoroutine(PlaceOnceSpawnPointArrives()); //stocks the contents once it lands - see below for why it can't happen here
+        }
+        else if (HasStateAuthority)
+        {
+            StockContents(); //already where it belongs, so fill it now
         }
         ApplyVisual();
     }
@@ -85,6 +93,14 @@ public class Safe : NetworkBehaviour
             yield return null;
         }
         transform.position = SpawnPoint;
+
+        //ONLY NOW. the contents are placed relative to this safe, and on a deferred spawn the safe is still sat at the
+        //origin until the line above runs - stocking any earlier would leave a pile of jewellery in the middle of the
+        //world with a safe somewhere else entirely.
+        if (HasStateAuthority)
+        {
+            StockContents();
+        }
     }
 
     public override void FixedUpdateNetwork()
@@ -150,13 +166,55 @@ public class Safe : NetworkBehaviour
         }
     }
 
-    private void Open() //runs on the state authority only (gated in FixedUpdateNetwork)
+    private void Open() //runs on the state authority only (gated in FixedUpdateNetwork and RPC_TryCode)
     {
         IsOpen = true; //networked - every client's Render swings their own door off the back of this
 
-        //loot deliberately not spawned here. it'll come from ItemSpawner so there's ONE loot pipeline instead of two
-        //sets of value settings drifting apart. when that lands, tell the spawner the safe opened and let it decide
-        //what's inside - and remember to ReportHouseLoot the total, or the safe's contents push clear-% over 100%.
+        //NOTHING IS CREATED HERE. The contents were spawned with the safe and have been sat behind the door the whole
+        //time; opening it just stops them being locked, so they can be seen and picked up like any other loot.
+        foreach (WorldItem item in WorldItem.AllItems)
+        {
+            if (item.LockedInSafe && item.InSafeId == SafeId)
+            {
+                item.LockedInSafe = false;
+            }
+        }
+    }
+
+    //Fill the safe the moment it exists. Master only, same as every other spawner, and the total goes into
+    //HouseLootTotal right away - so an uncracked safe is the gap between a good run and a perfect one rather than
+    //loot that quietly never existed.
+    private void StockContents()
+    {
+        if (worldItemPrefab == null || lootItemCount <= 0) return;
+
+        Vector3 anchor = lootAnchor != null ? lootAnchor.position : transform.position + Vector3.up * 0.5f;
+        int totalValue = 0;
+
+        for (int i = 0; i < lootItemCount; i++)
+        {
+            int value = Random.Range(lootValueMin, lootValueMax + 1); //declared in the loop so each closure captures its own
+            totalValue += value;
+
+            Vector3 spawnAt = anchor + Random.insideUnitSphere * lootScatter; //barely scattered - they're in a box, not strewn across a room
+            int mySafeId = SafeId;
+            Runner.Spawn(worldItemPrefab, spawnAt, Random.rotation, PlayerRef.None, (runner, spawnedObject) =>
+            {
+                WorldItem item = spawnedObject.GetComponent<WorldItem>();
+                if (item == null) return;
+                item.ItemName = lootName;
+                item.Value = value;
+                item.LockedInSafe = true;  //behind a shut door until this safe opens
+                item.InSafeId = mySafeId;
+                item.SpawnPoint = spawnAt; //networked-position safeguard - a deferred spawn drops the position argument
+                item.UseSpawnPoint = true;
+            });
+        }
+
+        if (RunManager.Instance != null)
+        {
+            RunManager.Instance.ReportHouseLoot(totalValue); //counts from the start, cracked or not
+        }
     }
 
     public override void Render()

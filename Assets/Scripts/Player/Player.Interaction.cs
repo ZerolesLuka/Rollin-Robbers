@@ -65,6 +65,7 @@ public partial class Player
         foreach (WorldItem item in WorldItem.AllItems)
         {
             if (item.pendingRemoval) continue;
+            if (item.LockedInSafe) continue; //we can't take it yet anyway, so don't blame our full hands for it
             if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange) return true;
         }
         return false;
@@ -134,6 +135,7 @@ public partial class Player
             foreach (WorldItem item in WorldItem.AllItems)
             {
                 if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
+                if (item.LockedInSafe) continue;   //sat behind a shut safe door. pickup is a proximity check, so without this you'd reach straight through it
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
                     target = item;

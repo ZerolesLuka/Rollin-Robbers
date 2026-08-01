@@ -22,6 +22,12 @@ public class WorldItem : NetworkBehaviour
 
     [Networked] public NetworkBool IsBait { get; set; } // a plant. looks worth taking, pays nothing, and screams when you lift it
 
+    //Loot that lives inside a shut safe. It EXISTS from the moment the safe does - the door is just in the way - so
+    //without this you could stand next to a locked safe and pull its contents straight through the door, since pickup
+    //is a proximity check and doesn't care about geometry. Cleared by Safe.Open when the door actually swings.
+    [Networked] public NetworkBool LockedInSafe { get; set; }
+    [Networked] public int InSafeId { get; set; } // which safe is holding it, so that safe knows what to release
+
     [Header("Bait")]
     [SerializeField] private AudioClip baitAlarmClip;          // what it does when you fall for it. 3D, so the guard isn't the only one who learns where you are
     [SerializeField, Range(0f, 1f)] private float baitAlarmVolume = 0.9f;
@@ -101,6 +107,16 @@ public class WorldItem : NetworkBehaviour
     public override void Render() //every frame on all clients - keeps the glow matched to the networked Value even as it replicates in after spawn
     {
         if (glowLight == null)
+        {
+            return;
+        }
+
+        //a glow leaking out of a shut safe would give away exactly what's inside before you've earned it
+        if (glowLight.enabled == LockedInSafe)
+        {
+            glowLight.enabled = !LockedInSafe;
+        }
+        if (LockedInSafe)
         {
             return;
         }
