@@ -15,6 +15,11 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float wakeThresholdMax = 6f;
     [SerializeField] private float catchRange = 2f; //how close he has to get to grab you
     [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
+    [SerializeField] private float wedgeBreakSecondsSameSide = 2f; //he can reach the wedge and kick it out
+    [SerializeField] private float wedgeBreakSecondsFarSide = 5f;  //it's on the other side, so he has to force the door itself
+    private Door breakingWedgeOnDoor;                              //the door he's currently working on, null when he isn't
+    private float breakingWedgeTimer;                              //seconds left on it
+
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
@@ -188,6 +193,32 @@ public class GuardPatrol : NetworkBehaviour
             //his bed isn't on the NavMesh, so the agent sits on the floor beside it - and dragging the transform onto
             //the agent every tick slid him off the mattress the instant he started waking.
             agent.nextPosition = transform.position;
+            return;
+        }
+
+        //working a wedge out of a door. he STANDS THERE doing it rather than jogging in place, so the animator's speed
+        //blend falls to idle on its own and the delay reads as effort. anger keeps ticking, because being held up by
+        //a door someone jammed is exactly the sort of thing that would wind him up.
+        if (breakingWedgeTimer > 0f)
+        {
+            TickAnger();
+            breakingWedgeTimer -= Runner.DeltaTime;
+            agent.ResetPath();
+            agent.nextPosition = transform.position; //hold the agent to us, same as the wake-up hold
+
+            if (breakingWedgeTimer <= 0f && breakingWedgeOnDoor != null)
+            {
+                DoorWedge wedge = breakingWedgeOnDoor.Wedge;
+                if (wedge != null && wedge.Object != null && wedge.Object.IsValid)
+                {
+                    Runner.Despawn(wedge.Object); //broken, and gone for good. nobody gets that wedge back
+                }
+                if (RunManager.Instance != null)
+                {
+                    RunManager.Instance.RPC_SetDoorOpen(breakingWedgeOnDoor.transform.position, true); //and through he comes
+                }
+                breakingWedgeOnDoor = null;
+            }
             return;
         }
 
@@ -693,6 +724,18 @@ public class GuardPatrol : NetworkBehaviour
         //0.1 is "anything not actually behind me", which is the honest version of the question we're asking.
         Door shutDoor = Door.FindClosedDoorAhead(transform.position, transform.forward, lookAhead, 0.1f);
         if (shutDoor == null) return;
+
+        //WEDGED. he can't just push through it - he has to stand there and force it, which is the whole point of
+        //spending a wedge. quicker if he's on the same side as it and can kick it out, slower forcing the door itself.
+        if (shutDoor.IsWedged)
+        {
+            DoorWedge wedge = shutDoor.Wedge;
+            bool sameSide = wedge != null && shutDoor.SideOf(transform.position) == wedge.WedgedSide;
+            breakingWedgeOnDoor = shutDoor;
+            breakingWedgeTimer = sameSide ? wedgeBreakSecondsSameSide : wedgeBreakSecondsFarSide;
+            agent.ResetPath(); //stop dead. he stands and works at it rather than jogging on the spot
+            return;
+        }
 
         shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
         RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true);  //and tell every other client to swing their copy

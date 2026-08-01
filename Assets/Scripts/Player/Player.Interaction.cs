@@ -73,7 +73,10 @@ public partial class Player
     //What E would act on right now. HandleInteract performs it and the HUD prompt describes it, both off THIS one
     //scan - so the prompt can never promise something different from what the key actually does. Add an interactable
     //here once and both halves pick it up.
-    private enum InteractKind { None, Rescue, Disarm, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
+    //NOTE: there's no PlaceWedge here. E already opens doors, and a second E action at the same door would either
+    //steal the open or need a hold, which collides with the safe's tap-vs-hold. Wedging is on G instead - the key
+    //that already means "put down what you're carrying". See HandleDrop.
+    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
 
     private InteractKind FindInteraction(out Component target)
     {
@@ -113,6 +116,14 @@ public partial class Player
         {
             target = armedTrap;
             return InteractKind.Disarm;
+        }
+
+        //a loose wedge on the floor, above loot because it's small, easy to miss, and you usually want it in a hurry
+        DoorWedge looseWedge = DoorWedge.LooseWedgeNear(transform.position);
+        if (looseWedge != null && CanCarryAnotherWedge)
+        {
+            target = looseWedge;
+            return InteractKind.TakeWedge;
         }
 
         //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check.
@@ -177,6 +188,18 @@ public partial class Player
             bool useSwingDoor = nearestSwingDoor != null && (nearestExit == null || nearestSwingDistance <= nearestExitDistance);
             if (useSwingDoor)
             {
+                //a wedge under this door outranks opening it, because the door isn't going to budge until it's out.
+                //only from the side it was kicked in from though - from the far side all you can do is look at it.
+                Door houseDoor = nearestSwingDoor.GetComponent<Door>();
+                DoorWedge jammedWedge = houseDoor != null ? houseDoor.Wedge : null;
+                if (jammedWedge != null)
+                {
+                    target = jammedWedge;
+                    return jammedWedge.CanBeRemovedFrom(transform.position) && CanCarryAnotherWedge
+                        ? InteractKind.PullWedge
+                        : InteractKind.WedgeStuck;
+                }
+
                 target = nearestSwingDoor;
                 return InteractKind.SwingDoor;
             }
@@ -278,6 +301,17 @@ public partial class Player
                 //stays in the world so a teammate can come and check it themselves.
                 LearnSafeCode(((SafeNote)target).ReadCode());
                 break;
+
+            case InteractKind.TakeWedge:
+            case InteractKind.PullWedge:
+                //both are the same act: the wedge object goes away and we're carrying one. pulling one out of a door
+                //unjams it as a side effect, because Door.IsWedged is derived from the wedges that exist.
+                ((DoorWedge)target).RPC_TakeWedge();
+                CarryWedge();
+                break;
+
+            case InteractKind.WedgeStuck:
+                break; //it's on the far side, or our hands are full. the prompt already said so
 
             case InteractKind.SwingDoor:
                 Door door = (Door)target;
@@ -402,6 +436,15 @@ public partial class Player
 
             case InteractKind.ReadNote:
                 return "E  Read the note";
+
+            case InteractKind.TakeWedge:
+                return "E  Pick up the wedge";
+
+            case InteractKind.PullWedge:
+                return "E  Pull the wedge out";
+
+            case InteractKind.WedgeStuck:
+                return CanCarryAnotherWedge ? "Wedged from the other side" : "You can't carry any more wedges";
 
             case InteractKind.SwingDoor:
                 Door door = target as Door;

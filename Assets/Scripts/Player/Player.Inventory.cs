@@ -16,11 +16,42 @@ public partial class Player
         inventory.Clear();
     }
 
+    //Kick a wedge under the nearest shut, un-wedged house door. Returns whether it actually wedged something, so the
+    //caller knows whether the press was spent. Only real Doors qualify, not every cupboard with a hinge on it.
+    private bool TryWedgeNearestDoor()
+    {
+        Door nearest = null;
+        float nearestDistance = wedgePlaceRange;
+        foreach (Door door in Door.AllDoors)
+        {
+            if (door.IsOpen || door.IsWedged) continue; //can't wedge a door that's standing open, and one wedge is enough
+            float distance = Vector3.Distance(transform.position, door.transform.position);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = door;
+            }
+        }
+
+        if (nearest == null) return false;
+        PlaceWedgeIn(nearest);
+        return true;
+    }
+
     private void HandleDrop(bool dropPressed)
     {
         bool pressed = dropPressed && !dropHeldLastTick; //rising edge only - one drop per press
         dropHeldLastTick = dropPressed;
-        if (!pressed || inventory.Count == 0 || worldItemPrefab == null) return;
+        if (!pressed) return;
+
+        //G at a shut door kicks a wedge under it. wedging lives on G rather than E because E already opens the door,
+        //and G already means "put down the thing you're carrying" - which is exactly what this is.
+        if (WedgesCarried > 0 && TryWedgeNearestDoor())
+        {
+            return; //wedged something, that was this press
+        }
+
+        if (inventory.Count == 0 || worldItemPrefab == null) return;
 
         InventoryItem dropped = inventory[inventory.Count - 1]; //drop the most recently picked up (the one you're "holding")
         inventory.RemoveAt(inventory.Count - 1);

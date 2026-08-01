@@ -74,6 +74,11 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float bearTrapSelfEscapeSeconds = 30f; //LAST-RESORT failsafe, not the intended way out: a teammate should free you long before this. set it to 0 to make it teammate-only forever, but read the warning in RPC_CaughtInBearTrap first
     private float bearTrapTimer;                                //counts the failsafe down on our own machine
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
+    [Networked] public int WedgesCarried { get; private set; } //door wedges in your pockets. networked so teammates' prompts and the HUD can see what you're holding
+    [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
+    [SerializeField] private int maxWedgesCarried = 3;
+    [SerializeField] private float wedgePlaceRange = 2f;        //how close to a shut door you must be for G to wedge it instead of dropping loot
+
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
     private float safeInteractHoldTime;                         //how long E has been held at a safe this press
@@ -400,6 +405,40 @@ public partial class Player : NetworkBehaviour
     {
         IsHiding = hiding;
         HidingSpotId = hiding ? spotId : HidingSpot.NoSpot;
+    }
+
+    public void CarryWedge() //picked one up off the floor or pulled one back out of a door
+    {
+        if (WedgesCarried < maxWedgesCarried) WedgesCarried++;
+    }
+
+    public bool CanCarryAnotherWedge => WedgesCarried < maxWedgesCarried;
+
+    public void PlaceWedgeIn(Door door) //kick one under this door, on the side we're stood on
+    {
+        if (WedgesCarried <= 0 || doorWedgePrefab == null || door == null) return;
+        if (door.IsWedged) return; //one is enough, and two would just fight over who owns the door
+
+        WedgesCarried--;
+
+        //remember WHICH SIDE we were on. that's the whole mechanic: only somebody stood on this side can pull it back
+        //out, so wedging a door decides who ends up shut in with what.
+        int side = door.SideOf(transform.position);
+        Vector3 doorPosition = door.transform.position;
+        Vector3 wedgePosition = doorPosition + door.ThroughDoorway * (0.35f * side); //sat at the foot of the door, on our side of it
+
+        Runner.Spawn(doorWedgePrefab, wedgePosition, Quaternion.identity, Object.InputAuthority, (runner, spawnedObject) =>
+        {
+            DoorWedge wedge = spawnedObject.GetComponent<DoorWedge>();
+            if (wedge != null)
+            {
+                wedge.IsPlaced = true;
+                wedge.DoorPosition = doorPosition; //doors aren't networked, so the wedge refers to its door by where it is
+                wedge.WedgedSide = side;
+                wedge.SpawnPoint = wedgePosition;  //networked-position safeguard - a deferred spawn drops the position argument
+                wedge.UseSpawnPoint = true;
+            }
+        });
     }
 
     public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
