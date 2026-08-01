@@ -19,6 +19,18 @@ public partial class Player
     [SerializeField] private float spectateMaxPitch = 70f;  //and how far over the top
     [SerializeField] private LayerMask spectateWallMask;    //set to the geometry layers. keeps the camera out of walls
 
+    //Whichever camera is actually drawing for this player right now. World-space UI has to billboard toward the live
+    //one, and "the live one" changes when you're eliminated - keying off ViewCamera alone made every nameplate vanish
+    //the moment you started spectating, which is exactly when you most want to know who you're looking at.
+    public Camera ActiveCamera
+    {
+        get
+        {
+            if (spectatorActive && spectatorCamera != null) return spectatorCamera;
+            return ViewCamera != null && ViewCamera.enabled ? ViewCamera : null;
+        }
+    }
+
     private Player spectateTarget;
     private float spectateYaw;
     private float spectatePitch = 12f;
@@ -52,7 +64,12 @@ public partial class Player
             spectateTarget = NextSpectateTarget(spectateTarget);
         }
 
-        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+        //menu's up: keep FOLLOWING them, but stop reading the mouse. otherwise moving the cursor to click Resume
+        //swings the camera round with it, and clicking a button also switches who you're watching. the camera still
+        //tracks below, so your teammate doesn't walk out of frame while you're in the menu.
+        bool takingInput = !IsPaused;
+
+        if (takingInput && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
         {
             spectateTarget = NextSpectateTarget(spectateTarget); //click through the crew
         }
@@ -63,7 +80,7 @@ public partial class Player
         }
 
         //same sensitivity as playing, so it feels like the same game rather than a different camera bolted on
-        Vector2 look = playerInputActions != null ? playerInputActions.Player.Look.ReadValue<Vector2>() : Vector2.zero;
+        Vector2 look = (takingInput && playerInputActions != null) ? playerInputActions.Player.Look.ReadValue<Vector2>() : Vector2.zero;
         spectateYaw += look.x * GameSettings.MouseSensitivity;
         spectatePitch = Mathf.Clamp(spectatePitch - look.y * GameSettings.LookSensitivityY, spectateMinPitch, spectateMaxPitch);
 
@@ -111,6 +128,10 @@ public partial class Player
     {
         if (spectatorCamera != null)
         {
+            //toggle the OBJECT as well as the component. enabling a component on a deactivated GameObject silently
+            //does nothing, and "disabled in the inspector" means either one to whoever set the prefab up - so handle
+            //both. same trap HidingSpot already hit with its vcam.
+            spectatorCamera.gameObject.SetActive(on);
             spectatorCamera.enabled = on;
         }
 

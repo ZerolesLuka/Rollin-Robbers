@@ -29,8 +29,9 @@ public class GuardTrap : NetworkBehaviour
     [SerializeField] private float disarmRange = 2f;            //reach to defuse it with E. should be comfortably bigger than triggerRadius or you'd have to stand ON it to disarm it
     [SerializeField] private float armDelay = 1.5f;             //he's stood right next to it as he sets it, and so might you be. don't let it fire the instant it lands
 
-    [Header("BearTrap only")]
-    [SerializeField] private float holdSeconds = 4f;            //how long it pins you. long enough for him to cover a room, short enough not to feel like a death sentence
+    //NO hold duration here any more. A bear trap holds you until a TEAMMATE pries it off - the only timer left is
+    //Player.bearTrapSelfEscapeSeconds, which is a failsafe against being stranded alone rather than the way out. A
+    //field here would just be a dial that silently does nothing.
 
     [Header("Sound")]
     [SerializeField] private AudioClip springClip;              //it going off. 3D, so the room it happened in is the information
@@ -131,7 +132,7 @@ public class GuardTrap : NetworkBehaviour
 
         if (kind == TrapKind.BearTrap)
         {
-            victim.RPC_CaughtInBearTrap(holdSeconds); //pinned where they stand, and loud about it - see Player
+            victim.RPC_CaughtInBearTrap(); //pinned where they stand, loud about it, and stuck until a teammate arrives
         }
 
         StartCoroutine(DespawnAfterSound());

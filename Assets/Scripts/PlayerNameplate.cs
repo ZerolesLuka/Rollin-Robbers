@@ -50,10 +50,19 @@ public class PlayerNameplate : MonoBehaviour
         }
 
         Player viewer = Player.LocalPlayer;
-        Camera viewerCamera = viewer != null ? viewer.ViewCamera : Camera.main;
-        if (viewer == null || viewerCamera == null || !viewerCamera.enabled)
+        if (viewer == null)
         {
-            Show(false); //no local player yet, or we're spectating on a different camera
+            Show(false); //no local player yet
+            return;
+        }
+
+        //whichever camera is actually drawing right now. keying off ViewCamera alone hid every nameplate the moment
+        //you were eliminated, because spectating disables it - and knowing WHO you're watching is most of the point
+        //of spectating.
+        Camera viewerCamera = viewer.ActiveCamera;
+        if (viewerCamera == null)
+        {
+            Show(false);
             return;
         }
 

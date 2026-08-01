@@ -539,7 +539,7 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //fired by the trap; runs on the victim's own machine, which owns their movement in Shared Mode
-    public void RPC_CaughtInBearTrap(float unusedHoldSeconds)
+    public void RPC_CaughtInBearTrap()
     {
         //WARNING before you set bearTrapSelfEscapeSeconds to 0: a teammate is the intended way out, but if you're the
         //last one moving there IS nobody. the guard usually arrives and resolves it (the trap called him), but if he
