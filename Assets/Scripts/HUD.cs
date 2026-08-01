@@ -15,6 +15,12 @@ public class HUD : MonoBehaviour
     [SerializeField, Range(0.2f, 1f)] private float unselectedSlotDim = 0.55f; //how far the slots you're NOT holding drop back, so the selected one stands out
     [SerializeField] private GameObject lootWheelRoot; //optional radial graphic, shown only while MMB is held. the slot list works without it
 
+    [Header("Status line - what's currently happening TO you")]
+    [SerializeField] private Text statusText;      //"a teammate has to pry it off you" etc. optional
+    [SerializeField] private GameObject statusRoot; //optional backing panel, hidden whenever there's nothing to say
+    [SerializeField] private Color statusUrgentColor = new Color(1f, 0.35f, 0.3f); //jailed or trapped
+    [SerializeField] private Color statusCalmColor = new Color(0.85f, 0.85f, 0.85f); //out of the run, hidden - no action needed
+
     [SerializeField] private Text interactPromptText; //"E  Open the door" etc, near the crosshair. optional - leave unassigned to hide it. the text comes from Player.InteractPrompt, which is derived from the SAME scan that E acts on, so it can't lie
 
     [Header("Safe cracking - shown only while this player is holding a safe open")]
@@ -118,6 +124,8 @@ public class HUD : MonoBehaviour
             if (lootWheelRoot.activeSelf != wheelUp) lootWheelRoot.SetActive(wheelUp);
         }
 
+        UpdateStatusLine(localPlayerLive);
+
         if (interactPromptText != null)
         {
             interactPromptText.text = localPlayerLive ? Player.LocalPlayer.InteractPrompt : "";
@@ -172,6 +180,70 @@ public class HUD : MonoBehaviour
             successPanel.SetActive(false); //next run started - clear the summary
         }
         wasSuccess = success;
+    }
+
+    //Says what's being done TO you. Every one of these states takes your controls away, and without a line of text
+    //that's indistinguishable from the game having hung - which is the single worst thing a co-op game can feel like
+    //when your friends are still audibly playing.
+    //
+    //DELIBERATELY only about YOU. There's no "Ollie is trapped across the house" readout, because shouting for help
+    //is the mechanic - a UI that quietly did the shouting for you would take the job off the voice system this whole
+    //game is built around.
+    private void UpdateStatusLine(bool localPlayerLive)
+    {
+        if (statusText == null && statusRoot == null)
+        {
+            return; //not wired up, nothing to do
+        }
+
+        string line = "";
+        bool urgent = false;
+
+        if (localPlayerLive)
+        {
+            Player me = Player.LocalPlayer;
+
+            //most severe first: whatever has the tightest grip on you is what you need to read
+            if (me.IsEliminated)
+            {
+                line = "You're out for the run.  Left click to watch someone else.";
+            }
+            else if (me.IsLockedUp)
+            {
+                //the air clock IS the threat here, so it goes on screen. it's what turns "wait" into "shout NOW"
+                line = $"Locked in the closet.  A teammate has to let you out.  {Mathf.CeilToInt(me.AirSecondsLeft)}s of air";
+                urgent = true;
+            }
+            else if (me.IsBeingDragged)
+            {
+                line = "He's got you.";
+                urgent = true;
+            }
+            else if (me.IsBearTrapped)
+            {
+                //NO countdown here, unlike the closet. bearTrapSelfEscapeSeconds is a failsafe against being stranded
+                //alone, not the intended way out - put a timer on screen and everyone just waits it out in silence
+                //instead of calling for help, which kills the co-op moment the trap exists to create.
+                line = "Trapped.  A teammate has to pry it off you.";
+                urgent = true;
+            }
+            else if (me.IsHiding)
+            {
+                line = "Hidden.  E to climb out.";
+            }
+        }
+
+        bool show = !string.IsNullOrEmpty(line);
+        if (statusRoot != null && statusRoot.activeSelf != show)
+        {
+            statusRoot.SetActive(show);
+        }
+        if (statusText != null)
+        {
+            statusText.text = line;
+            statusText.color = urgent ? statusUrgentColor : statusCalmColor;
+            if (statusRoot == null && statusText.enabled != show) statusText.enabled = show; //no panel wired, so the text hides itself
+        }
     }
 
     private IEnumerator PlayCaughtImpact()
