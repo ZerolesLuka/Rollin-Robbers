@@ -59,6 +59,10 @@ public class NoteSpawner : MonoBehaviour
             }
         });
 
-        Debug.Log($"[NOTE] spawned at '{marker.name}' {markerPosition} for safe id {targetSafeId}"); //TEMP - handy while there's no other way to find it
+#if UNITY_EDITOR
+        //EDITOR ONLY. searching for the note IS the mechanic, so shipping a line that says exactly where it landed
+        //would hand the crew the answer without them leaving the van.
+        Debug.Log($"[NOTE] spawned at '{marker.name}' {markerPosition} for safe id {targetSafeId}");
+#endif
     }
 }

@@ -280,7 +280,10 @@ public class RunManager : NetworkBehaviour
     private void ChangeState(RunState newState)
     {
         State = newState;
-        Debug.Log($"Run ended: {newState}"); // TEMP: trigger end screen / return to lobby here
+        //the end screens themselves live in HUD, which watches State change - nothing to trigger from here
+#if UNITY_EDITOR
+        Debug.Log($"Run ended: {newState}");
+#endif
 
         //run's over - everyone rides to the van, so seal its back until they pick where to go next. this one line
         //covers both ways a run ends: pressing E on the van (Success) and the whole team getting caught (Caught).

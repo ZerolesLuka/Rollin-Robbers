@@ -27,7 +27,7 @@ public partial class Player : NetworkBehaviour
     [Networked] public float NoiseLevel { get; private set; }
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private Transform playerCamera; //simple camera ref
-    [SerializeField] private float mouseSensitivity = 0.5f; //DOES NOT WORK
+    [SerializeField] private float mouseSensitivity = 0.5f; //IS wired - HandleLook multiplies raw <Mouse>/delta by it, and the Look action has no processors overriding it. what's missing is any way for a PLAYER to change it, which needs the settings menu. note that editing this on the prefab asset mid-play won't move the spawned instance
     [SerializeField] private CharacterController characterController; //charcontroller
     [SerializeField] private float standCamHeight = 0.559f; //set this to the camera's current local Y
     [SerializeField] private float crouchCamHeight = 0.1f;  //lower, tune to taste
