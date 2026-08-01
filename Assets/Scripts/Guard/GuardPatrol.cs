@@ -20,6 +20,12 @@ public class GuardPatrol : NetworkBehaviour
     private Door breakingWedgeOnDoor;                              //the door he's currently working on, null when he isn't
     private float breakingWedgeTimer;                              //seconds left on it
 
+    //TRAPS ONLY FOLLOW A REAL SIGHTING. lastKnownPosition is written by noise, squeaky toys, cameras and missing loot
+    //as well as by eyes, so keying traps off it meant a creaky floorboard in an empty room got the place wired. these
+    //two are set ONLY when he actually looks at a player, so a hunt he never saw anyone during ends with nothing.
+    private bool sawPlayerThisHunt;
+    private Vector3 lastSightingPosition;
+
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
@@ -332,9 +338,14 @@ public class GuardPatrol : NetworkBehaviour
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
                         {
-                            //giving up the hunt. he doesn't wire where he's stood - he wires around where he last had
-                            //eyes on someone, which is a guess about your route rather than knowledge of your position
-                            TryPlaceTrapNear(lastKnownPosition);
+                            //giving up the hunt. he only wires the place if he ACTUALLY SAW somebody at some point -
+                            //a search that started from a noise and turned up nothing gets no traps, because he has
+                            //no idea whether there was ever anyone there. and he wires around where he SAW them, not
+                            //where he's stood, so it stays a guess about your route rather than knowledge of it.
+                            if (sawPlayerThisHunt)
+                            {
+                                TryPlaceTrapNear(lastSightingPosition);
+                            }
                             ChangeState(GuardState.Relaxed);
                         }
                         else
@@ -372,6 +383,10 @@ public class GuardPatrol : NetworkBehaviour
                     lastTargetPosition = currentTargetPosition;
 
                     lastKnownPosition = currentTargetPosition; //still the real last-seen spot, used if we lose the target entirely
+                    if (canSeeTargetNow)
+                    {
+                        lastSightingPosition = currentTargetPosition; //EYES on them, not just sensed through a wall. this is the only thing traps are allowed to key off
+                    }
                     Vector3 predictedPosition = currentTargetPosition + targetVelocity * predictionLeadTime; //aim a little ahead instead of exactly where they are right now
                     agent.SetDestination(chaseTarget.IsHiding ? currentTargetPosition : predictedPosition); //no point leading a target who's stood still in a wardrobe
                 }
@@ -506,13 +521,15 @@ public class GuardPatrol : NetworkBehaviour
                 noiseAccumulator = 0f; //empty the bucket on every trip to sleep so he needs FRESH noise to wake
                 quietTimer = 0f; //reset the quiet clock too
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
+                sawPlayerThisHunt = false; //hunt's over. the next one starts having seen nobody
                 PlayStateSound(newState); //bark whenever he changes state
 
                 break;
             case GuardState.Relaxed:
-                agent.speed = relaxSpeed; 
+                agent.speed = relaxSpeed;
                 noiseAccumulator = 0f;
                 quietTimer = 0f;
+                sawPlayerThisHunt = false; //hunt's over, either because he gave up (traps already placed above) or because he caught them
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
             case GuardState.Suspicious:
@@ -544,6 +561,11 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     lastTargetPosition = chaseTarget.transform.position; //reset so the first velocity sample isn't computed against stale data from a previous chase
                     targetVelocity = Vector3.zero;
+
+                    //the ONLY way into Chasing is vision.CanSee returning true, so arriving here IS the sighting.
+                    //this is what unlocks traps for the rest of this hunt.
+                    sawPlayerThisHunt = true;
+                    lastSightingPosition = chaseTarget.transform.position;
                 }
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
