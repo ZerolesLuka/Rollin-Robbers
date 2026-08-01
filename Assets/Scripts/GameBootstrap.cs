@@ -218,13 +218,16 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     {
         if (networkRunner != null) return; //already connecting or connected, hide the menu
 
-        GUI.Label(new Rect(20, 20, 300, 30), "Room Title:");
-        roomTitle = GUI.TextField(new Rect(20, 45, 200, 30), roomTitle); //friends type the SAME title to land together
+        GUI.Label(new Rect(20, 20, 300, 30), "Name:");
+        PlayerIdentity.LocalName = GUI.TextField(new Rect(20, 45, 200, 30), PlayerIdentity.LocalName); //remembered between launches, and the one line Steam eventually replaces
 
-        GUI.Label(new Rect(20, 85, 300, 30), "Password (optional):");
-        roomPassword = GUI.PasswordField(new Rect(20, 110, 200, 30), roomPassword, '*'); //masked so it isn't readable over a shoulder or on stream
+        GUI.Label(new Rect(20, 85, 300, 30), "Room Title:");
+        roomTitle = GUI.TextField(new Rect(20, 110, 200, 30), roomTitle); //friends type the SAME title to land together
 
-        if (GUI.Button(new Rect(20, 150, 200, 40), "Connect"))
+        GUI.Label(new Rect(20, 150, 300, 30), "Password (optional):");
+        roomPassword = GUI.PasswordField(new Rect(20, 175, 200, 30), roomPassword, '*'); //masked so it isn't readable over a shoulder or on stream
+
+        if (GUI.Button(new Rect(20, 215, 200, 40), "Connect"))
         {
             if (string.IsNullOrWhiteSpace(roomTitle))
             {
@@ -238,11 +241,11 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
         //say this out loud: a wrong password can't be detected (it just resolves to another session), so a
         //player who ends up alone needs to know the likely reason instead of assuming the game is broken
-        GUI.Label(new Rect(20, 195, 420, 40), "Everyone must type the title AND password exactly.\nA mismatch puts you in your own empty room.");
+        GUI.Label(new Rect(20, 260, 420, 40), "Everyone must type the title AND password exactly.\nA mismatch puts you in your own empty room.");
 
         if (!string.IsNullOrEmpty(connectError))
         {
-            GUI.Label(new Rect(20, 240, 400, 30), connectError); //why the last attempt failed, so a typo isn't a silent mystery
+            GUI.Label(new Rect(20, 305, 400, 30), connectError); //why the last attempt failed, so a typo isn't a silent mystery
         }
     }
 

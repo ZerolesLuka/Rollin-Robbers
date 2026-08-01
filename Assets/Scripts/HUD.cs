@@ -12,6 +12,8 @@ public class HUD : MonoBehaviour
     [SerializeField] private Text timerText;        //live heist clock, mm:ss (optional - leave unassigned to hide it)
     [SerializeField] private Text[] inventorySlotTexts; //4 slot labels; each shows the held item's name or empty
     [SerializeField] private Color emptySlotColor = new Color(0.5f, 0.5f, 0.5f, 0.5f); //dim tint for an empty inventory slot
+    [SerializeField, Range(0.2f, 1f)] private float unselectedSlotDim = 0.55f; //how far the slots you're NOT holding drop back, so the selected one stands out
+    [SerializeField] private GameObject lootWheelRoot; //optional radial graphic, shown only while MMB is held. the slot list works without it
 
     [SerializeField] private Text interactPromptText; //"E  Open the door" etc, near the crosshair. optional - leave unassigned to hide it. the text comes from Player.InteractPrompt, which is derived from the SAME scan that E acts on, so it can't lie
 
@@ -87,8 +89,18 @@ public class HUD : MonoBehaviour
                 if (slot < inventory.Count)
                 {
                     InventoryItem carried = inventory[slot];
-                    inventorySlotTexts[slot].text = $"{carried.name} (${carried.value})";
-                    inventorySlotTexts[slot].color = LootRarityTable.ColorFor(carried.value); //tint the slot by how valuable the item is - orange = jackpot
+                    bool isSelected = slot == Player.LocalPlayer.SelectedSlot;
+
+                    //mark the one G will actually drop. it was invisible before, so players had no way to know what
+                    //they were about to put on the floor.
+                    inventorySlotTexts[slot].text = isSelected
+                        ? $"> {carried.name} (${carried.value})"
+                        : $"{carried.name} (${carried.value})";
+
+                    Color slotColor = LootRarityTable.ColorFor(carried.value); //tint the slot by how valuable the item is - orange = jackpot
+                    if (!isSelected) slotColor *= unselectedSlotDim; //dim the rest so the selected one reads at a glance
+                    slotColor.a = 1f;
+                    inventorySlotTexts[slot].color = slotColor;
                 }
                 else
                 {
@@ -99,6 +111,12 @@ public class HUD : MonoBehaviour
         }
 
         bool localPlayerLive = Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid;
+
+        if (lootWheelRoot != null)
+        {
+            bool wheelUp = localPlayerLive && Player.LocalPlayer.IsLootWheelOpen;
+            if (lootWheelRoot.activeSelf != wheelUp) lootWheelRoot.SetActive(wheelUp);
+        }
 
         if (interactPromptText != null)
         {

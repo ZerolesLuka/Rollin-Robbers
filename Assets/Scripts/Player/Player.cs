@@ -74,6 +74,8 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float bearTrapSelfEscapeSeconds = 30f; //LAST-RESORT failsafe, not the intended way out: a teammate should free you long before this. set it to 0 to make it teammate-only forever, but read the warning in RPC_CaughtInBearTrap first
     private float bearTrapTimer;                                //counts the failsafe down on our own machine
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
+    [Networked] public NetworkString<_16> DisplayName { get; private set; } //who this is, for nameplates. written once by the owner in Spawned; the source lives in PlayerIdentity so Steam can take over later
+
     [Networked] public int WedgesCarried { get; private set; } //door wedges in your pockets. networked so teammates' prompts and the HUD can see what you're holding
     [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
     [SerializeField] private int maxWedgesCarried = 3;
@@ -148,6 +150,7 @@ public partial class Player : NetworkBehaviour
         if (HasInputAuthority) //if our player
         {
             LocalPlayer = this; //set the local player to this instance of the player script
+            DisplayName = PlayerIdentity.ResolveName(Object.InputAuthority.PlayerId); //only the owner names itself; it replicates to everyone else's nameplate
             mainCam.enabled = true; //this our camera
             playerCamera = virtualCam.transform; //set the player camera to the virtual cam's transform, which is used for looking up and down
             playerInputActions = new PlayerInputActions(); //our input actions
@@ -204,6 +207,7 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
+        UpdateLootWheel(); //hold MMB to pick which item G drops
         UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
         UpdateInteractPrompt(); //what E would do from where we're standing - the HUD reads InteractPrompt. runs before the computer bail-out because it has to clear itself when we sit down

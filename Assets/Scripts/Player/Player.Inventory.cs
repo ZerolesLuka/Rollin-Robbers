@@ -53,8 +53,11 @@ public partial class Player
 
         if (inventory.Count == 0 || worldItemPrefab == null) return;
 
-        InventoryItem dropped = inventory[inventory.Count - 1]; //drop the most recently picked up (the one you're "holding")
-        inventory.RemoveAt(inventory.Count - 1);
+        int slot = ResolveDropSlot(); //whatever the loot wheel is pointing at, clamped - the list shrinks under a stale index
+        if (slot < 0) return;
+
+        InventoryItem dropped = inventory[slot];
+        inventory.RemoveAt(slot);
 
         Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
         Runner.Spawn(worldItemPrefab, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point
