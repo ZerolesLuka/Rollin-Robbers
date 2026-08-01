@@ -85,6 +85,15 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
     {
         if (Player.LocalPlayer == null || Player.LocalPlayer.playerInputActions == null) return;
 
+        //menu's up: send EMPTY input rather than skipping the call. skipping it makes Fusion reuse our last input, so
+        //a player who paused mid-sprint would keep running into a wall while reading the menu. an empty struct means
+        //we stand still - vulnerable, which is the point, but not sprinting off on our own.
+        if (Player.LocalPlayer.IsPaused)
+        {
+            input.Set(new NetworkInputData());
+            return;
+        }
+
         NetworkInputData networkInputData = new NetworkInputData();
         networkInputData.movementInput = Player.LocalPlayer.playerInputActions.Player.Move.ReadValue<Vector2>();
         networkInputData.crouchInput = Player.LocalPlayer.playerInputActions.Player.Crouch.ReadValue<float>() > 0.5f; //read the crouch input from the player and store it in the struct, converts float to bool

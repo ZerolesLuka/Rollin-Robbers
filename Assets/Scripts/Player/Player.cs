@@ -191,6 +191,19 @@ public partial class Player : NetworkBehaviour
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
+
+        UpdatePause();     //Escape brings the menu up. it does NOT stop the game for anyone, including us
+        UpdateSpectator(); //once we're out of the run, orbit a living teammate instead of our own frozen body
+
+        //the menu being up, or us watching someone else, both mean our own look and reach are off. the SIMULATION
+        //carries on regardless - our body is still stood there and can still be caught while we read the menu.
+        if (IsPaused || spectatorActive)
+        {
+            InteractPrompt = "";
+            InteractAnchor = null;
+            return;
+        }
+
         UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
         UpdateInteractPrompt(); //what E would do from where we're standing - the HUD reads InteractPrompt. runs before the computer bail-out because it has to clear itself when we sit down
