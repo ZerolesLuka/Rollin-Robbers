@@ -306,8 +306,9 @@ public partial class Player
             case InteractKind.PullWedge:
                 //both are the same act: the wedge object goes away and we're carrying one. pulling one out of a door
                 //unjams it as a side effect, because Door.IsWedged is derived from the wedges that exist.
-                ((DoorWedge)target).RPC_TakeWedge();
-                CarryWedge();
+                //ASK, don't take - the wedge's owner picks a single winner and grants it back (RPC_GrantWedge), the
+                //same way loot pickup resolves. counting it locally would let two players share one wedge.
+                ((DoorWedge)target).RPC_TakeWedge(Object.InputAuthority);
                 break;
 
             case InteractKind.WedgeStuck:

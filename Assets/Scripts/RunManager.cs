@@ -197,6 +197,14 @@ public class RunManager : NetworkBehaviour
         }
         if (nearest != null)
         {
+            //a wedged door refuses to OPEN, whoever asked. Door.SetOpen has this same guard, but nothing reaches it
+            //any more now that every openable routes through the hinge instead - so the check has to live here too,
+            //or a wedge would only stop the prompt from offering rather than actually holding the door shut.
+            if (open)
+            {
+                Door houseDoor = nearest.GetComponent<Door>();
+                if (houseDoor != null && houseDoor.IsWedged) return;
+            }
             nearest.SetOpen(open);
         }
     }

@@ -99,9 +99,18 @@ public class WorldInteractPrompt : MonoBehaviour
 
     private void Show(bool visible)
     {
-        if (promptCanvas != null && promptCanvas.enabled != visible)
+        //toggling the Canvas rather than the GameObject keeps LateUpdate running so we can turn it back on
+        if (promptCanvas != null)
         {
-            promptCanvas.enabled = visible; //toggling the Canvas rather than the GameObject keeps LateUpdate running so we can turn it back on
+            if (promptCanvas.enabled != visible) promptCanvas.enabled = visible;
+            return;
+        }
+
+        //no Canvas found or assigned. without this the label would simply never hide - it'd sit on screen showing the
+        //last thing you walked past, which reads as a broken prompt rather than a missing reference.
+        if (promptText != null && promptText.enabled != visible)
+        {
+            promptText.enabled = visible;
         }
     }
 }

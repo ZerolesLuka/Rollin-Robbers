@@ -407,7 +407,8 @@ public partial class Player : NetworkBehaviour
         HidingSpotId = hiding ? spotId : HidingSpot.NoSpot;
     }
 
-    public void CarryWedge() //picked one up off the floor or pulled one back out of a door
+    [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)] //the wedge's owner decided WE won it; this lands on our machine
+    public void RPC_GrantWedge()
     {
         if (WedgesCarried < maxWedgesCarried) WedgesCarried++;
     }
@@ -427,7 +428,9 @@ public partial class Player : NetworkBehaviour
         Vector3 doorPosition = door.transform.position;
         Vector3 wedgePosition = doorPosition + door.ThroughDoorway * (0.35f * side); //sat at the foot of the door, on our side of it
 
-        Runner.Spawn(doorWedgePrefab, wedgePosition, Quaternion.identity, Object.InputAuthority, (runner, spawnedObject) =>
+        //PlayerRef.None, not us: a wedge owned by the player who placed it would go with them when they disconnect,
+        //silently un-jamming a door someone was counting on. the master holds it, like the traps and the loot.
+        Runner.Spawn(doorWedgePrefab, wedgePosition, Quaternion.identity, PlayerRef.None, (runner, spawnedObject) =>
         {
             DoorWedge wedge = spawnedObject.GetComponent<DoorWedge>();
             if (wedge != null)
@@ -471,6 +474,7 @@ public partial class Player : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine, so we own the movement in Shared Mode
     public void RPC_GetDragged(GuardPatrol guard)
     {
+        IsBearTrapped = false; //being hauled off overrides being pinned - the drag branch owns our position from here
         LoseCarriedLoot();                   // hauled off to the closet - the haul spills the moment he grabs you (jail's mercy is staying in the run, not keeping the loot). flip this line off if jail should let a rescued player keep their loot
         draggingGuard = guard;
         isBeingDragged = true;
@@ -491,6 +495,9 @@ public partial class Player : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] // runs on the dragged player's own machine
     public void RPC_GetLockedUp(Vector3 closetPosition)
     {
+        IsBearTrapped = false; //he's carried us off; whatever had our ankle doesn't any more. leaving it set would run
+                               //the bear-trap branch ahead of the closet one, leaking noise 26 out of a locked wardrobe
+                               //and pausing the suffocation clock that's supposed to be the whole threat
         isBeingDragged = false;
         draggingGuard = null;
         characterController.enabled = false; // toggle the CC so it accepts the teleport

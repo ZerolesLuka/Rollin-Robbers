@@ -95,9 +95,26 @@ public class DoorWedge : NetworkBehaviour
         return nearest;
     }
 
+    [Networked] private NetworkBool claimed { get; set; } //ONE machine decides who actually gets this wedge
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_TakeWedge() //picked up off the floor, or pulled back out of a door. the authority owns the despawn
+    public void RPC_TakeWedge(PlayerRef requester) //picked up off the floor, or pulled back out of a door
     {
+        //ASK, don't take. incrementing the carrier's count locally let two players grabbing the same wedge on the
+        //same tick BOTH end up carrying one off a single object, which is the exact money dupe WorldItem already had.
+        //the loser's request simply arrives second and is dropped.
+        if (claimed) return;
+        claimed = true;
+
+        foreach (Player player in Player.ActivePlayers)
+        {
+            if (player != null && player.Object != null && player.Object.InputAuthority == requester)
+            {
+                player.RPC_GrantWedge();
+                break;
+            }
+        }
+
         if (Object != null && Object.IsValid)
         {
             Runner.Despawn(Object);
