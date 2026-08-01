@@ -12,27 +12,7 @@ using UnityEngine.SceneManagement;
 // the pawn shop, or enter/exit a hiding spot. First match wins and returns.
 public partial class Player
 {
-    private void HandleCracking(bool interactHeld)
-    {
-        //cracking is a HOLD, not a tap. we don't fill the meter here - we just publish WHICH un-opened safe we're
-        //standing on via networked CrackingSafeId (same one-source-of-truth idea as the hiding spots). the safe
-        //itself reads every player's CrackingSafeId in its FixedUpdateNetwork and advances its own meter. stop
-        //holding, or walk out of range, and CrackingSafeId clears - the meter just pauses, it never resets.
-        Safe target = interactHeld ? FindCrackableSafe() : null;
-        SetCrackingSafe(target != null ? target.SafeId : Safe.NoSafe);
-    }
-
-    private bool IsLootWithinReach() //loot we could take if our hands were empty. only used to explain a full bag, never to act
-    {
-        foreach (WorldItem item in WorldItem.AllItems)
-        {
-            if (item.pendingRemoval) continue;
-            if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange) return true;
-        }
-        return false;
-    }
-
-    private Safe FindCrackableSafe() //nearest un-cracked safe we're standing close enough to work on, or null
+    private Safe NearestCrackableSafe()
     {
         Safe nearest = null;
         float nearestDistance = float.MaxValue;
@@ -50,6 +30,44 @@ public partial class Player
             }
         }
         return nearest;
+    }
+
+    private void HandleCracking(bool interactHeld)
+    {
+        //E does two different things at a safe. TAP it and the keypad comes up - type the code off the note and it
+        //pops instantly and silently. HOLD it and you brute-force the dial instead: slow, loud, and a genuinely bad
+        //idea with the guard awake. That's the whole risk/reward - go find the note, or gamble that he's far enough away.
+        Safe nearbySafe = NearestCrackableSafe();
+
+        if (interactHeld && nearbySafe != null)
+        {
+            safeInteractHoldTime += Runner.DeltaTime;
+        }
+        else if (!interactHeld)
+        {
+            //released. a SHORT press near a safe was a tap, so bring the keypad up instead of cracking.
+            if (safeInteractHoldTime > 0f && safeInteractHoldTime < safeHoldToCrackTime && nearbySafe != null)
+            {
+                OpenSafeKeypad(nearbySafe);
+            }
+            safeInteractHoldTime = 0f;
+        }
+
+        //only publish that we're cracking once the hold passes the threshold, so a tap never nudges the meter.
+        //the safe reads every player's CrackingSafeId in its own FixedUpdateNetwork and advances itself; let go or
+        //walk out of range and this clears, which PAUSES the meter rather than resetting it.
+        bool actuallyCracking = interactHeld && nearbySafe != null && safeInteractHoldTime >= safeHoldToCrackTime;
+        SetCrackingSafe(actuallyCracking ? nearbySafe.SafeId : Safe.NoSafe);
+    }
+
+    private bool IsLootWithinReach() //loot we could take if our hands were empty. only used to explain a full bag, never to act
+    {
+        foreach (WorldItem item in WorldItem.AllItems)
+        {
+            if (item.pendingRemoval) continue;
+            if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange) return true;
+        }
+        return false;
     }
 
     //What E would act on right now. HandleInteract performs it and the HUD prompt describes it, both off THIS one
@@ -104,6 +122,17 @@ public partial class Player
             }
         }
 
+        //reading a safe-code note. doesn't need RunManager, and it's above the doors/van so a note lying on a desk
+        //next to something else still wins - it's a tiny target and the most annoying thing to fail to pick up.
+        foreach (SafeNote note in SafeNote.AllNotes)
+        {
+            if (Vector3.Distance(transform.position, note.transform.position) <= note.ReadRange)
+            {
+                LearnSafeCode(note.ReadCode()); //onto OUR hud only - the whole point is reading it out to whoever's at the safe
+                return;
+            }
+        }
+
         //everything below this point needs the RunManager
         if (RunManager.Instance == null) return InteractKind.None;
 
@@ -122,17 +151,13 @@ public partial class Player
             }
         }
 
-        Door nearestSwingDoor = null;
-        float nearestSwingDistance = float.MaxValue;
-        foreach (Door swingDoor in Door.AllDoors)
-        {
-            float distanceToDoor = Vector3.Distance(transform.position, swingDoor.transform.position);
-            if (distanceToDoor <= swingDoor.interactRange && distanceToDoor < nearestSwingDistance)
-            {
-                nearestSwingDoor = swingDoor;
-                nearestSwingDistance = distanceToDoor;
-            }
-        }
+        //ANY openable, not just doors. searching SwingingHinge instead of Door means a cupboard, a drawer or a
+        //jewellery box is interactive with that one component on it - no Door script bolted on to props that aren't
+        //doors. house doors still turn up here because every door owns a hinge.
+        SwingingHinge nearestSwingDoor = SwingingHinge.FindNearest(transform.position);
+        float nearestSwingDistance = nearestSwingDoor != null
+            ? Vector3.Distance(transform.position, nearestSwingDoor.transform.position)
+            : float.MaxValue;
 
         if (nearestExit != null || nearestSwingDoor != null)
         {
@@ -290,14 +315,14 @@ public partial class Player
 
         InteractKind kind = FindInteraction(out Component target);
 
-        //nothing tappable in reach, so fall back to the two things that aren't tap-actions: a safe (which is a HOLD)
-        //and loot we can SEE but can't carry. checked in that order and only here, so standing at a safe next to a
-        //door doesn't flip the line back and forth between two things that are both true.
+        //nothing tappable in reach, so fall back to the two things FindInteraction doesn't cover: a safe (its own
+        //tap-vs-hold input path) and loot we can SEE but can't carry. checked in that order and only here, so
+        //standing at a safe next to a door doesn't flip the line back and forth between two things that are both true.
         if (kind == InteractKind.None)
         {
-            if (FindCrackableSafe() != null)
+            if (NearestCrackableSafe() != null)
             {
-                InteractPrompt = "Hold E to crack the safe";
+                InteractPrompt = "E  Enter the code    (hold to force it open)"; //both halves of the safe, because the tap and the hold do genuinely different things
             }
             else if (inventory.Count >= maxInventorySlots && IsLootWithinReach())
             {

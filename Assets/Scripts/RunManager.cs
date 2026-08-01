@@ -32,9 +32,11 @@ public class RunManager : NetworkBehaviour
     //this, stepping out an exit door and back in handed you a brand-new guard: anger wiped, ears reset, fast asleep.
     //that made a door a panic button that deleted all the tension you'd built. he now carries his mood across the
     //trip and only forgets it when a genuinely new run starts.
+    [Networked] public int RunGeneration { get; set; } // bumped by ResetForNewRun. the guard stamps his saved mood with the generation he LIVED in, and only restores it if that still matches - Fusion's Despawned() fires a tick or more after Runner.Despawn(), so it lands AFTER the reset and can't be ordered around
     [Networked] public NetworkBool HasSavedGuardState { get; set; } // false = no guard has been saved this run, roll him fresh
     [Networked] public float SavedGuardAnger { get; set; }
     [Networked] public float SavedGuardNoiseThreshold { get; set; }
+    [Networked] public int SavedGuardRunGeneration { get; set; } // which run the saved mood belongs to
     [Networked] public int SavedGuardAsleepChances { get; set; }
 
     [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
@@ -82,15 +84,22 @@ public class RunManager : NetworkBehaviour
     public void RPC_LoadScene(int buildIndex, int spawnPointId)
     {
         EntrySpawnPointId = spawnPointId;
-        if (GuardPatrol.Instance != null)
+        DespawnHouseAI();
+        LoadSceneForEveryone(buildIndex);
+    }
+
+    private void DespawnHouseAI() //neither guard type can navigate the outdoor NavMesh, so both are cleaned up before any scene change
+    {
+        //re-check the objects are actually live. Runner.Despawn only QUEUES the despawn and Despawned() (which nulls
+        //Instance) fires a tick or more later, so a stale Instance can survive long enough to be despawned twice.
+        if (GuardPatrol.Instance != null && GuardPatrol.Instance.Object != null && GuardPatrol.Instance.Object.IsValid)
         {
             Runner.Despawn(GuardPatrol.Instance.Object);
         }
-        if (DogAI.Instance != null)
+        if (DogAI.Instance != null && DogAI.Instance.Object != null && DogAI.Instance.Object.IsValid)
         {
-            Runner.Despawn(DogAI.Instance.Object); //neither guard type can navigate the outdoor NavMesh - clean up before leaving
+            Runner.Despawn(DogAI.Instance.Object);
         }
-        LoadSceneForEveryone(buildIndex);
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
@@ -143,14 +152,7 @@ public class RunManager : NetworkBehaviour
         VanBackClosed = false; //picked a destination - the van's back opens onto whatever scene we're routing to. this runs BEFORE the scene load, and the flag survives it (RunManager is DontDestroyOnLoad + networked), so the destination van starts open
         //despawn BEFORE any reset. the guard saves his mood into this RunManager as he despawns, so resetting first
         //would just get overwritten by the guard he was a second ago and he'd walk into the new house still furious.
-        if (GuardPatrol.Instance != null)
-        {
-            Runner.Despawn(GuardPatrol.Instance.Object);
-        }
-        if (DogAI.Instance != null)
-        {
-            Runner.Despawn(DogAI.Instance.Object);
-        }
+        DespawnHouseAI();
         if (startNewRun)
         {
             ResetForNewRun(); //House button - back to InProgress so the run-over van ride doesn't instantly re-trigger
@@ -177,18 +179,20 @@ public class RunManager : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]
-    public void RPC_SetDoorOpen(Vector3 doorPosition, NetworkBool open) //ONE path for every door change - players pressing E, and the guard/dog shoving one open. doors aren't NetworkObjects, so we identify one by WHERE it is: static scene geometry sits at identical coordinates on every client, so "nearest door to this point" resolves the same for everyone, with nothing to configure per door
+    public void RPC_SetDoorOpen(Vector3 doorPosition, NetworkBool open) //ONE path for EVERY openable - house doors, cupboards, drawers, jewellery boxes - whether a player pressed E or the guard shoved it. none of them are NetworkObjects, so we identify one by WHERE it is: static scene geometry sits at identical coordinates on every client, so "nearest hinge to this point" resolves the same for everyone, with nothing to configure per object
     {
-        const float maxDoorMatchDistance = 1f; //the match must be essentially exact. without a cap, "nearest" would happily grab a door on the far side of the house - or one lingering in the static list from the scene we just left (SpawnPoint hit exactly that) - and swing the wrong one
-        Door nearest = null;
+        //searches SwingingHinge rather than Door on purpose. every door owns a hinge, so doors are still covered, but
+        //a prop no longer needs a Door component bolted on just to be openable - one script per object, as intended.
+        const float maxDoorMatchDistance = 1f; //the match must be essentially exact. without a cap, "nearest" would happily grab something on the far side of the house - or one lingering in the static list from the scene we just left (SpawnPoint hit exactly that) - and swing the wrong one
+        SwingingHinge nearest = null;
         float nearestDistance = maxDoorMatchDistance;
-        foreach (Door door in Door.AllDoors)
+        foreach (SwingingHinge hinge in SwingingHinge.AllHinges)
         {
-            float distance = Vector3.Distance(door.transform.position, doorPosition);
+            float distance = Vector3.Distance(hinge.transform.position, doorPosition);
             if (distance < nearestDistance)
             {
                 nearestDistance = distance;
-                nearest = door;
+                nearest = hinge;
             }
         }
         if (nearest != null)
@@ -260,6 +264,7 @@ public class RunManager : NetworkBehaviour
         GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
         HouseLootTotal = 0; //ItemSpawner re-tallies the new run's loot when the indoor scene reloads
         HasSavedGuardState = false; //genuinely new heist: the guard forgets last run's mood and gets rolled fresh
+        RunGeneration++;            //and stamp a new generation, so a mood saved by the OLD guard (whose Despawned fires after this) can't be mistaken for this run's
         RunTime = 0f; //fresh clock for the new heist
         FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run
     }
@@ -288,14 +293,7 @@ public class RunManager : NetworkBehaviour
         //only reload if players are still indoors - if the run ended at the van (success) everyone's already outside, and reloading the scene you're standing in doesn't reliably fire activeSceneChanged. players ride to their van seat from Player.FixedUpdateNetwork either way.
         if (SceneManager.GetActiveScene().buildIndex != outdoorSceneBuildIndex)
         {
-            if (GuardPatrol.Instance != null)
-            {
-                Runner.Despawn(GuardPatrol.Instance.Object);
-            }
-            if (DogAI.Instance != null)
-            {
-                Runner.Despawn(DogAI.Instance.Object);
-            }
+            DespawnHouseAI();
             LoadSceneForEveryone(outdoorSceneBuildIndex); //brings the indoor players out; the van seats exist in that scene
         }
     }

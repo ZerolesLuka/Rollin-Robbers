@@ -71,6 +71,8 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
+    [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
+    private float safeInteractHoldTime;                         //how long E has been held at a safe this press
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     private bool wasHiding;
 
@@ -158,15 +160,29 @@ public partial class Player : NetworkBehaviour
     {
         UpdateVoiceMuffle(); //taped mouth: low-pass this player's runtime voice Speaker while locked up. Runs on ALL clients so every teammate hears the muffle, driven by the [Networked] IsLockedUp
 
-        if (playerVisuals != null && Object != null && Object.IsValid && IsHiding != wasHiding)
+        //hiding has to switch off the BODY as well as the mesh. it used to only hide the visuals, which left a live
+        //CharacterController standing in the closet - teammates walked into an invisible person blocking the doorway.
+        //runs on every client, because it's the remote copy of you that everyone else actually collides with.
+        if (Object != null && Object.IsValid && IsHiding != wasHiding)
         {
             wasHiding = IsHiding;
-            playerVisuals.SetActive(!IsHiding); // runs on all clients so other players see you vanish
+            if (playerVisuals != null)
+            {
+                playerVisuals.SetActive(!IsHiding); // runs on all clients so other players see you vanish
+            }
+            if (characterController != null)
+            {
+                //climbing OUT only gives the body back if nothing else is holding it - being ripped from a closet by
+                //the guard clears IsHiding on the same tick he starts dragging you, and re-enabling here would undo
+                //the freeze he just applied.
+                characterController.enabled = !IsHiding && !IsLockedUp && !IsEliminated && !isBeingDragged;
+            }
         }
 
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
+        UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
         UpdateInteractPrompt(); //what E would do from where we're standing - the HUD reads InteractPrompt. runs before the computer bail-out because it has to clear itself when we sit down
         if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
@@ -289,7 +305,10 @@ public partial class Player : NetworkBehaviour
 
         if (IsHiding) // locked inside a hiding spot - can't move, but can still press E to exit
         {
-            NoiseLevel = 0f;
+            //a closet door isn't soundproof. movement noise is gone (you're not moving), but your VOICE still
+            //carries out - so chattering on the mic while the guard walks past is what gives you away. staying
+            //quiet in there is a real choice, not just a wait.
+            NoiseLevel = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
             if (GetInput(out NetworkInputData hidingInput))
                 HandleInteract(hidingInput.interactInput);
             return;
@@ -362,6 +381,12 @@ public partial class Player : NetworkBehaviour
     public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
     {
         CrackingSafeId = safeId;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //the guard yanks the door open. has to be an RPC: in Shared Mode only WE own our own networked state, so he can't clear IsHiding for us directly
+    public void RPC_PulledFromHiding()
+    {
+        SetHiding(false, HidingSpot.NoSpot);
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp

@@ -124,7 +124,7 @@ public class SecurityCamera : MonoBehaviour
         dwellTimer = 0f;
         cooldownTimer = alertCooldown;
 
-        if (GuardPatrol.Instance != null) GuardPatrol.Instance.AlertTo(position, false); //master only, alertDog:false - the camera summons the GUARD but never the dog (a dog doesn't watch monitors). the spotted sound already played on sight (see Update)
+        if (GuardPatrol.Instance != null) GuardPatrol.Instance.AlertTo(position); //master only - summons the guard. he never forwards it to the dog, so the camera still can't reach the dog (a dog doesn't watch monitors). the spotted sound already played on sight (see Update)
     }
 
     private void OnDrawGizmos()

@@ -16,6 +16,14 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float catchRange = 2f; //how close he has to get to grab you
     [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
+    [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
+    [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
+    [SerializeField] private float wakeUpHoldTime = 1.5f;       //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
+    private float wakeUpHoldTimer;                              //counts down while he's climbing to his feet
+    [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
+    [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe
+    private bool sawTargetEnterHiding;                          //did we have eyes on the chase target the moment they dove into a spot? if so we know which one
+    private int myRunGeneration;                                //which heist this guard instance belongs to - captured at spawn, stamped onto his saved mood at despawn
     private float noiseDrainRate = 1.5f; //how fast the bucket empties when it's quiet
     private float noiseMemoryTime = 2f; //hold the bucket this long after the last noise before draining
     private float quietTimer; //how long it's been quiet since the last noise
@@ -25,7 +33,6 @@ public class GuardPatrol : NetworkBehaviour
     private Player chaseTarget;//last seen player
     private Player escortTarget; //who he's currently dragging to the closet
     private Vector3 lastKnownPosition; //playerpos
-    private bool alertShouldPingDog = true; //whether the current alert also pulls the dog in - AlertTo sets this; the camera sets it false so it wakes ONLY the guard
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
     private int asleepChancesMax = 3; //false alarms he shrugs off before he stays permanently alert (never drops fully back to sleep)
     private float relaxPatrolTimer;
@@ -33,7 +40,6 @@ public class GuardPatrol : NetworkBehaviour
     private float relaxIdleMax = 8f;
 
     private NavMeshAgent agent; //guard
-    private Transform[] waypoints; //guard patrol
     private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
 
@@ -41,6 +47,7 @@ public class GuardPatrol : NetworkBehaviour
     private GuardHearing hearing; //reusable ears component - noise perception config (range/threshold) lives there
 
     private GuardAudio guardAudio; //reusable voice component - AudioSource + bark clips + the networked bark RPC live there
+    private GuardAnimation guardAnimation; //drives the Animator; we ask it whether the get-up clip is still running
 
     private float searchSweepRadius = 6f;
     [SerializeField] private int maximumSearchSweepPoints = 3; //spots he checks before giving up a search - bigger = he hunts longer
@@ -69,6 +76,8 @@ public class GuardPatrol : NetworkBehaviour
     private float sweepLookRange = 45f; //how far left/right of center he turns while waiting at a search point
     private float sweepLookSpeed = 90f;  //degrees per second the look oscillates back and forth
     private bool isSweepingSearchPoint;
+    [SerializeField] private float turnSpeed = 540f; //degrees per second he turns to face his direction of travel. lower = he leans into corners, higher = snappier
+    private Vector3 lastFacingPosition;              //where he was last tick, so we can work out which way he actually moved
     private float sweepBaseYaw;    //the direction he was facing when he arrived - the look oscillates around this, not world-forward
     private float sweepPhaseTimer;
 
@@ -91,7 +100,6 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float angerEliminateThreshold = 60f; //at/above this, a catch eliminates you for the run instead of just jailing you. higher = more forgiving
     [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
 
-    private int currentWaypoint = 0; //used in modulo
 
     public override void Spawned()
     {
@@ -99,6 +107,7 @@ public class GuardPatrol : NetworkBehaviour
         vision = GetComponent<GuardVision>(); //reusable sight component sits on the same GameObject
         hearing = GetComponent<GuardHearing>(); //reusable ears component sits on the same GameObject
         guardAudio = GetComponent<GuardAudio>(); //reusable voice component sits on the same GameObject
+        guardAnimation = GetComponent<GuardAnimation>(); //optional - he still works headless, just without the clip-length hold
         if (!HasStateAuthority)
         {
             agent.enabled = false;
@@ -110,9 +119,15 @@ public class GuardPatrol : NetworkBehaviour
 
         //every scene load despawns and respawns him, so a fresh roll here would mean walking out an exit door and
         //back in handed the players a brand-new guard with no anger and factory-reset ears. carry his mood over
-        //instead; RunManager only clears it when a genuinely new run begins.
-        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
-            && RunManager.Instance.HasSavedGuardState)
+        //instead - but ONLY if it belongs to the run we're currently in.
+        bool runManagerLive = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid;
+        myRunGeneration = runManagerLive ? RunManager.Instance.RunGeneration : 0; //remember which run WE live in, so our own Despawned can stamp the mood correctly
+
+        //the generation check is what makes this safe: Fusion fires Despawned() a tick or more AFTER Runner.Despawn(),
+        //so the old guard banks his mood AFTER ResetForNewRun has already cleared it. Comparing generations means a
+        //mood from the previous heist simply doesn't match, no matter which order the two things happen in.
+        if (runManagerLive && RunManager.Instance.HasSavedGuardState
+            && RunManager.Instance.SavedGuardRunGeneration == RunManager.Instance.RunGeneration)
         {
             Anger = RunManager.Instance.SavedGuardAnger;
             noiseThreshold = RunManager.Instance.SavedGuardNoiseThreshold;
@@ -123,6 +138,8 @@ public class GuardPatrol : NetworkBehaviour
             noiseThreshold = Random.Range(wakeThresholdMin, wakeThresholdMax); //random wake threshold so players cant memorize the exact amount
         }
         agent.updatePosition = false; //agent still steers/pathfinds, but WE move the transform on the tick so NetworkTransform doesn't fight it
+        agent.updateRotation = false; //and we turn him too - see FaceMovementDirection. the agent's own rotation aims at where it WANTS to go, which drifts from where we actually put him
+        lastFacingPosition = transform.position;
         agent.Warp(transform.position); 
     }
 
@@ -134,9 +151,32 @@ public class GuardPatrol : NetworkBehaviour
         }
         if (!HasStateAuthority) return; //only run for the state authority, which is the host in this case, so only the host will control the guard's movement
 
+        //just woken - pin him in place until the standing-up animation has played out. without this he'd be pathing
+        //off to investigate while the clip still has him flat on the floor, which reads as him sliding through the
+        //ground. he's a free hit for a moment, which is a fair trade for it not looking broken.
+        //
+        //the timer covers the gap before the Animator has actually entered the get-up state (the bool takes a tick or
+        //two to propagate); GuardAnimation then holds him for as long as the clip really runs. that way the clip
+        //length is the source of truth and there's no magic number to keep in sync when the animation is swapped.
+        bool stillGettingUp = guardAnimation != null && guardAnimation.IsGettingUp;
+        if (wakeUpHoldTimer > 0f || stillGettingUp)
+        {
+            if (wakeUpHoldTimer > 0f)
+            {
+                wakeUpHoldTimer -= Runner.DeltaTime;
+            }
+            agent.ResetPath();                     //drop whatever destination woke him; he'll re-path once he's up
+            //push the AGENT to us, not us to the agent. it used to be the other way round, and that was the bug:
+            //his bed isn't on the NavMesh, so the agent sits on the floor beside it - and dragging the transform onto
+            //the agent every tick slid him off the mattress the instant he started waking.
+            agent.nextPosition = transform.position;
+            return;
+        }
+
         TickAnger(); //rise while chasing, cool while calm
         CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
         OpenDoorInMyWay(); //shove open any shut door he walks into, so he isn't clipping through solid doors
+        CheckNoisyHidingSpots(); //someone running their mouth inside a wardrobe he's stood next to
 
         if (floorboardCreakCount > 0) //let the creak count fade if the creaking stops
         {
@@ -158,9 +198,9 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Relaxed:
                 ListenForNoise();
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
-                if (relaxPatrolTimer <= 0f && waypoints != null && waypoints.Length > 0 && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                if (relaxPatrolTimer <= 0f && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
-                    PickNextWaypoint(); //random non-repeating pick instead of a fixed cycle - a memorized loop is a stealth game's biggest exploit
+                    PickWanderPoint(); //no fixed route at all - he drifts to random reachable spots, so there's nothing to memorise
                     relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit then move again
                 }
                 break;
@@ -226,7 +266,7 @@ public class GuardPatrol : NetworkBehaviour
                     if (!isSweepingSearchPoint) //just arrived - lock in facing direction and take manual control of rotation while we look around
                     {
                         isSweepingSearchPoint = true;
-                        agent.updateRotation = false; //nothing to path toward right now anyway, so this can't fight the agent's own auto-rotate
+                        //rotation is ours now (see FaceMovementDirection); isSweepingSearchPoint is what tells it to back off
                         sweepBaseYaw = transform.eulerAngles.y;
                         sweepPhaseTimer = 0f;
                     }
@@ -238,7 +278,7 @@ public class GuardPatrol : NetworkBehaviour
                     {
                         searchSweepWaitTimer = 0f;
                         isSweepingSearchPoint = false;
-                        agent.updateRotation = true; //hand facing back to the agent now that he's about to move again
+                        //done scanning - FaceMovementDirection takes over again as soon as he starts moving
                         searchSweepPointsChecked++;
 
                         if (searchSweepPointsChecked >= maximumSearchSweepPoints)
@@ -253,16 +293,27 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
             case GuardState.Chasing:
-                if (chaseTarget == null || chaseTarget.IsHiding || chaseTarget.IsLockedUp || chaseTarget.IsEliminated) //target left, hid, or is already caught (jailed/out) - stop chasing so he never re-grabs or re-eliminates someone he's already dealt with
+                if (chaseTarget == null || chaseTarget.IsLockedUp || chaseTarget.IsEliminated) //target left or is already caught (jailed/out) - stop chasing so he never re-grabs someone he's already dealt with
                 {
                     ChangeState(GuardState.Searching);
                     break;
                 }
+
+                //they dove into a hiding spot. if we had eyes on them the instant they did it we know exactly which
+                //one, so keep coming and haul them out. break line of sight FIRST and it's a clean escape - that's
+                //what makes losing him the actual skill, instead of the closet being a panic button.
+                if (chaseTarget.IsHiding && !sawTargetEnterHiding)
+                {
+                    ChangeState(GuardState.Searching);
+                    break;
+                }
+
                 Vector3 toTarget = chaseTarget.transform.position - transform.position;
                 toTarget.y = 0f; //ignore height difference
                 float distanceToTarget = toTarget.magnitude;
 
-                if (vision.CanSee(chaseTarget.transform) || distanceToTarget < chaseSenseRange) //see the target or close enough to sense them
+                bool canSeeTargetNow = vision.CanSee(chaseTarget.transform);
+                if (canSeeTargetNow || distanceToTarget < chaseSenseRange || chaseTarget.IsHiding) //see them, close enough to sense them, or they're in a spot we watched them climb into
                 {
                     Vector3 currentTargetPosition = chaseTarget.transform.position;
                     targetVelocity = (currentTargetPosition - lastTargetPosition) / Runner.DeltaTime; //crude per-tick velocity estimate
@@ -270,15 +321,26 @@ public class GuardPatrol : NetworkBehaviour
 
                     lastKnownPosition = currentTargetPosition; //still the real last-seen spot, used if we lose the target entirely
                     Vector3 predictedPosition = currentTargetPosition + targetVelocity * predictionLeadTime; //aim a little ahead instead of exactly where they are right now
-                    agent.SetDestination(predictedPosition);
+                    agent.SetDestination(chaseTarget.IsHiding ? currentTargetPosition : predictedPosition); //no point leading a target who's stood still in a wardrobe
                 }
                 if (distanceToTarget < catchRange)
                 {
+                    if (chaseTarget.IsHiding)
+                    {
+                        chaseTarget.RPC_PulledFromHiding(); //door yanked open - out you come, then the normal catch handles the rest
+                    }
                     ChangeState(GuardState.Caught);
                 }
-                else if (!vision.CanSee(chaseTarget.transform) && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
+                else if (!canSeeTargetNow && !chaseTarget.IsHiding && distanceToTarget > chaseSenseRange && !agent.pathPending && agent.remainingDistance <= reachDistance)
                 {
                     ChangeState(GuardState.Searching);
+                }
+
+                //remember whether we can see them RIGHT NOW, so if they vanish into a spot next tick we know whether
+                //we watched it happen. only meaningful while they're still out in the open.
+                if (!chaseTarget.IsHiding)
+                {
+                    sawTargetEnterHiding = canSeeTargetNow;
                 }
                 break;
             case GuardState.Caught:
@@ -314,6 +376,7 @@ public class GuardPatrol : NetworkBehaviour
                 break;
         }
         transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
+        FaceMovementDirection(); //and point him where he's actually going, not where the agent wishes it were going
     }
     public override void Despawned(NetworkRunner runner, bool hasState) //he's despawned on every scene change, so this is where his mood gets banked for the trip
     {
@@ -328,31 +391,34 @@ public class GuardPatrol : NetworkBehaviour
             RunManager.Instance.SavedGuardAnger = Anger;
             RunManager.Instance.SavedGuardNoiseThreshold = noiseThreshold;
             RunManager.Instance.SavedGuardAsleepChances = asleepChances;
+            RunManager.Instance.SavedGuardRunGeneration = myRunGeneration; //stamp it with the run we LIVED in, captured at spawn - not the current one, which a new heist may already have bumped
             RunManager.Instance.HasSavedGuardState = true;
         }
     }
 
-    public void SetWaypoints(Transform[] points)
-    {
-        waypoints = points; //set the waypoints from the spawner, since we cant set them in the inspector for the guard prefab
-    }
-
     public void SetCloset(Transform spot)
     {
-        closetSpot = spot; //closet lives in the scene, handed over by the spawner like the waypoints
+        closetSpot = spot; //closet lives in the scene, handed over by the spawner at spawn (a prefab can't hold a scene ref)
     }
 
-    public void AlertTo(Vector3 spot, bool alertDog = true) //any sensor (squeaky toy, camera, ...) pings this to send the guard to investigate a spot. pass alertDog=false to wake ONLY the guard (the camera does this)
+    //Runner.Despawn only QUEUES the despawn - Despawned() (which nulls Instance) runs a tick or more later. In that
+    //window every sensor still sees a non-null Instance while the networked properties are already dead, and reading
+    //State throws "Networked properties can only be accessed when Spawned() has been called". Every public entry
+    //point checks this first.
+    private bool IsLive => Object != null && Object.IsValid;
+
+    public void AlertTo(Vector3 spot) //any sensor (squeaky toy, camera, the dog barking at a door) pings this to send the guard to investigate a spot. he never passes the alert on to the dog - they hunt independently
     {
+        if (!IsLive) return; //despawned or mid-despawn - touching State here would throw
         if (!HasStateAuthority) return; //only the master drives the guard
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
-        alertShouldPingDog = alertDog; //the Searching entry reads this to decide whether to pull the dog in too
         ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
     }
 
     public void RegisterFloorboardCreak(Vector3 spot) //floorboards don't alert on a single creak - it takes several in a row before he bothers to come look
     {
+        if (!IsLive) return; //same mid-despawn guard as AlertTo
         if (!HasStateAuthority) return;
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //busy - ignore creaks
 
@@ -369,11 +435,17 @@ public class GuardPatrol : NetworkBehaviour
 
     private void ChangeState(GuardState newState) //single place to switch states so timers/counters always reset on entry
     {
+        //leaving Asleep means he's climbing off the floor - start the hold BEFORE State changes, since we need to
+        //know what he was, not what he's becoming
+        if (State == GuardState.Asleep && newState != GuardState.Asleep)
+        {
+            wakeUpHoldTimer = wakeUpHoldTime;
+        }
+
         State = newState;
 
-        //default rotation control back to the agent on every transition - Searching re-claims it manually, but only while actually idle at a sweep point.
-        //covers spotting a player mid-sweep (Searching -> Chasing without ever reaching the sweep-timeout code below)
-        agent.updateRotation = true;
+        //clear the manual scan on every transition, so FaceMovementDirection takes his facing back. covers spotting a
+        //player mid-sweep (Searching -> Chasing without ever reaching the sweep-timeout code below)
         isSweepingSearchPoint = false;
 
         switch (newState)
@@ -408,17 +480,18 @@ public class GuardPatrol : NetworkBehaviour
                 searchPointsThisSweep.Clear(); //fresh search - forget spots checked on a previous alert
                 searchPointsThisSweep.Add(lastKnownPosition); //count the first spot he's heading to so later sweep points don't cluster around it either
                 PlayStateSound(newState); //bark whenever he changes state
-                if (alertShouldPingDog && DogAI.Instance != null) DogAI.Instance.AlertTo(lastKnownPosition); //a confirmed noise pulls the dog toward it too - unless this alert opted out (the camera)
-                alertShouldPingDog = true; //reset: by default the next thing that starts a search DOES pull the dog
+                //the guard deliberately does NOT summon the dog. one mistake pulling BOTH threats onto you spent all
+                //the tension at once and made a single creak feel like a death sentence. they hunt independently now -
+                //the dog can still fetch the guard (that's its whole job), but never the other way round.
                 break;
             case GuardState.Chasing:
                 agent.speed = chaseSpeed;
                 Anger = Mathf.Min(angerMax, Anger + angerPerAlert); //spotting a player really sets him off
+                sawTargetEnterHiding = false; //fresh chase - he hasn't watched THIS target hide anywhere yet. leaving a stale true here would let him rip open a spot he never actually saw anyone enter
                 if (chaseTarget != null)
                 {
                     lastTargetPosition = chaseTarget.transform.position; //reset so the first velocity sample isn't computed against stale data from a previous chase
                     targetVelocity = Vector3.zero;
-                    if (DogAI.Instance != null) DogAI.Instance.AlertTo(chaseTarget.transform.position); //a confirmed sighting pulls the dog in too - two threats converging is meaningfully scarier
                 }
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
@@ -448,23 +521,69 @@ public class GuardPatrol : NetworkBehaviour
         }
     }
 
+    private void FaceMovementDirection() //turn him to look where he's actually travelling
+    {
+        if (isSweepingSearchPoint)
+        {
+            return; //he's deliberately scanning a room from a standstill - that code owns his head, leave it alone
+        }
+
+        Vector3 movedThisTick = transform.position - lastFacingPosition;
+        lastFacingPosition = transform.position;
+        movedThisTick.y = 0f; //ignore the climb, or going up stairs would tip him backwards
+
+        if (movedThisTick.sqrMagnitude < 0.000001f)
+        {
+            return; //standing still - hold the last facing rather than snapping to some arbitrary direction
+        }
+
+        //this replaces agent.updateRotation, which turned him toward the direction the AGENT wanted to travel. we run
+        //with updatePosition = false and move the transform ourselves, so those two diverge - most visibly on stairs,
+        //where he'd stroll up sideways. facing the real movement delta always matches what's on screen, and it matters
+        //for more than looks: GuardVision builds his view cone from transform.forward.
+        Quaternion wantedFacing = Quaternion.LookRotation(movedThisTick.normalized, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, wantedFacing, turnSpeed * Runner.DeltaTime);
+    }
+
     private void OpenDoorInMyWay() //he walks the NavMesh, which ignores door colliders - so without this he'd stroll straight THROUGH a shut door. now he pushes it open and walks through the gap like a person
     {
         if (RunManager.Instance == null) return;
         if (State == GuardState.Asleep) return; //dead asleep at his post - doors drifting open on their own would look haunted
 
-        Door shutDoor = Door.FindClosedDoorNear(transform.position, doorOpenRange);
-        if (shutDoor == null) return;
+        //reach further ahead the faster he's moving. a fixed 1.8m is fine at a stroll, but at chase speed he covers
+        //that in under a third of a second - about how long the door takes to swing - so he'd reach the doorway
+        //while it was still opening and clip straight through it. giving him roughly half a second of lead fixes it.
+        float lookAhead = Mathf.Max(doorOpenRange, agent.speed * 0.5f);
 
-        //only shove open a door he's actually walking INTO. without this he flings open every door he passes in a
-        //hallway, which both looks mad and hands the players a lit-up trail of where he's been.
-        Vector3 towardDoor = shutDoor.transform.position - transform.position;
-        towardDoor.y = 0f;
-        if (Vector3.Dot(transform.forward, towardDoor.normalized) < 0.5f) return; //not roughly ahead of him (~60 degree cone)
+        //only shove open a door he's actually walking INTO, so he doesn't fling open every door in a hallway and hand
+        //the players a lit-up trail of where he's been. that direction test used to live here with a 0.5 dot (a 60
+        //degree cone) and it rejected essentially every door in the house - the Door script sits on the HINGE, which
+        //is off at the EDGE of the doorway, so walking straight through one puts its pivot almost side-on to him.
+        //0.1 is "anything not actually behind me", which is the honest version of the question we're asking.
+        Door shutDoor = Door.FindClosedDoorAhead(transform.position, transform.forward, lookAhead, 0.1f);
+        if (shutDoor == null) return;
 
         shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
         RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true);  //and tell every other client to swing their copy
         //deliberately never closed behind him - a door left open is a free tell to the players that he came through here
+    }
+
+    private void CheckNoisyHidingSpots() //a hiding spot only hides you if you SHUT UP in it
+    {
+        if (State == GuardState.Caught || State == GuardState.Escorting) return; //already got someone, hands full
+
+        foreach (Player player in Player.ActivePlayers)
+        {
+            if (player == null || !player.IsHiding || player.IsEliminated || player.IsLockedUp) continue;
+            if (player.NoiseLevel <= hidingNoiseTolerance) continue; //quiet in there - he walks right past
+            if (Vector3.Distance(transform.position, player.transform.position) > hidingSearchRange) continue; //heard something, but not from close enough to place which spot
+
+            //talking, and he's right next to the door. that's the whole tell - open it.
+            player.RPC_PulledFromHiding();
+            chaseTarget = player;
+            ChangeState(GuardState.Caught);
+            return;
+        }
     }
 
     private void CheckForMissingLoot() //a new sensing mode: notices his valuables disappearing even with zero noise or sightings - ties threat directly to how much you've stolen
@@ -576,22 +695,27 @@ public class GuardPatrol : NetworkBehaviour
         }
     }
 
-    private void PickNextWaypoint() //random non-repeating pick instead of a fixed cycle, so the patrol route can't be memorized
+    private void PickWanderPoint() //no waypoint list: he strolls to random reachable spots around the house instead
     {
-        if (waypoints.Length == 1)
+        //sampling from his SPAWN rather than his current position stops him drifting into a far corner and staying
+        //there - the bed stays the centre of gravity, so he keeps circulating through the house he's guarding.
+        for (int attempt = 0; attempt < 8; attempt++)
         {
-            currentWaypoint = 0;
-            agent.SetDestination(waypoints[0].position);
+            Vector2 randomCircle = Random.insideUnitCircle * patrolRadius;
+            Vector3 candidate = spawnPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
+
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, patrolRadius, NavMesh.AllAreas)) continue;
+            if (Vector3.Distance(hit.position, transform.position) < minPatrolStepDistance) continue; //too close to be worth walking to
+
+            //make sure he can actually GET there. an unreachable point leaves him walking into a wall forever,
+            //because remainingDistance never drops under reachDistance and the Relaxed tick never picks a new spot.
+            NavMeshPath path = new NavMeshPath();
+            if (!agent.CalculatePath(hit.position, path) || path.status != NavMeshPathStatus.PathComplete) continue;
+
+            agent.SetPath(path);
             return;
         }
-
-        int nextWaypoint;
-        do
-        {
-            nextWaypoint = Random.Range(0, waypoints.Length);
-        } while (nextWaypoint == currentWaypoint); //never immediately repeat the spot we're already at
-
-        currentWaypoint = nextWaypoint;
-        agent.SetDestination(waypoints[currentWaypoint].position);
+        //nothing valid found this time - just idle, the timer will bring us straight back here
     }
+
 }

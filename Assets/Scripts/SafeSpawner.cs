@@ -43,6 +43,8 @@ public class SafeSpawner : MonoBehaviour
                 if (safe != null)
                 {
                     safe.SafeId = safeId;
+                    safe.Code = Random.Range(1000, 10000); //4 digits, never leading-zero so it always reads as four characters. master rolls it and it replicates, so the note and the keypad can't disagree
+                    Debug.Log($"[SAFE] id {safeId} code {safe.Code} at {markerPosition}"); //TEMP - there's no note in the world yet, so this is the only way to learn the code. delete once the note prop exists
                     safe.SpawnPoint = markerPosition; //networked-position safeguard, exactly like the loot fix - deferred spawns drop the position arg
                     safe.UseSpawnPoint = true;
                 }
