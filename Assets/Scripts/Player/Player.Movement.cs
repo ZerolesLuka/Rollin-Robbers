@@ -110,12 +110,12 @@ public partial class Player
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
 
         // Vertical camera pitch
-        xRotation -= lookInput.y * mouseSensitivity;
+        xRotation -= lookInput.y * GameSettings.LookSensitivityY; //LookSensitivityY carries the invert flag as its sign, so nothing here has to know about it
         xRotation = Mathf.Clamp(xRotation, -90f, 90f); //clamp to prevent flipping over
         playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
         // Horizontal player body
-        yRotation += lookInput.x * mouseSensitivity;
+        yRotation += lookInput.x * GameSettings.MouseSensitivity; //horizontal never inverts - that setting is only ever about the Y axis
         transform.rotation = Quaternion.Euler(0f, yRotation, 0f);
     }
 

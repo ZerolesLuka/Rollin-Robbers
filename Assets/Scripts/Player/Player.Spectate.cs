@@ -64,8 +64,8 @@ public partial class Player
 
         //same sensitivity as playing, so it feels like the same game rather than a different camera bolted on
         Vector2 look = playerInputActions != null ? playerInputActions.Player.Look.ReadValue<Vector2>() : Vector2.zero;
-        spectateYaw += look.x * mouseSensitivity;
-        spectatePitch = Mathf.Clamp(spectatePitch - look.y * mouseSensitivity, spectateMinPitch, spectateMaxPitch);
+        spectateYaw += look.x * GameSettings.MouseSensitivity;
+        spectatePitch = Mathf.Clamp(spectatePitch - look.y * GameSettings.LookSensitivityY, spectateMinPitch, spectateMaxPitch);
 
         Vector3 focus = spectateTarget.transform.position + Vector3.up * spectateHeight;
         Quaternion orbit = Quaternion.Euler(spectatePitch, spectateYaw, 0f);

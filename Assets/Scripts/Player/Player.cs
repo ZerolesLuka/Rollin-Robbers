@@ -27,7 +27,8 @@ public partial class Player : NetworkBehaviour
     [Networked] public float NoiseLevel { get; private set; }
     [SerializeField] private float moveSpeed = 7f;
     [SerializeField] private Transform playerCamera; //simple camera ref
-    [SerializeField] private float mouseSensitivity = 0.5f; //IS wired - HandleLook multiplies raw <Mouse>/delta by it, and the Look action has no processors overriding it. what's missing is any way for a PLAYER to change it, which needs the settings menu. note that editing this on the prefab asset mid-play won't move the spawned instance
+    //sensitivity is NOT a field here any more. it belongs to the machine, not to a spawned player object - it has to
+    //survive scene loads and be there next launch, which a prefab field isn't. see GameSettings.
     [SerializeField] private CharacterController characterController; //charcontroller
     [SerializeField] private float standCamHeight = 0.559f; //set this to the camera's current local Y
     [SerializeField] private float crouchCamHeight = 0.1f;  //lower, tune to taste
@@ -129,6 +130,7 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
     public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
+    private AudioSource voiceSpeakerSource; //this player's runtime voice Speaker, cached so the voice-volume setting can be applied to it
     private AudioLowPassFilter voiceMuffleFilter; //the low-pass on this player's runtime voice Speaker(Clone) - found on first appearance, then toggled by IsLockedUp for the taped-mouth effect
     [SerializeField] private float voiceMuffleCutoff = 1000f; //how muffled a trapped player's voice sounds to teammates - lower = more muffled
     private bool interactHeldLastTick; //interact fires on the rising edge (press), not while held
@@ -238,6 +240,7 @@ public partial class Player : NetworkBehaviour
                     }
                     voiceMuffleFilter.cutoffFrequency = voiceMuffleCutoff;
                     voiceMuffleFilter.enabled = false;
+                    voiceSpeakerSource = speakerSource; //kept so the voice slider has something to turn down
                 }
             }
         }
@@ -245,6 +248,14 @@ public partial class Player : NetworkBehaviour
         if (voiceMuffleFilter != null)
         {
             voiceMuffleFilter.enabled = IsLockedUp;
+        }
+
+        //teammates' voices get their own volume. worth a separate slider in a proximity-voice game more than most:
+        //one friend with a hot mic buries the footsteps and creaks you're straining to hear, and pulling the master
+        //down to fix that turns the guard down with it. done here because this is where the Speaker gets found.
+        if (voiceSpeakerSource != null)
+        {
+            voiceSpeakerSource.volume = GameSettings.VoiceVolume;
         }
     }
 
