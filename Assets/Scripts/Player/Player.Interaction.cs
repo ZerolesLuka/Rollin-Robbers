@@ -98,7 +98,7 @@ public partial class Player
         foreach (Player other in ActivePlayers)
         {
             if (other == this) continue;
-            if (!other.IsLockedUp) continue;
+            if (!other.IsLockedUp && !other.IsBearTrapped) continue; //jailed in a closet OR pinned by the ankle - both need a friend
             if (Vector3.Distance(transform.position, other.transform.position) <= rescueRange)
             {
                 target = other;
@@ -356,7 +356,8 @@ public partial class Player
         switch (kind)
         {
             case InteractKind.Rescue:
-                return "E  Free your teammate";
+                Player trapped = target as Player;
+                return (trapped != null && trapped.IsBearTrapped) ? "E  Pry the trap off them" : "E  Free your teammate";
 
             case InteractKind.Disarm:
                 GuardTrap trap = target as GuardTrap;

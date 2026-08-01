@@ -69,9 +69,10 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsEliminated { get; private set; } //caught = out for the run, not respawned
     [Networked] public bool IsLockedUp { get; private set; } //stuffed in the closet - frozen, out of action but rescuable, freed ONLY by a teammate
     [Networked] public bool IsHiding { get; private set; } //inside a hiding spot - invisible to guards, can't move
-    [Networked] public bool IsBearTrapped { get; private set; } //jaws round your ankle - can't move until it lets go, and you're LOUD the whole time
-    private float bearTrapTimer;                                //counts down on our own machine while pinned
-    [SerializeField] private float bearTrapNoiseAmount = 26f;   //thrashing to get free is nearly as loud as a hard landing (30) - that's the real damage, not the delay
+    [Networked] public bool IsBearTrapped { get; private set; } //jaws round your ankle - a TEAMMATE has to lever it open, same as the closet. you're LOUD the whole time you wait
+    [SerializeField] private float bearTrapNoiseAmount = 26f;   //thrashing while stuck is nearly as loud as a hard landing (30) - that's the real damage, not the delay
+    [SerializeField] private float bearTrapSelfEscapeSeconds = 30f; //LAST-RESORT failsafe, not the intended way out: a teammate should free you long before this. set it to 0 to make it teammate-only forever, but read the warning in RPC_CaughtInBearTrap first
+    private float bearTrapTimer;                                //counts the failsafe down on our own machine
     [Networked] public int HidingSpotId { get; private set; } //WHICH hiding spot we're inside (HidingSpot.spotId), or HidingSpot.NoSpot. replicated so every client can tell an occupied spot from a free one - a local bool let two players share one spot
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
@@ -306,15 +307,21 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
-        if (IsBearTrapped) //pinned. no control at all, and thrashing about broadcasts exactly where you are
+        if (IsBearTrapped) //pinned until a teammate levers it open. no control, and thrashing broadcasts exactly where you are
         {
             if (HasStateAuthority)
             {
                 NoiseLevel = bearTrapNoiseAmount; //the point of the trap: it doesn't just hold you, it TELLS him
-                bearTrapTimer -= Runner.DeltaTime;
-                if (bearTrapTimer <= 0f)
+
+                //the failsafe, NOT the mechanic. a teammate pressing E is the way out; this only exists so a solo or
+                //last-alive player can't be frozen forever with nobody left to come and get them.
+                if (bearTrapSelfEscapeSeconds > 0f)
                 {
-                    IsBearTrapped = false; //worked your foot loose
+                    bearTrapTimer -= Runner.DeltaTime;
+                    if (bearTrapTimer <= 0f)
+                    {
+                        IsBearTrapped = false; //finally worked your foot loose on your own
+                    }
                 }
             }
             return;
@@ -455,17 +462,26 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //fired by the trap; runs on the victim's own machine, which owns their movement in Shared Mode
-    public void RPC_CaughtInBearTrap(float seconds)
+    public void RPC_CaughtInBearTrap(float unusedHoldSeconds)
     {
+        //WARNING before you set bearTrapSelfEscapeSeconds to 0: a teammate is the intended way out, but if you're the
+        //last one moving there IS nobody. the guard usually arrives and resolves it (the trap called him), but if he
+        //can't path to you, a teammate-only trap freezes that player for the rest of the run with no way to quit to
+        //the van. the timer is the only thing standing between this trap and that softlock.
         if (IsEliminated || IsLockedUp) return; //already out of the run - nothing left to catch
         IsBearTrapped = true;
-        bearTrapTimer = seconds;
+        bearTrapTimer = bearTrapSelfEscapeSeconds;
         verticalVelocity = 0f; //don't bank fall speed while pinned in place
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //any caller (the rescuer); runs on the freed player's own machine
     public void RPC_Rescue()
     {
+        if (IsBearTrapped)
+        {
+            IsBearTrapped = false; //jaws levered open by a friend - the intended way out
+            return;
+        }
         if (!IsLockedUp)
         {
             return; //nothing to free

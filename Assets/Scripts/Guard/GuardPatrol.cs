@@ -107,7 +107,7 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private NetworkObject alarmPrefab;        //wide radius, screams, brings the dog
     [SerializeField] private float angerToSetTraps = 25f;      //he has to be rattled first. one quiet noise early on shouldn't start him wiring the place
     [SerializeField] private int maxTrapsPerRun = 5;           //everything he's carrying. also stops a long run turning the house into a minefield
-    [SerializeField] private float doorwayTrapRange = 5f;      //a door this close to where he lost you counts as "the way they went", and gets the tripwire
+    [SerializeField] private float trapPointSearchRange = 12f; //how far from where he lost you he'll walk a wire to. TrapPoints are placed by hand in the scene - see TrapPoint.cs
     [SerializeField] private float trapScatterRadius = 4f;     //how far from that spot a floor trap can end up. he's guessing, not tracking - this is the guess
     [SerializeField] private float minTrapSpacing = 3f;        //don't stack a second trap on ground he's already covered
     private int trapsSetThisRun;                               //runtime count, not a tuning value
@@ -569,34 +569,25 @@ public class GuardPatrol : NetworkBehaviour
         if (Anger < angerToSetTraps) return;             //calm enough to shrug it off. only a rattled guard bothers
         if (trapsSetThisRun >= maxTrapsPerRun) return;   //that's everything he was carrying
 
-        //the doorway they most likely used. a wire across it is the obvious thing a person would actually do.
-        Door escapeDoor = null;
-        float nearestDoorDistance = doorwayTrapRange;
-        foreach (Door door in Door.AllDoors)
-        {
-            float distance = Vector3.Distance(door.transform.position, seenPosition);
-            if (distance < nearestDoorDistance)
-            {
-                nearestDoorDistance = distance;
-                escapeDoor = door;
-            }
-        }
+        //the nearest TrapPoint the level author marked - a doorway, the top of the stairs, a hallway pinch. he takes
+        //whichever is closest to where he lost you, so he's covering the way he reckons you went.
+        TrapPoint wireSpot = TrapPoint.FindNearestFree(seenPosition, trapPointSearchRange);
 
-        //a doorway gets the wire about two times in three - the rest of the time he does something less predictable,
-        //because a guard who ALWAYS wires the door is a guard you can route around forever.
-        if (escapeDoor != null && tripwirePrefab != null && Random.value < 0.66f)
+        //a marked spot gets the wire about two times in three - the rest of the time he does something less
+        //predictable, because a guard who ALWAYS wires the same doorways is one you can route around forever.
+        if (wireSpot != null && tripwirePrefab != null && Random.value < 0.66f)
         {
-            SpawnTrapAt(tripwirePrefab, escapeDoor.transform.position);
+            SpawnTrapAt(tripwirePrefab, wireSpot.transform.position);
             return;
         }
 
-        //no door, or he fancied something else: put a floor trap somewhere in the vicinity. sampled onto the NavMesh
-        //so it can't end up inside furniture or through a wall.
+        //no marked spot in range, or he fancied something else: put a floor trap somewhere in the vicinity. sampled
+        //onto the NavMesh so it can't end up inside furniture or through a wall.
         NetworkObject floorTrap = PickFloorTrapPrefab();
         if (floorTrap == null)
         {
             //nothing else assigned - fall back to the wire so a half-configured guard still does something
-            if (escapeDoor != null && tripwirePrefab != null) SpawnTrapAt(tripwirePrefab, escapeDoor.transform.position);
+            if (wireSpot != null && tripwirePrefab != null) SpawnTrapAt(tripwirePrefab, wireSpot.transform.position);
             return;
         }
 
