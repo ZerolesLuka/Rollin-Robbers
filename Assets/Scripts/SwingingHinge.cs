@@ -112,6 +112,7 @@ public class SwingingHinge : MonoBehaviour
         hingeAudio.rolloffMode = AudioRolloffMode.Linear;
         hingeAudio.minDistance = 1.5f;
         hingeAudio.maxDistance = SoundMaxDistance;
+        AudioOcclusion.Attach(hingeAudio); //a door opening two rooms away is a very different piece of news to one opening behind you
     }
 
     private static float RollBetween(System.Random source, float min, float max)

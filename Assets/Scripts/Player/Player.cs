@@ -133,8 +133,8 @@ public partial class Player : NetworkBehaviour
 
     public bool IsBeingDragged => isBeingDragged; //the HUD says so, because otherwise being hauled across the house with no control reads as the game hanging
     public float AirSecondsLeft => IsLockedUp ? Mathf.Max(0f, suffocateTimer) : 0f; //shown while jailed. the clock IS the threat there, so it belongs on screen
-    private AudioSource voiceSpeakerSource; //this player's runtime voice Speaker, cached so the voice-volume setting can be applied to it
-    private AudioLowPassFilter voiceMuffleFilter; //the low-pass on this player's runtime voice Speaker(Clone) - found on first appearance, then toggled by IsLockedUp for the taped-mouth effect
+    private AudioSource voiceSpeakerSource;   //this player's runtime voice Speaker, cached so the voice-volume setting can be applied to it
+    private AudioOcclusion voiceOcclusion;    //owns the low-pass on that Speaker - walls muffle it, and the taped mouth clamps it further through ExtraMuffleCutoff //the low-pass on this player's runtime voice Speaker(Clone) - found on first appearance, then toggled by IsLockedUp for the taped-mouth effect
     [SerializeField] private float voiceMuffleCutoff = 1000f; //how muffled a trapped player's voice sounds to teammates - lower = more muffled
     private bool interactHeldLastTick; //interact fires on the rising edge (press), not while held
 
@@ -228,7 +228,7 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
-        if (voiceMuffleFilter == null) //the speaker appears a moment after the player - keep looking until it's here. our OWN player has no speaker for its own voice, so this just stays null for us, which is fine
+        if (voiceOcclusion == null) //the speaker appears a moment after the player - keep looking until it's here. our OWN player has no speaker for its own voice, so this just stays null for us, which is fine
         {
             Speaker speaker = GetComponentInChildren<Speaker>();
             if (speaker != null)
@@ -236,21 +236,19 @@ public partial class Player : NetworkBehaviour
                 AudioSource speakerSource = speaker.GetComponent<AudioSource>();
                 if (speakerSource != null)
                 {
-                    voiceMuffleFilter = speakerSource.GetComponent<AudioLowPassFilter>();
-                    if (voiceMuffleFilter == null)
-                    {
-                        voiceMuffleFilter = speakerSource.gameObject.AddComponent<AudioLowPassFilter>(); //add it ourselves so nothing needs wiring in the inspector
-                    }
-                    voiceMuffleFilter.cutoffFrequency = voiceMuffleCutoff;
-                    voiceMuffleFilter.enabled = false;
+                    //VOICE IS OCCLUDED LIKE EVERYTHING ELSE, and for this game that's the important one: a teammate
+                    //shouting from the next room used to arrive as clear as one stood beside you, which quietly
+                    //removed the reason to care where anybody is. AudioOcclusion owns the low-pass on this source;
+                    //the taped-mouth effect goes through ExtraMuffleCutoff rather than fighting it for the filter.
+                    voiceOcclusion = AudioOcclusion.Attach(speakerSource);
                     voiceSpeakerSource = speakerSource; //kept so the voice slider has something to turn down
                 }
             }
         }
 
-        if (voiceMuffleFilter != null)
+        if (voiceOcclusion != null)
         {
-            voiceMuffleFilter.enabled = IsLockedUp;
+            voiceOcclusion.ExtraMuffleCutoff = IsLockedUp ? voiceMuffleCutoff : float.MaxValue; //taped mouth clamps it further; walls do the rest
         }
 
         //teammates' voices get their own volume. worth a separate slider in a proximity-voice game more than most:

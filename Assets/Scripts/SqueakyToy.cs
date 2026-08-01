@@ -15,6 +15,11 @@ public class SqueakyToy : MonoBehaviour
 
     private float cooldownTimer;
 
+    private void Awake()
+    {
+        AudioOcclusion.Attach(squeakSource); //which ROOM the squeak came from is the information it carries
+    }
+
     private void Update()
     {
         cooldownTimer -= Time.deltaTime;

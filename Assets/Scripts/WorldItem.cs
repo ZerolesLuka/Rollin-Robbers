@@ -56,6 +56,7 @@ public class WorldItem : NetworkBehaviour
         baitAudio.rolloffMode = AudioRolloffMode.Linear;
         baitAudio.minDistance = 2f;
         baitAudio.maxDistance = 30f;
+        AudioOcclusion.Attach(baitAudio); //so the crew can tell which room someone just got greedy in
 
         //DON'T place the item here. On a deferred spawn (prefab still loading) the networked SpawnPoint hasn't
         //replicated yet - it reads (0,0,0) in Spawned - and a dynamic rigidbody dropped at origin, overlapping the

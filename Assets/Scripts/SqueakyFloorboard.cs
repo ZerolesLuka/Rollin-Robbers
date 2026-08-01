@@ -14,6 +14,11 @@ public class SqueakyFloorboard : MonoBehaviour
     private float cooldownTimer;
     private Dictionary<Player, Vector3> lastPositions = new Dictionary<Player, Vector3>();
 
+    private void Awake()
+    {
+        AudioOcclusion.Attach(squeakSource); //a creak upstairs and a creak in this room have to sound different or the noise map means nothing
+    }
+
     private void Update()
     {
         cooldownTimer -= Time.deltaTime;

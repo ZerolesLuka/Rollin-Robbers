@@ -16,6 +16,8 @@ public class PlayerFootsteps : NetworkBehaviour
 
     public override void Spawned()
     {
+        AudioOcclusion.Attach(audioSource); //a teammate's footsteps through a wall shouldn't sound like they're stood next to you
+
         lastPosition = transform.position; // Initialize last position when the player spawns
     }
     public override void FixedUpdateNetwork()

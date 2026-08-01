@@ -18,6 +18,13 @@ public class GuardAudio : NetworkBehaviour
     [SerializeField] private float barkCooldown = 1.5f; //min seconds between barks
     private float barkCooldownTimer;
 
+    private void Awake()
+    {
+        //his voice is the single most important sound in the game to place correctly - "he's in the next room" versus
+        //"he's in THIS room" is the whole decision you're making when you hear him
+        AudioOcclusion.Attach(voiceSource);
+    }
+
     private AudioClip[] ClipsFor(BarkType type)
     {
         switch (type)

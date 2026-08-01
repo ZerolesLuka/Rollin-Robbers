@@ -63,6 +63,7 @@ public class GuardTrap : NetworkBehaviour
         trapAudio.rolloffMode = AudioRolloffMode.Linear;
         trapAudio.minDistance = 2f;
         trapAudio.maxDistance = soundMaxDistance;
+        AudioOcclusion.Attach(trapAudio); //hearing WHICH room it went off in is the whole point of the sound, and that only works if walls dull it
 
         if (UseSpawnPoint)
         {
