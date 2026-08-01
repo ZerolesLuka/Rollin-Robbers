@@ -326,11 +326,14 @@ public partial class Player
 
     public string InteractPrompt { get; private set; } = ""; //what the HUD shows. local only - each client describes its own player's reach
 
+    public Transform InteractAnchor { get; private set; } //the THING the prompt is about, so the label can be drawn on it in the world rather than floating at the crosshair. null = nothing in reach
+
     public void UpdateInteractPrompt() //called every render frame from Player.Update for the local player, so the line tracks the crosshair smoothly rather than stepping at the 32Hz tick
     {
         if (isUsingComputer || IsEliminated || IsLockedUp || isBeingDragged || IsBearTrapped)
         {
             InteractPrompt = ""; //no reach while parked, out, jailed, hauled off, or pinned by the ankle
+            InteractAnchor = null;
             return;
         }
 
@@ -341,22 +344,44 @@ public partial class Player
         //standing at a safe next to a door doesn't flip the line back and forth between two things that are both true.
         if (kind == InteractKind.None)
         {
-            if (NearestCrackableSafe() != null)
+            Safe crackable = NearestCrackableSafe();
+            if (crackable != null)
             {
                 InteractPrompt = "E  Enter the code    (hold to force it open)"; //both halves of the safe, because the tap and the hold do genuinely different things
+                InteractAnchor = crackable.transform;
             }
             else if (inventory.Count >= maxInventorySlots && IsLootWithinReach())
             {
                 InteractPrompt = "Hands full - drop something with G"; //the pickup scan skipped this loot entirely, so say why rather than showing nothing
+                InteractAnchor = NearestLootInReach();                 //hang it on the thing we can't pick up, so it's obvious WHAT we're being refused
             }
             else
             {
                 InteractPrompt = "";
+                InteractAnchor = null;
             }
             return;
         }
 
         InteractPrompt = LabelFor(kind, target);
+        InteractAnchor = target != null ? target.transform : null;
+    }
+
+    private Transform NearestLootInReach() //only used to hang the "hands full" line on something. never acts
+    {
+        Transform nearest = null;
+        float nearestDistance = float.MaxValue;
+        foreach (WorldItem item in WorldItem.AllItems)
+        {
+            if (item.pendingRemoval) continue;
+            float distance = Vector3.Distance(transform.position, item.transform.position);
+            if (distance <= pickupRange && distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = item.transform;
+            }
+        }
+        return nearest;
     }
 
     private string LabelFor(InteractKind kind, Component target)
