@@ -20,11 +20,36 @@ public class WorldItem : NetworkBehaviour
     [Networked] public NetworkBool UseSpawnPoint { get; set; } // true = runtime-spawned loot, re-apply SpawnPoint in Spawned. false = an item placed directly in the scene, which keeps its own transform
     [Networked] public NetworkBool CountedAsStolen { get; set; } // true once this item's value has been added to RunManager.GatheredLootValue. a G-dropped item spawns with this ALREADY true, so re-picking it can't count the same loot toward the house twice (which used to push clear-% over 100% and poison BestClearPercent)
 
+    [Networked] public NetworkBool IsBait { get; set; } // a plant. looks worth taking, pays nothing, and screams when you lift it
+
+    [Header("Bait")]
+    [SerializeField] private AudioClip baitAlarmClip;          // what it does when you fall for it. 3D, so the guard isn't the only one who learns where you are
+    [SerializeField, Range(0f, 1f)] private float baitAlarmVolume = 0.9f;
+    [SerializeField] private float baitFlickerSpeed = 4.5f;    // THE TELL. bait breathes; real loot sits dead still. subtle enough to miss when you're panicking, obvious once you know
+    [SerializeField] private float baitFlickerAmount = 0.18f;  // how deep that breath is, as a fraction of the light's authored intensity. bigger = easier to spot = kinder
+    private float glowBaseIntensity;                           // whatever the light was authored at, so the flicker is relative rather than absolute
+    private AudioSource baitAudio;
+
     [HideInInspector] public bool pendingRemoval; // set locally the instant we grab it, so our own pickup scan can't re-grab it during the despawn lag
 
     public override void Spawned()
     {
         AllItems.Add(this);
+
+        if (glowLight != null)
+        {
+            glowBaseIntensity = glowLight.intensity; //remember the authored brightness so the bait flicker rides on top of it instead of replacing it
+        }
+
+        //3D on purpose: a bait going off across the house should be a distant "oh no", one in your hands should be a
+        //jolt. built in code so a bait prefab needs nothing wired but the clip.
+        baitAudio = gameObject.AddComponent<AudioSource>();
+        baitAudio.playOnAwake = false;
+        baitAudio.loop = false;
+        baitAudio.spatialBlend = 1f;
+        baitAudio.rolloffMode = AudioRolloffMode.Linear;
+        baitAudio.minDistance = 2f;
+        baitAudio.maxDistance = 30f;
 
         //DON'T place the item here. On a deferred spawn (prefab still loading) the networked SpawnPoint hasn't
         //replicated yet - it reads (0,0,0) in Spawned - and a dynamic rigidbody dropped at origin, overlapping the
@@ -75,9 +100,19 @@ public class WorldItem : NetworkBehaviour
 
     public override void Render() //every frame on all clients - keeps the glow matched to the networked Value even as it replicates in after spawn
     {
-        if (glowLight != null)
+        if (glowLight == null)
         {
-            glowLight.color = LootRarityTable.ColorFor(Value);
+            return;
+        }
+
+        glowLight.color = LootRarityTable.ColorFor(Value);
+
+        //bait deliberately wears the colour of whatever it's pretending to be worth - the value alone must never give
+        //it away, or nobody would ever fall for it. the flicker is the only tell, and it's a learnable one: real loot
+        //glows steady, a plant breathes. players who slow down and look get to keep their run.
+        if (IsBait)
+        {
+            glowLight.intensity = glowBaseIntensity * (1f + Mathf.Sin(Time.time * baitFlickerSpeed) * baitFlickerAmount);
         }
     }
 
@@ -95,6 +130,20 @@ public class WorldItem : NetworkBehaviour
         //only ever guarded the despawn, not the payout. Now the loser's request simply arrives second and is dropped.
         if (claimed) return;
         claimed = true;
+
+        //A PLANT. it never entered HouseLootTotal (the guard spawned it, not ItemSpawner), so it must never enter
+        //GatheredLootValue either - reporting it would push clear-% above 100% off an item that was never real.
+        //nobody gets paid, everybody hears about it, and he comes to the exact spot your hand was.
+        if (IsBait)
+        {
+            RPC_BaitSprung();
+            if (GuardPatrol.Instance != null)
+            {
+                GuardPatrol.Instance.AlertTo(transform.position); //dog too - this is a shout, not a whisper
+            }
+            StartCoroutine(DespawnAfterAlarm()); //hold on a moment so the alarm isn't cut off by our own despawn
+            return;
+        }
 
         //count the theft here too, on the same single machine, so it can't be double-counted either. dropped loot
         //arrives with CountedAsStolen already true, so re-picking a teammate's drop still isn't a fresh theft.
@@ -114,5 +163,23 @@ public class WorldItem : NetworkBehaviour
         }
 
         Runner.Despawn(Object);
+    }
+
+    private IEnumerator DespawnAfterAlarm() //let the alarm actually play before the object carrying the AudioSource disappears
+    {
+        yield return new WaitForSeconds(0.8f);
+        if (HasStateAuthority && Object != null && Object.IsValid)
+        {
+            Runner.Despawn(Object);
+        }
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_BaitSprung() //every client plays it from the item's own position, so the whole crew hears WHERE someone just got greedy
+    {
+        if (baitAlarmClip != null && baitAudio != null)
+        {
+            baitAudio.PlayOneShot(baitAlarmClip, baitAlarmVolume);
+        }
     }
 }

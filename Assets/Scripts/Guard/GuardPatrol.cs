@@ -105,6 +105,11 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private NetworkObject tripwirePrefab;     //strung across a doorway
     [SerializeField] private NetworkObject bearTrapPrefab;     //dropped on open floor - the one that pins you
     [SerializeField] private NetworkObject alarmPrefab;        //wide radius, screams, brings the dog
+    [SerializeField] private NetworkObject baitLootPrefab;     //a WorldItem prefab, NOT a GuardTrap - a fake valuable he leaves out. pays nothing and screams when lifted
+    [SerializeField] private string baitItemName = "Jewellery";//what it claims to be. make it something you'd actually stop for
+    [SerializeField] private int baitValueMin = 700;           //it has to LOOK worth the risk or nobody bites - this drives its rarity glow like any real item
+    [SerializeField] private int baitValueMax = 1600;
+    [SerializeField, Range(0f, 1f)] private float baitChance = 0.3f; //how often he plants bait INSTEAD of setting a trap. keep it a minority - bait only works while players still trust loot on sight
     [SerializeField] private float angerToSetTraps = 25f;      //he has to be rattled first. one quiet noise early on shouldn't start him wiring the place
     [SerializeField] private int maxTrapsPerRun = 5;           //everything he's carrying. also stops a long run turning the house into a minefield
     [SerializeField] private float trapPointSearchRange = 12f; //how far from where he lost you he'll walk a wire to. TrapPoints are placed by hand in the scene - see TrapPoint.cs
@@ -569,6 +574,15 @@ public class GuardPatrol : NetworkBehaviour
         if (Anger < angerToSetTraps) return;             //calm enough to shrug it off. only a rattled guard bothers
         if (trapsSetThisRun >= maxTrapsPerRun) return;   //that's everything he was carrying
 
+        //sometimes he doesn't wire anything at all - he leaves something shiny out and waits for you to come back for
+        //it. deliberately the minority option: bait only works while players still trust loot on sight, so flooding
+        //the house with it just teaches them to touch nothing and kills the mechanic.
+        if (baitLootPrefab != null && Random.value < baitChance)
+        {
+            TryPlantBait(seenPosition);
+            return;
+        }
+
         //the nearest TrapPoint the level author marked - a doorway, the top of the stairs, a hallway pinch. he takes
         //whichever is closest to where he lost you, so he's covering the way he reckons you went.
         TrapPoint wireSpot = TrapPoint.FindNearestFree(seenPosition, trapPointSearchRange);
@@ -599,6 +613,41 @@ public class GuardPatrol : NetworkBehaviour
             if (GuardTrap.AnyTrapNear(hit.position, minTrapSpacing)) continue; //already covered this ground
 
             SpawnTrapAt(floorTrap, hit.position);
+            return;
+        }
+    }
+
+    //A PLANT, not a trap object: he sets out something shiny where he thinks you'll come back for it. Lifting it pays
+    //nothing and screams. Kept separate from SpawnTrapAt because bait is a WorldItem - it goes in the loot pile, gets
+    //a rarity glow off its fake value, and is picked up like anything else. That disguise IS the mechanic.
+    private void TryPlantBait(Vector3 seenPosition)
+    {
+        if (baitLootPrefab == null) return;
+        if (Anger < angerToSetTraps) return;
+        if (trapsSetThisRun >= maxTrapsPerRun) return;
+
+        for (int attempt = 0; attempt < 6; attempt++)
+        {
+            Vector2 randomCircle = Random.insideUnitCircle * trapScatterRadius;
+            Vector3 candidate = seenPosition + new Vector3(randomCircle.x, 0f, randomCircle.y);
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, trapScatterRadius, NavMesh.AllAreas)) continue;
+
+            trapsSetThisRun++;
+            Vector3 baitPosition = hit.position + Vector3.up * 0.4f; //lift it clear of the floor so it drops and settles like real loot
+            int fakeValue = Random.Range(baitValueMin, baitValueMax + 1);
+            Runner.Spawn(baitLootPrefab, baitPosition, Random.rotation, PlayerRef.None, (spawnRunner, spawnedObject) =>
+            {
+                WorldItem bait = spawnedObject.GetComponent<WorldItem>();
+                if (bait != null)
+                {
+                    bait.ItemName = baitItemName;
+                    bait.Value = fakeValue;          //drives the rarity glow, so it reads as a genuine score
+                    bait.IsBait = true;
+                    bait.CountedAsStolen = true;     //belt and braces: it must never touch the house tally even if the bait branch is ever changed
+                    bait.SpawnPoint = baitPosition;  //networked-position safeguard - a deferred spawn drops the position argument
+                    bait.UseSpawnPoint = true;
+                }
+            });
             return;
         }
     }
