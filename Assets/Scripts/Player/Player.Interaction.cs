@@ -73,7 +73,7 @@ public partial class Player
     //What E would act on right now. HandleInteract performs it and the HUD prompt describes it, both off THIS one
     //scan - so the prompt can never promise something different from what the key actually does. Add an interactable
     //here once and both halves pick it up.
-    private enum InteractKind { None, Rescue, Disarm, Pickup, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
+    private enum InteractKind { None, Rescue, Disarm, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
 
     private InteractKind FindInteraction(out Component target)
     {
@@ -133,12 +133,14 @@ public partial class Player
 
         //reading a safe-code note. doesn't need RunManager, and it's above the doors/van so a note lying on a desk
         //next to something else still wins - it's a tiny target and the most annoying thing to fail to pick up.
+        //NOTE: only REPORTS the note here. this scan runs every render frame to feed the prompt, so actually reading
+        //it in this method would re-read the code continuously without anyone ever pressing E.
         foreach (SafeNote note in SafeNote.AllNotes)
         {
             if (Vector3.Distance(transform.position, note.transform.position) <= note.ReadRange)
             {
-                LearnSafeCode(note.ReadCode()); //onto OUR hud only - the whole point is reading it out to whoever's at the safe
-                return;
+                target = note;
+                return InteractKind.ReadNote;
             }
         }
 
@@ -271,6 +273,12 @@ public partial class Player
                 item.RPC_RequestPickUp(Object.InputAuthority);
                 break;
 
+            case InteractKind.ReadNote:
+                //onto OUR hud only - the whole point is reading it out loud to whoever's stood at the safe. the note
+                //stays in the world so a teammate can come and check it themselves.
+                LearnSafeCode(((SafeNote)target).ReadCode());
+                break;
+
             case InteractKind.SwingDoor:
                 Door door = (Door)target;
                 RunManager.Instance.RPC_SetDoorOpen(door.transform.position, !door.IsOpen);
@@ -366,6 +374,9 @@ public partial class Player
             case InteractKind.Pickup:
                 WorldItem item = target as WorldItem;
                 return item != null ? $"E  Take {item.ItemName} (${item.Value})" : "E  Take";
+
+            case InteractKind.ReadNote:
+                return "E  Read the note";
 
             case InteractKind.SwingDoor:
                 Door door = target as Door;
