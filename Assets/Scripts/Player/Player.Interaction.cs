@@ -77,7 +77,7 @@ public partial class Player
     //NOTE: there's no PlaceWedge here. E already opens doors, and a second E action at the same door would either
     //steal the open or need a hold, which collides with the safe's tap-vs-hold. Wedging is on G instead - the key
     //that already means "put down what you're carrying". See HandleDrop.
-    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Sell, Hide }
+    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Sell, Shop, Hide }
 
     private InteractKind FindInteraction(out Component target)
     {
@@ -250,6 +250,15 @@ public partial class Player
             return InteractKind.Van;
         }
 
+        //the tool shop. above the sell counter because they sit side by side and buying is the more deliberate act -
+        //walking up to sell and accidentally opening the shop is harmless, the reverse loses your haul in one press.
+        ToolShop shop = ToolShop.NearestTo(transform.position);
+        if (shop != null)
+        {
+            target = shop;
+            return InteractKind.Shop;
+        }
+
         //pawn shop counter: sell the team's haul for money
         foreach (SellCounter counter in SellCounter.AllCounters)
         {
@@ -336,6 +345,10 @@ public partial class Player
 
             case InteractKind.Van:
                 RunManager.Instance.RPC_StartGetaway(); //start the van - the run ends successfully for everyone
+                break;
+
+            case InteractKind.Shop:
+                EnterShop((ToolShop)target);
                 break;
 
             case InteractKind.Sell:
@@ -467,6 +480,9 @@ public partial class Player
                 return (RunManager.Instance != null && !RunManager.Instance.IsComputerFree)
                     ? "Someone else is on the computer"
                     : "E  Use the computer";
+
+            case InteractKind.Shop:
+                return "E  Buy tools";
 
             case InteractKind.Sell:
                 return inventory.Count > 0 ? $"E  Sell your haul (${CarriedValue})" : "Nothing to sell";
