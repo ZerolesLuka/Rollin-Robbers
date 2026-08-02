@@ -42,4 +42,44 @@ public class ComputerTerminal : MonoBehaviour
         if (screenCamera != null) screenCamera.enabled = false;
         if (screenUI != null) screenUI.SetActive(false);
     }
+
+    //THE MAP. Drawn here rather than on the screenUI canvas for one practical reason: that canvas gets SetActive(false)
+    //when nobody's sat down, and an inactive GameObject doesn't run OnGUI - so the map would never appear. Drawing it
+    //from the terminal, which is always active, sidesteps that entirely.
+    //
+    //It also means the loop closes with NO wiring: this replaces the two OnClick buttons that were never hooked up, so
+    //there's nothing left to assign. Swap it for the real canvas later and only this method goes.
+    private void OnGUI()
+    {
+        Player me = Player.LocalPlayer;
+        if (me == null || me.CurrentTerminal != this) return;
+
+        const float width = 520f;
+        float x = Screen.width * 0.5f - width * 0.5f;
+        float y = Screen.height * 0.5f - 210f;
+
+        GUI.Box(new Rect(x - 14f, y - 14f, width + 28f, 430f), GUIContent.none);
+        GUI.Label(new Rect(x, y, width, 24f), "WHERE TO?");
+        GUI.Label(new Rect(x, y + 22f, width, 24f), "E to get out of the seat.");
+        y += 56f;
+
+        foreach (Destination stop in Neighbourhood.Stops)
+        {
+            GUI.enabled = stop.unlocked;
+            if (GUI.Button(new Rect(x, y, 210f, 30f), stop.unlocked ? stop.name : $"{stop.name}  (locked)"))
+            {
+                //everything routes through RunManager so the WHOLE CREW travels, not just whoever's in the chair
+                if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+                {
+                    Exit(); //stand up first, or we'd arrive still frozen in a seat that no longer exists
+                    RunManager.Instance.RPC_Route(stop.sceneBuildIndex, stop.spawnPointId, stop.startsNewRun);
+                }
+                return; //the list is about to be irrelevant - we're driving
+            }
+            GUI.enabled = true;
+
+            GUI.Label(new Rect(x + 220f, y + 6f, width - 220f, 24f), stop.detail);
+            y += 34f;
+        }
+    }
 }

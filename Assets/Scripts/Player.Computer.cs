@@ -29,6 +29,8 @@ public partial class Player
         }
     }
 
+    public ComputerTerminal CurrentTerminal => currentTerminal; //the terminal draws its own map and asks whether it's the one we're sat at
+
     public void EnterComputer(ComputerTerminal terminal)
     {
         isUsingComputer = true;

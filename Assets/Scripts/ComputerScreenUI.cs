@@ -1,7 +1,15 @@
 using UnityEngine;
 
-// The buttons shown on the van computer screen while a player is "in" it. Wire each button's OnClick
-// to one of these methods. Routing goes through RunManager so it happens for the whole crew.
+// SUPERSEDED, but kept on purpose.
+//
+// ComputerTerminal now draws the neighbourhood map itself and routes from there, so nothing calls these and the two
+// OnClick lists in the scene can stay empty. This file survives because the scene still holds a reference to the
+// component (deleting it would leave a missing-script warning), and because it's the right API for a REAL canvas
+// later - build the map as proper UI and hook its buttons straight back to these, then delete the OnGUI in
+// ComputerTerminal. Nothing else has to change.
+//
+// The buttons shown on the van computer screen while a player is "in" it. Routing goes through RunManager so it
+// happens for the whole crew.
 public class ComputerScreenUI : MonoBehaviour
 {
     [SerializeField] private int houseSceneBuildIndex = 1;
