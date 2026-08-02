@@ -211,13 +211,14 @@ public partial class Player : NetworkBehaviour
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
 
+        UpdateKeeperProximity(); //same for the fence's desk
         UpdateShopProximity(); //walked away from the counter, or got dragged off it - close the shop rather than leaving it open on a frozen screen
         UpdatePause();     //Escape brings the menu up. it does NOT stop the game for anyone, including us
         UpdateSpectator(); //once we're out of the run, orbit a living teammate instead of our own frozen body
 
         //the menu being up, or us watching someone else, both mean our own look and reach are off. the SIMULATION
         //carries on regardless - our body is still stood there and can still be caught while we read the menu.
-        if (IsPaused || spectatorActive || IsShopping)
+        if (IsPaused || spectatorActive || IsShopping || IsTalkingToKeeper)
         {
             InteractPrompt = "";
             InteractAnchor = null;
@@ -401,7 +402,7 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
-        if (IsShopping) // stood at the tool counter - frozen with the cursor free, and E backs out
+        if (IsShopping || IsTalkingToKeeper) // stood at a counter - frozen with the cursor free, and E backs out
         {
             NoiseLevel = 0f;
             if (GetInput(out NetworkInputData shopInput))
@@ -410,7 +411,8 @@ public partial class Player : NetworkBehaviour
                 interactHeldLastTick = shopInput.interactInput;
                 if (exitPressed)
                 {
-                    ExitShop();
+                    if (IsShopping) ExitShop();
+                    else ExitKeeper();
                 }
             }
             return;

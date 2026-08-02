@@ -77,7 +77,7 @@ public partial class Player
     //NOTE: there's no PlaceWedge here. E already opens doors, and a second E action at the same door would either
     //steal the open or need a hold, which collides with the safe's tap-vs-hold. Wedging is on G instead - the key
     //that already means "put down what you're carrying". See HandleDrop.
-    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Sell, Shop, Hide }
+    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Shop, Keeper, Hide }
 
     private InteractKind FindInteraction(out Component target)
     {
@@ -250,6 +250,14 @@ public partial class Player
             return InteractKind.Van;
         }
 
+        //the fence behind the desk. selling goes through HIM now, not the counter - see Player.Haggle
+        Shopkeeper keeper = Shopkeeper.NearestTo(transform.position);
+        if (keeper != null)
+        {
+            target = keeper;
+            return InteractKind.Keeper;
+        }
+
         //the tool shop. above the sell counter because they sit side by side and buying is the more deliberate act -
         //walking up to sell and accidentally opening the shop is harmless, the reverse loses your haul in one press.
         ToolShop shop = ToolShop.NearestTo(transform.position);
@@ -259,15 +267,9 @@ public partial class Player
             return InteractKind.Shop;
         }
 
-        //pawn shop counter: sell the team's haul for money
-        foreach (SellCounter counter in SellCounter.AllCounters)
-        {
-            if (Vector3.Distance(transform.position, counter.transform.position) <= counter.interactRange)
-            {
-                target = counter;
-                return InteractKind.Sell;
-            }
-        }
+        //NO instant-sell counter any more. It dumped the whole bag at full sticker price, which made the fence
+        //pointless the moment he opened at 60% - you'd never talk to him again. Selling goes through him, one item at
+        //a time, or it doesn't happen. SellCounter is now just the desk he stands behind.
 
         foreach (HidingSpot hidingSpot in HidingSpot.AllHidingSpots)
         {
@@ -347,17 +349,14 @@ public partial class Player
                 RunManager.Instance.RPC_StartGetaway(); //start the van - the run ends successfully for everyone
                 break;
 
+            case InteractKind.Keeper:
+                EnterKeeper((Shopkeeper)target);
+                break;
+
             case InteractKind.Shop:
                 EnterShop((ToolShop)target);
                 break;
 
-            case InteractKind.Sell:
-                if (inventory.Count > 0)
-                {
-                    RunManager.Instance.RPC_SellItems(CarriedValue); //bank the worth of my haul into the shared money
-                    inventory.Clear();                                //handed it all over
-                    PublishCarriedCount();
-                }
                 break;
 
             case InteractKind.Hide:
@@ -481,11 +480,11 @@ public partial class Player
                     ? "Someone else is on the computer"
                     : "E  Use the computer";
 
+            case InteractKind.Keeper:
+                return inventory.Count > 0 ? "E  Talk to the fence" : "E  Talk to the fence  (nothing to sell)";
+
             case InteractKind.Shop:
                 return "E  Buy tools";
-
-            case InteractKind.Sell:
-                return inventory.Count > 0 ? $"E  Sell your haul (${CarriedValue})" : "Nothing to sell";
 
             case InteractKind.Hide:
                 HidingSpot spot = target as HidingSpot;
