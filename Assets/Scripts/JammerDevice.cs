@@ -66,13 +66,19 @@ public class JammerDevice : NetworkBehaviour
         transform.position = SpawnPoint;
     }
 
+    [Networked] private NetworkBool dead { get; set; } //latched. without it the block below re-fires every tick of the despawn delay
+
     public override void FixedUpdateNetwork()
     {
-        if (!HasStateAuthority) return;
+        if (!HasStateAuthority || dead) return;
 
         SecondsLeft -= Runner.DeltaTime;
         if (SecondsLeft <= 0f)
         {
+            //ONCE. this runs at 32Hz and the despawn is deliberately delayed to let the sound finish, so without the
+            //latch it would fire the death chirp about twenty times and start twenty despawn coroutines.
+            dead = true;
+            SecondsLeft = 0f; //stop it drifting negative - anything reading it for a HUD bar would go past empty
             RPC_BatteryDied();
             StartCoroutine(DespawnAfterSound());
         }

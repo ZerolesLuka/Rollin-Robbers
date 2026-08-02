@@ -26,6 +26,15 @@ public partial class Player
 
     public bool HasFreeToolSlot => ToolSlotA == ToolType.None || ToolSlotB == ToolType.None;
 
+    //A tool eats a loot slot, so buying one while the bag is already full would leave you carrying MORE than your own
+    //capacity - fill up on loot, then buy two tools, and you'd walk into the house with a full bag AND a full kit.
+    //The Duffel Bag is exempt from its own check because it hands back more room than it takes.
+    public bool HasRoomForTool(ToolType tool)
+    {
+        if (tool == ToolType.DuffelBag) return true;
+        return inventory.Count < MaxInventorySlots; //room to lose one slot without going over
+    }
+
     public ToolType ToolInSlot(int index) => index == 0 ? ToolSlotA : ToolSlotB;
 
     //Called on the buyer's own machine once RunManager has confirmed the shared wallet could afford it. Returns false
@@ -51,7 +60,7 @@ public partial class Player
     public void RequestBuyTool(ToolType tool)
     {
         if (RunManager.Instance == null || RunManager.Instance.Object == null || !RunManager.Instance.Object.IsValid) return;
-        if (tool == ToolType.None || HasTool(tool) || !HasFreeToolSlot) return; //cheap local rejections, so obvious no-ops never leave the machine
+        if (tool == ToolType.None || HasTool(tool) || !HasFreeToolSlot || !HasRoomForTool(tool)) return; //cheap local rejections, so obvious no-ops never leave the machine
         RunManager.Instance.RPC_BuyTool((int)tool, Object.InputAuthority);
     }
 
@@ -102,7 +111,10 @@ public partial class Player
     private void UpdateDeployKey()
     {
         if (Keyboard.current == null) return;
-        if (isUsingComputer || isEnteringSafeCode || IsPaused || IsEliminated) return; //busy, or out of the run entirely
+        //anything that has taken your hands or your control also takes this. hiding matters most: your body is inside
+        //a wardrobe, so the device would appear through the door as if you'd posted it out.
+        if (isUsingComputer || isEnteringSafeCode || IsPaused) return;
+        if (IsEliminated || IsHiding || IsLockedUp || IsBearTrapped || isBeingDragged) return;
         if (!Keyboard.current.qKey.wasPressedThisFrame) return;
         TryDeployJammer();
     }

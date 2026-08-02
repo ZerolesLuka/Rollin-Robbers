@@ -233,9 +233,9 @@ public class RunManager : NetworkBehaviour
         {
             if (player == null || player.Object == null || player.Object.InputAuthority != buyer) continue;
 
-            if (player.HasTool(tool) || !player.HasFreeToolSlot)
+            if (player.HasTool(tool) || !player.HasFreeToolSlot || !player.HasRoomForTool(tool))
             {
-                return; //already owns it, or has nowhere to put it. charge nobody
+                return; //already owns it, nowhere to put it, or their bag is too full to give up the space. charge nobody
             }
 
             Money -= cost;
