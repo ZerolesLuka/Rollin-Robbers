@@ -74,7 +74,7 @@ public partial class Player
 
     //EFFECTS. Each of these is read by a system that already existed, so a tool never needs its own update loop.
 
-    public float MovementNoiseMultiplier => HasTool(ToolType.SoftSoles) ? ToolTable.SoftSolesNoiseMultiplier : 1f;
+    public float MovementNoiseMultiplier => HasTool(ToolType.PaddedBoots) ? ToolTable.PaddedBootsNoiseMultiplier : 1f;
 
     public float SafeCrackMultiplier => HasTool(ToolType.Crowbar) ? ToolTable.CrowbarCrackMultiplier : 1f;
 

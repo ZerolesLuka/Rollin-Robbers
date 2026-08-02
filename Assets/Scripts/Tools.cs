@@ -12,7 +12,7 @@ using UnityEngine;
 public enum ToolType
 {
     None = 0,
-    SoftSoles,   //quieter on your feet
+    PaddedBoots, //quieter on your feet
     Crowbar,     //force a safe faster
     WireCutters, //disarm the guard's traps without announcing it
     DuffelBag,   //carry more loot
@@ -33,7 +33,10 @@ public static class ToolTable
     public const int SlotCount = 2; //TWO on purpose. the interesting part of a loadout is what you LEAVE behind, and three slots is enough to bring one of everything
 
     //Balance lives here and nowhere else, so tuning is one file rather than a hunt through five systems.
-    public const float SoftSolesNoiseMultiplier = 0.55f; //movement noise only - it does nothing about your mouth
+    public const float PaddedBootsNoiseMultiplier = 0.8f;
+    //0.8, NOT lower, and the reason is a threshold rather than a feel. GuardHearing ignores anything under 5.
+    //Walking is moveSpeed 7, so 0.55 gave 3.85 and made walking COMPLETELY inaudible - identical to crouching,
+    //which quietly deleted the crouch decision for 450. 0.8 gives 5.6: still clearly quieter, still heard.
     public const float CrowbarCrackMultiplier = 0.6f;    //fraction of the normal time to force a safe
     public const int DuffelBagExtraSlots = 2;
     public const int WedgeKitWedges = 2;
@@ -50,7 +53,7 @@ public static class ToolTable
 
     private static readonly ToolDefinition[] all = new ToolDefinition[]
     {
-        new ToolDefinition { type = ToolType.SoftSoles,   name = "Soft Soles",   cost = 450,  description = "Your footsteps carry about half as far. Says nothing about your voice." },
+        new ToolDefinition { type = ToolType.PaddedBoots, name = "Padded Boots", cost = 450,  description = "Your footsteps carry noticeably less far. Says nothing about your voice." },
         new ToolDefinition { type = ToolType.Crowbar,     name = "Crowbar",      cost = 600,  description = "Forcing a safe takes noticeably less time. Still just as loud." },
         new ToolDefinition { type = ToolType.WireCutters, name = "Wire Cutters", cost = 500,  description = "Disarm his traps quietly. Without them it can be done, but he'll hear it." },
         new ToolDefinition { type = ToolType.DuffelBag,   name = "Duffel Bag",   cost = 750,  description = "Two more slots for loot. Nothing else." },
