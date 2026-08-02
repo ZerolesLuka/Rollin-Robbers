@@ -39,6 +39,12 @@ public class RunManager : NetworkBehaviour
     [Networked] public int SavedGuardRunGeneration { get; set; } // which run the saved mood belongs to
     [Networked] public int SavedGuardAsleepChances { get; set; }
 
+    //Same problem, same fix, for the dog. He's despawned on every scene load too, so stepping outside and back in
+    //handed you a dog who'd never been disturbed - he'd go straight back to his bed no matter how many times you'd
+    //already woken him. Only restDisturbances matters: everything else about him is genuinely per-room.
+    [Networked] public NetworkBool HasSavedDogState { get; set; }
+    [Networked] public int SavedDogDisturbances { get; set; }
+
     [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
 
     [Networked] public NetworkBool VanBackClosed { get; private set; } // true while a run is over and everyone's pooled in the van - a scene barrier seals the van's back so nobody wanders off before picking a destination. any route button reopens it. networked so every client's barrier agrees
@@ -306,6 +312,7 @@ public class RunManager : NetworkBehaviour
         GatheredLootValue = 0; //fresh house, nothing stolen yet - resets the guard's theft-suspicion baseline
         HouseLootTotal = 0; //ItemSpawner re-tallies the new run's loot when the indoor scene reloads
         HasSavedGuardState = false; //genuinely new heist: the guard forgets last run's mood and gets rolled fresh
+        HasSavedDogState = false;   //and the dog goes back to sleeping through anything
         RunGeneration++;            //and stamp a new generation, so a mood saved by the OLD guard (whose Despawned fires after this) can't be mistaken for this run's
         RunTime = 0f; //fresh clock for the new heist
         FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run

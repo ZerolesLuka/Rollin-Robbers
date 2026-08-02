@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -15,7 +16,10 @@ public partial class Player
     private Safe keypadSafe;              // which safe we're typing at
     private string typedDigits = "";
     private float codeRejectedFlashTimer; // >0 = show the "wrong" flash
-    private int knownSafeCode;            // a code we've read off a note. 0 = we haven't found one
+    //Codes we've read, keyed by which safe they open. A single int meant reading a second note silently threw the
+    //first away - fine while a house has one safe, silently destructive the moment it has two, and the player would
+    //have had no idea it happened. Local on purpose: teammates don't learn it, you read it out.
+    private readonly Dictionary<int, int> knownSafeCodes = new Dictionary<int, int>();
 
     private const int SafeCodeLength = 4;
 
@@ -40,13 +44,13 @@ public partial class Player
         typedDigits = "";
     }
 
-    public void LearnSafeCode(int code) //read a note - the number stays on OUR hud for the rest of the run
+    public void LearnSafeCode(int safeId, int code) //read a note - the number stays on OUR hud for the rest of the run
     {
-        if (code <= 0)
+        if (code <= 0 || safeId == Safe.NoSafe)
         {
             return; //the safe this note belonged to is gone
         }
-        knownSafeCode = code; //local only on purpose. teammates don't magically learn it; you have to say it out loud
+        knownSafeCodes[safeId] = code; //local only on purpose. teammates don't magically learn it; you have to say it out loud
     }
 
     private void UpdateSafeKeypad() //called from Update, local player only
@@ -130,9 +134,13 @@ public partial class Player
             return; //only our own player draws this
         }
 
-        if (knownSafeCode > 0) //a code we've read off a note - parked in the corner so you can read it out mid-run
+        //every code we've found, parked in the corner so you can read them out mid-run. stacked upward so the newest
+        //sits nearest the bottom where your eye already is.
+        int line = 0;
+        foreach (KeyValuePair<int, int> known in knownSafeCodes)
         {
-            GUI.Label(new Rect(14f, Screen.height - 34f, 260f, 24f), $"Safe code: {knownSafeCode}");
+            GUI.Label(new Rect(14f, Screen.height - 34f - line * 22f, 300f, 24f), $"Safe #{known.Key} code: {known.Value}");
+            line++;
         }
 
         if (codeRejectedFlashTimer > 0f)

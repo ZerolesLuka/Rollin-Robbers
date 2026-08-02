@@ -312,7 +312,8 @@ public partial class Player
             case InteractKind.ReadNote:
                 //onto OUR hud only - the whole point is reading it out loud to whoever's stood at the safe. the note
                 //stays in the world so a teammate can come and check it themselves.
-                LearnSafeCode(((SafeNote)target).ReadCode());
+                SafeNote note = (SafeNote)target;
+                LearnSafeCode(note.SafeId, note.ReadCode()); //keyed by safe, so a second note can't overwrite the first
                 break;
 
             case InteractKind.TakeWedge:

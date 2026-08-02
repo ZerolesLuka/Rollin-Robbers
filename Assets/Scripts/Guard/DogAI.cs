@@ -73,6 +73,14 @@ public class DogAI : NetworkBehaviour
         Instance = this;
         spawnPosition = transform.position;
         State = DogState.Resting; //night time - the dog starts asleep at his bed, like the guard, and only gets up when disturbed
+
+        //carry how fed up he already is across the scene load. without this, stepping out of the house and back in
+        //gave you a dog who'd never been woken once, however many times you'd actually disturbed him.
+        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
+            && RunManager.Instance.HasSavedDogState)
+        {
+            restDisturbances = RunManager.Instance.SavedDogDisturbances;
+        }
         agent.updatePosition = false; //same NavMeshAgent/NetworkTransform fix as GuardPatrol - we move the transform on the tick ourselves
         agent.Warp(transform.position);
         agent.speed = patrolSpeed;
@@ -406,6 +414,21 @@ public class DogAI : NetworkBehaviour
                 chaseTarget = target;
                 if (dogAudio != null) dogAudio.Bark(GuardAudio.BarkType.Chase);
                 break;
+        }
+    }
+
+    public override void Despawned(NetworkRunner runner, bool hasState) //he's despawned on every scene change, so bank how disturbed he is on the way out
+    {
+        if (Instance == this)
+        {
+            Instance = null; //don't leave sensors pinging a destroyed dog
+        }
+        if (!hasState || !HasStateAuthority) return; //hasState false = the session is tearing down, nothing worth keeping
+
+        if (RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+        {
+            RunManager.Instance.SavedDogDisturbances = restDisturbances;
+            RunManager.Instance.HasSavedDogState = true;
         }
     }
 
