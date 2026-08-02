@@ -155,7 +155,7 @@ public class GuardTrap : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
-    public void RPC_Disarm() //a player defused it. the authority owns the despawn, same as every other world object
+    public void RPC_Disarm(NetworkBool quietly) //a player defused it. the authority owns the despawn, same as every other world object
     {
         if (sprung)
         {
@@ -163,6 +163,15 @@ public class GuardTrap : NetworkBehaviour
         }
         sprung = true;
         RPC_Disarmed();
+
+        //WITHOUT wire cutters you can still disarm it, you just make a mess of it - the clatter carries and he comes
+        //to look. That's what the tool buys: not the ability, the silence. Otherwise Wire Cutters would be a gate on
+        //content rather than an upgrade, and a crew without them would simply have to walk around every trap.
+        if (!quietly && GuardPatrol.Instance != null)
+        {
+            GuardPatrol.Instance.AlertTo(transform.position, false); //him only. the dog doesn't need to hear about a snipped wire
+        }
+
         StartCoroutine(DespawnAfterSound());
     }
 

@@ -110,9 +110,11 @@ public class Safe : NetworkBehaviour
             return; //only the authority advances the meter, and an open safe is finished
         }
 
-        if (AnyoneCracking())
+        float speedMultiplier = BestCrackMultiplier();
+        if (speedMultiplier > 0f)
         {
-            CrackProgress = Mathf.Min(1f, CrackProgress + Runner.DeltaTime / crackSeconds);
+            //multiplier scales the TIME, so a Crowbar's 0.6 means the meter fills in 60% of crackSeconds
+            CrackProgress = Mathf.Min(1f, CrackProgress + Runner.DeltaTime / (crackSeconds * speedMultiplier));
             if (CrackProgress >= 1f)
             {
                 Open();
@@ -120,8 +122,12 @@ public class Safe : NetworkBehaviour
         }
     }
 
-    private bool AnyoneCracking() //is at least one live player holding interact on THIS safe, in range
+    //0 if nobody's working on it, otherwise the BEST multiplier among everyone who is. Two crackers still don't stack
+    //- it's presence, not headcount - but the one with the crowbar sets the pace for the pair, so handing the tool to
+    //whoever's going to the safe actually matters.
+    private float BestCrackMultiplier()
     {
+        float best = 0f;
         foreach (Player player in Player.ActivePlayers)
         {
             if (player.CrackingSafeId != SafeId)
@@ -132,12 +138,15 @@ public class Safe : NetworkBehaviour
             {
                 continue; //out of action - can't be cracking
             }
-            if (Vector3.Distance(player.transform.position, transform.position) <= crackRange)
+            if (Vector3.Distance(player.transform.position, transform.position) > crackRange)
             {
-                return true;
+                continue;
             }
+
+            float mine = player.SafeCrackMultiplier;
+            if (best == 0f || mine < best) best = mine; //lower is faster
         }
-        return false;
+        return best;
     }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]

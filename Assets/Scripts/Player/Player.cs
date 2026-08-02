@@ -98,6 +98,7 @@ public partial class Player : NetworkBehaviour
     private bool flashlightHeldLastTick; //rising-edge detect so one press = one toggle
     private Vector3 flashlightLastPosition; //to gauge how fast this player is moving, for the walk bob
     private bool hasRiddenVanForRunEnd; //one-shot so the run-end van teleport only fires once
+    private bool hasRefilledToolsThisRun; //one-shot so a WedgeKit tops you up once per heist, not every tick
     private bool isUsingComputer; //local only - frozen at the van computer, camera focused on the screen, cursor freed
     private ComputerTerminal currentTerminal; //the terminal we're currently "in", so E can exit it
     private ComputerTerminal pendingTerminal; //terminal we've asked to use and are waiting on the networked lock for
@@ -108,7 +109,7 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
     private readonly List<InventoryItem> inventory = new List<InventoryItem>(); //local only - carried loot (name + value), shown on this player's own HUD
     public IReadOnlyList<InventoryItem> Inventory => inventory;
-    public int MaxInventorySlots => maxInventorySlots;
+    public int MaxInventorySlots => maxInventorySlots + ToolInventoryBonus; //a Duffel Bag widens this, and everything that checks capacity reads it
     public int CarriedValue //total worth of what this player is holding - the HUD reads it, selling banks it
     {
         get
@@ -287,6 +288,22 @@ public partial class Player : NetworkBehaviour
             return; //no movement while settling
         }
 
+        //a fresh run started - hand out anything a tool promises per-run (the WedgeKit's wedges). one-shot, so it
+        //refills at the start of every heist rather than being a single purchase of two wedges that never comes back.
+        if (HasStateAuthority && RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid)
+        {
+            bool runActive = RunManager.Instance.State == RunManager.RunState.InProgress;
+            if (runActive && !hasRefilledToolsThisRun)
+            {
+                hasRefilledToolsThisRun = true;
+                RefillToolConsumables();
+            }
+            else if (!runActive)
+            {
+                hasRefilledToolsThisRun = false; //re-arm for the next one
+            }
+        }
+
         //a fresh run started (House button) - re-arm the one-shot so the NEXT run-over ride can fire
         if (hasRiddenVanForRunEnd && RunManager.Instance != null && RunManager.Instance.Object != null
             && RunManager.Instance.Object.IsValid && RunManager.Instance.State == RunManager.RunState.InProgress)
@@ -439,6 +456,11 @@ public partial class Player : NetworkBehaviour
     [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)] //the wedge's owner decided WE won it; this lands on our machine
     public void RPC_GrantWedge()
     {
+        AddWedge();
+    }
+
+    private void AddWedge() //the actual increment, so local grants (a WedgeKit refilling) don't have to route through an RPC to reach it
+    {
         if (WedgesCarried < maxWedgesCarried) WedgesCarried++;
     }
 
@@ -487,7 +509,7 @@ public partial class Player : NetworkBehaviour
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
     public void RPC_GrantPickup(NetworkString<_32> itemName, int value)
     {
-        if (inventory.Count >= maxInventorySlots) return; //bag filled while the request was in flight
+        if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
         inventory.Add(new InventoryItem(itemName.ToString(), value));
     }
 
@@ -496,6 +518,7 @@ public partial class Player : NetworkBehaviour
     public void RPC_GetCaught()
     {
         LoseCarriedLoot();                   // caught red-handed - you lose everything you were carrying
+        LoseTools();                         // and the kit with it, per the locked tools-lost-on-catch decision
         IsEliminated = true;                 // out for the run - spectator handoff + visuals come later in Unity
         characterController.enabled = false; // freeze them in place, no more moving or colliding
     }
@@ -504,6 +527,7 @@ public partial class Player : NetworkBehaviour
     public void RPC_GetDragged(GuardPatrol guard)
     {
         IsBearTrapped = false; //being hauled off overrides being pinned - the drag branch owns our position from here
+        LoseTools();                         // the kit goes the moment he grabs you, same as the loot
         LoseCarriedLoot();                   // hauled off to the closet - the haul spills the moment he grabs you (jail's mercy is staying in the run, not keeping the loot). flip this line off if jail should let a rescued player keep their loot
         draggingGuard = guard;
         isBeingDragged = true;

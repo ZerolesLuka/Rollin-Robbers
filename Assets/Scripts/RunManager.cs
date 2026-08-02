@@ -215,6 +215,35 @@ public class RunManager : NetworkBehaviour
         Money += value;
     }
 
+    //Buying a tool. The WALLET is shared and the TOOL is personal, which is the whole point: the crew decides
+    //together who gets the crowbar, and that person is now the one going to the safe.
+    //
+    //The authority checks the price and deducts, THEN tells the buyer to equip it. Doing it the other way round lets
+    //two players on the same tick both pass an affordability check against the same money and buy one tool each.
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_BuyTool(int toolTypeValue, PlayerRef buyer)
+    {
+        ToolType tool = (ToolType)toolTypeValue;
+        if (tool == ToolType.None) return;
+
+        int cost = ToolTable.CostOf(tool);
+        if (Money < cost) return; //can't afford it - the buyer's HUD already greyed it out, this is the authoritative no
+
+        foreach (Player player in Player.ActivePlayers)
+        {
+            if (player == null || player.Object == null || player.Object.InputAuthority != buyer) continue;
+
+            if (player.HasTool(tool) || !player.HasFreeToolSlot)
+            {
+                return; //already owns it, or has nowhere to put it. charge nobody
+            }
+
+            Money -= cost;
+            player.RPC_GrantTool(toolTypeValue); //lands on the buyer's own machine, which owns their tool slots
+            return;
+        }
+    }
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_ReportLootTaken(int value, Vector3 stolenFrom) //a WorldItem was lifted - the house is missing that much now (feeds the guard's suspicion), and we remember WHERE so he can investigate the actual crime scene
     {

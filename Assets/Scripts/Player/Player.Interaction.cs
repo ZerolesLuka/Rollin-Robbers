@@ -130,7 +130,7 @@ public partial class Player
         //world item pickup: into the inventory (separate from the loot-value system). doesn't need RunManager, so it runs before that check.
         //a FULL bag deliberately falls straight through this block rather than blocking - otherwise loot lying by the
         //exit door would make the door unopenable exactly when you're loaded up and trying to leave.
-        if (inventory.Count < maxInventorySlots)
+        if (inventory.Count < MaxInventorySlots)
         {
             foreach (WorldItem item in WorldItem.AllItems)
             {
@@ -286,7 +286,7 @@ public partial class Player
                 break;
 
             case InteractKind.Disarm:
-                ((GuardTrap)target).RPC_Disarm();
+                ((GuardTrap)target).RPC_Disarm(CanDisarmQuietly); //wire cutters make it silent; bare hands make it a noise he investigates
                 break;
 
             case InteractKind.Pickup:
@@ -387,7 +387,7 @@ public partial class Player
                 InteractPrompt = "E  Enter the code    (hold to force it open)"; //both halves of the safe, because the tap and the hold do genuinely different things
                 InteractAnchor = crackable.transform;
             }
-            else if (inventory.Count >= maxInventorySlots && IsLootWithinReach())
+            else if (inventory.Count >= MaxInventorySlots && IsLootWithinReach())
             {
                 InteractPrompt = "Hands full - drop something with G"; //the pickup scan skipped this loot entirely, so say why rather than showing nothing
                 InteractAnchor = NearestLootInReach();                 //hang it on the thing we can't pick up, so it's obvious WHAT we're being refused
@@ -431,7 +431,10 @@ public partial class Player
 
             case InteractKind.Disarm:
                 GuardTrap trap = target as GuardTrap;
-                return trap != null ? $"E  Disarm the {trap.DisplayName}" : "E  Disarm";
+                string trapName = trap != null ? trap.DisplayName : "trap";
+                //say the cost out loud. without cutters it's still worth doing, but the player should be choosing to
+                //make that noise rather than discovering it afterwards
+                return CanDisarmQuietly ? $"E  Cut the {trapName}" : $"E  Disarm the {trapName}   (he'll hear it)";
 
             case InteractKind.Pickup:
                 WorldItem item = target as WorldItem;

@@ -65,7 +65,9 @@ public partial class Player
         wasGroundedForLanding = groundedNow;
 
         //noise comes AFTER speed is finalized
-        float movementNoise = (inputVector.magnitude > 0.1f) ? speed : 0f; //moving = your speed, still = 0
+        //Soft Soles scale ONLY this. your voice, a hard landing and working a safe are all untouched, so the tool
+        //makes you sneakier without making you silent - which is the difference between an upgrade and an off switch.
+        float movementNoise = (inputVector.magnitude > 0.1f) ? speed * MovementNoiseMultiplier : 0f; //moving = your speed, still = 0
         float voiceNoise = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
         float crackNoise = (CrackingSafeId != Safe.NoSafe) ? crackNoiseAmount : 0f; //working a safe is loud - holding interact on one (CrackingSafeId set) leaks noise every tick, even standing dead still
         NoiseLevel = Mathf.Max(Mathf.Max(movementNoise, crackNoise), Mathf.Max(voiceNoise, landingNoise)); //loudest of moving, cracking, talking, or a fresh landing
