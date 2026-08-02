@@ -78,6 +78,7 @@ public partial class Player : NetworkBehaviour
     [Networked] public NetworkString<_16> DisplayName { get; private set; } //who this is, for nameplates. written once by the owner in Spawned; the source lives in PlayerIdentity so Steam can take over later
 
     [Networked] public int WedgesCarried { get; private set; } //door wedges in your pockets. networked so teammates' prompts and the HUD can see what you're holding
+    [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you press Q with a Signal Jammer in your kit. leave empty and it simply can't be deployed
     [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
     [SerializeField] private int maxWedgesCarried = 3;
     [SerializeField] private float wedgePlaceRange = 2f;        //how close to a shut door you must be for G to wedge it instead of dropping loot
@@ -109,7 +110,10 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
     private readonly List<InventoryItem> inventory = new List<InventoryItem>(); //local only - carried loot (name + value), shown on this player's own HUD
     public IReadOnlyList<InventoryItem> Inventory => inventory;
-    public int MaxInventorySlots => maxInventorySlots + ToolInventoryBonus; //a Duffel Bag widens this, and everything that checks capacity reads it
+    //Tools take LOOT slots. Every one you bring is a vase you can't carry home, which is what turns a loadout into a
+    //decision - and it's why the Duffel Bag reads as buying back the room your other tool cost. Clamped at 1 so a
+    //full kit can never leave you unable to pick anything up at all.
+    public int MaxInventorySlots => Mathf.Max(1, maxInventorySlots + ToolInventoryBonus - ToolsCarried);
     public int CarriedValue //total worth of what this player is holding - the HUD reads it, selling banks it
     {
         get
@@ -213,6 +217,7 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
+        UpdateDeployKey();  //Q sets down a Signal Jammer, read straight off the keyboard like the safe keypad so it needs no new binding
         UpdateLootWheel(); //hold MMB to pick which item G drops
         UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)

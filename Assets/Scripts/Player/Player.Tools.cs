@@ -1,5 +1,6 @@
 using Fusion;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 // Player - the loadout you carry into a house.
 //
@@ -82,23 +83,55 @@ public partial class Player
 
     public int ToolInventoryBonus => HasTool(ToolType.DuffelBag) ? ToolTable.DuffelBagExtraSlots : 0;
 
-    //The hum. Folded into NoiseLevel as just another source, so it competes with walking rather than adding to it -
-    //which is why it only actually matters when you're stood still.
-    public float ToolNoiseFloor => HasTool(ToolType.SignalJammer) ? ToolTable.JammerNoise : 0f;
-
-    //Is this spot inside somebody's jamming bubble? Static because a CAMERA needs to ask, and a camera has no idea
-    //which players exist - it just knows where it's pointing. Covers teammates too, on purpose: the bubble is a
-    //reason for the crew to move as a group rather than a personal invisibility cloak.
-    public static bool IsPositionJammed(Vector3 position)
+    //TOOLS COST CARRYING SPACE. Every tool in your kit is one less thing you can take home, which is what makes a
+    //loadout a decision rather than a shopping list - and it's why the Duffel Bag reads as buying back the room your
+    //other tool cost rather than as free capacity.
+    public int ToolsCarried
     {
-        foreach (Player player in ActivePlayers)
+        get
         {
-            if (player == null || !player.HasTool(ToolType.SignalJammer)) continue;
-            if (player.IsEliminated) continue; //his kit went with him when he was caught
-            if (Vector3.Distance(player.transform.position, position) <= ToolTable.JammerRadius) return true;
+            int count = 0;
+            if (ToolSlotA != ToolType.None) count++;
+            if (ToolSlotB != ToolType.None) count++;
+            return count;
         }
-        return false;
     }
+
+    //Q, read straight off the keyboard the way the safe keypad already reads digits, so this needs no new action in
+    //the input asset (which would mean regenerating the C# wrapper before anything compiled).
+    private void UpdateDeployKey()
+    {
+        if (Keyboard.current == null) return;
+        if (isUsingComputer || isEnteringSafeCode || IsPaused || IsEliminated) return; //busy, or out of the run entirely
+        if (!Keyboard.current.qKey.wasPressedThisFrame) return;
+        TryDeployJammer();
+    }
+
+    //Deploying spends the tool and frees its slot.
+    public void TryDeployJammer()
+    {
+        if (jammerDevicePrefab == null || !HasTool(ToolType.SignalJammer)) return;
+
+        Vector3 dropAt = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
+
+        //spend it FIRST. spawning is deferred, so waiting for the callback to clear the slot leaves a window where
+        //holding Q would place a second one off a single tool.
+        if (ToolSlotA == ToolType.SignalJammer) ToolSlotA = ToolType.None;
+        else if (ToolSlotB == ToolType.SignalJammer) ToolSlotB = ToolType.None;
+
+        Runner.Spawn(jammerDevicePrefab, dropAt, Quaternion.identity, PlayerRef.None, (runner, spawnedObject) =>
+        {
+            JammerDevice device = spawnedObject.GetComponent<JammerDevice>();
+            if (device == null) return;
+            device.SecondsLeft = ToolTable.JammerSeconds;
+            device.SpawnPoint = dropAt;   //networked-position safeguard - a deferred spawn drops the position argument
+            device.UseSpawnPoint = true;
+        });
+    }
+
+    //Cameras ask this. It reads DEPLOYED devices, not who's carrying what - a jammer in your pocket does nothing,
+    //which is the whole point of making it a thing you place.
+    public static bool IsPositionJammed(Vector3 position) => JammerDevice.CoversPosition(position);
 
     //Hand out the wedges a WedgeKit promises. Called when a fresh run starts rather than when the tool is bought, so
     //the kit refills every heist instead of being a one-off purchase of two wedges.

@@ -70,9 +70,7 @@ public partial class Player
         float movementNoise = (inputVector.magnitude > 0.1f) ? speed * MovementNoiseMultiplier : 0f; //moving = your speed, still = 0
         float voiceNoise = (MicLoudnessProbe.Instance != null) ? MicLoudnessProbe.Instance.VoiceLoudness * voiceNoiseScale : 0f;
         float crackNoise = (CrackingSafeId != Safe.NoSafe) ? crackNoiseAmount : 0f; //working a safe is loud - holding interact on one (CrackingSafeId set) leaks noise every tick, even standing dead still
-        //the loudest single source wins, it never sums - so a jammer's hum is drowned out the moment you take a step,
-        //and only shows up when everything else has gone quiet
-        NoiseLevel = Mathf.Max(Mathf.Max(movementNoise, crackNoise), Mathf.Max(Mathf.Max(voiceNoise, landingNoise), ToolNoiseFloor));
+        NoiseLevel = Mathf.Max(Mathf.Max(movementNoise, crackNoise), Mathf.Max(voiceNoise, landingNoise)); //loudest of moving, cracking, talking, or a fresh landing
         landingNoise = Mathf.MoveTowards(landingNoise, 0f, landNoiseDecayRate * Runner.DeltaTime); //the landing spike rings out over a moment instead of a single tick
     }
 

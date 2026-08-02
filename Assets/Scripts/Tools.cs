@@ -41,15 +41,14 @@ public static class ToolTable
     public const int DuffelBagExtraSlots = 2;
     public const int WedgeKitWedges = 2;
 
-    //The jammer trades one way of being caught for another. It blinds cameras in a bubble around whoever carries it -
-    //teammates included, so the crew has a reason to move together - but the thing HUMS.
+    //The jammer is PLACED, not merely owned. Deploying spends it: the device sits where you dropped it, blinds every
+    //camera inside JammerRadius, and dies when the battery does. Nobody gets it back.
     //
-    //6f is chosen against GuardHearing's threshold of 5, not picked for feel: it sits just above, so the jammer is
-    //faintly audible on its own. That does nothing while you're walking (movement noise is 7 and NoiseLevel takes the
-    //loudest, not the sum) - it only bites when you STAND STILL, which is exactly when you'd otherwise be silent.
-    //Carrying it means you can never go quiet, only quieter.
-    public const float JammerRadius = 6f;
-    public const float JammerNoise = 6f;
+    //It was a passive effect at first and that was its whole problem - it worked invisibly, on a prop that might only
+    //appear once in a house, so you could carry it a full run and never see it do anything. Placing it makes every
+    //part legible: you chose the spot, it's sat there, and you know exactly when it stops.
+    public const float JammerRadius = 7f;
+    public const float JammerSeconds = 45f;
 
     private static readonly ToolDefinition[] all = new ToolDefinition[]
     {
@@ -58,7 +57,7 @@ public static class ToolTable
         new ToolDefinition { type = ToolType.WireCutters, name = "Wire Cutters", cost = 500,  description = "Disarm his traps quietly. Without them it can be done, but he'll hear it." },
         new ToolDefinition { type = ToolType.DuffelBag,   name = "Duffel Bag",   cost = 750,  description = "Two more slots for loot. Nothing else." },
         new ToolDefinition { type = ToolType.WedgeKit,    name = "Wedge Kit",    cost = 300,  description = "Start each run carrying two door wedges." },
-        new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 800,  description = "Cameras go blind near whoever's carrying it, teammates included. It hums, so you can never be truly still." },
+        new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 550,  description = "Press Q to set it down. Blinds every camera around it for about a minute, then the battery dies and it's gone." },
     };
 
     public static ToolDefinition[] All => all;
