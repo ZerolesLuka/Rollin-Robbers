@@ -17,6 +17,7 @@ public enum ToolType
     WireCutters, //disarm the guard's traps without announcing it
     DuffelBag,   //carry more loot
     WedgeKit,    //start the run with door wedges
+    SignalJammer,//blinds cameras near you, but hums
 }
 
 public struct ToolDefinition
@@ -37,6 +38,16 @@ public static class ToolTable
     public const int DuffelBagExtraSlots = 2;
     public const int WedgeKitWedges = 2;
 
+    //The jammer trades one way of being caught for another. It blinds cameras in a bubble around whoever carries it -
+    //teammates included, so the crew has a reason to move together - but the thing HUMS.
+    //
+    //6f is chosen against GuardHearing's threshold of 5, not picked for feel: it sits just above, so the jammer is
+    //faintly audible on its own. That does nothing while you're walking (movement noise is 7 and NoiseLevel takes the
+    //loudest, not the sum) - it only bites when you STAND STILL, which is exactly when you'd otherwise be silent.
+    //Carrying it means you can never go quiet, only quieter.
+    public const float JammerRadius = 6f;
+    public const float JammerNoise = 6f;
+
     private static readonly ToolDefinition[] all = new ToolDefinition[]
     {
         new ToolDefinition { type = ToolType.SoftSoles,   name = "Soft Soles",   cost = 450,  description = "Your footsteps carry about half as far. Says nothing about your voice." },
@@ -44,6 +55,7 @@ public static class ToolTable
         new ToolDefinition { type = ToolType.WireCutters, name = "Wire Cutters", cost = 500,  description = "Disarm his traps quietly. Without them it can be done, but he'll hear it." },
         new ToolDefinition { type = ToolType.DuffelBag,   name = "Duffel Bag",   cost = 750,  description = "Two more slots for loot. Nothing else." },
         new ToolDefinition { type = ToolType.WedgeKit,    name = "Wedge Kit",    cost = 300,  description = "Start each run carrying two door wedges." },
+        new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 800,  description = "Cameras go blind near whoever's carrying it, teammates included. It hums, so you can never be truly still." },
     };
 
     public static ToolDefinition[] All => all;

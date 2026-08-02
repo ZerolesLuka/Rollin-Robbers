@@ -82,6 +82,24 @@ public partial class Player
 
     public int ToolInventoryBonus => HasTool(ToolType.DuffelBag) ? ToolTable.DuffelBagExtraSlots : 0;
 
+    //The hum. Folded into NoiseLevel as just another source, so it competes with walking rather than adding to it -
+    //which is why it only actually matters when you're stood still.
+    public float ToolNoiseFloor => HasTool(ToolType.SignalJammer) ? ToolTable.JammerNoise : 0f;
+
+    //Is this spot inside somebody's jamming bubble? Static because a CAMERA needs to ask, and a camera has no idea
+    //which players exist - it just knows where it's pointing. Covers teammates too, on purpose: the bubble is a
+    //reason for the crew to move as a group rather than a personal invisibility cloak.
+    public static bool IsPositionJammed(Vector3 position)
+    {
+        foreach (Player player in ActivePlayers)
+        {
+            if (player == null || !player.HasTool(ToolType.SignalJammer)) continue;
+            if (player.IsEliminated) continue; //his kit went with him when he was caught
+            if (Vector3.Distance(player.transform.position, position) <= ToolTable.JammerRadius) return true;
+        }
+        return false;
+    }
+
     //Hand out the wedges a WedgeKit promises. Called when a fresh run starts rather than when the tool is bought, so
     //the kit refills every heist instead of being a one-off purchase of two wedges.
     public void RefillToolConsumables()

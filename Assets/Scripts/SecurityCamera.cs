@@ -77,6 +77,10 @@ public class SecurityCamera : MonoBehaviour
             if (player.Object == null || !player.Object.IsValid) continue;
             if (player.IsEliminated || player.IsLockedUp || player.IsHiding) continue;
 
+            //someone nearby is running a jammer, so this camera has nothing but static where they're stood. checked
+            //against the PLAYER's position rather than the camera's - the bubble travels with whoever carries it.
+            if (Player.IsPositionJammed(player.transform.position)) continue;
+
             Vector3 toPlayer = player.transform.position - transform.position;
             float distance = toPlayer.magnitude;
 
