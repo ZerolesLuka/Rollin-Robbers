@@ -13,6 +13,7 @@ public class HUD : MonoBehaviour
     [SerializeField] private Text[] inventorySlotTexts; //4 slot labels; each shows the held item's name or empty
     [SerializeField] private Color emptySlotColor = new Color(0.5f, 0.5f, 0.5f, 0.5f); //dim tint for an empty inventory slot
     [SerializeField, Range(0.2f, 1f)] private float unselectedSlotDim = 0.55f; //how far the slots you're NOT holding drop back, so the selected one stands out
+    [SerializeField] private Color toolOccupiedSlotColor = new Color(0.45f, 0.4f, 0.3f, 0.7f); //a slot a tool is taking up. distinct from empty, because it isn't empty - it's spent
     [SerializeField] private GameObject lootWheelRoot; //optional radial graphic, shown only while MMB is held. the slot list works without it
 
     [Header("Status line - what's currently happening TO you")]
@@ -108,10 +109,17 @@ public class HUD : MonoBehaviour
                     slotColor.a = 1f;
                     inventorySlotTexts[slot].color = slotColor;
                 }
-                else
+                else if (slot < Player.LocalPlayer.MaxInventorySlots)
                 {
                     inventorySlotTexts[slot].text = "";
                     inventorySlotTexts[slot].color = emptySlotColor;
+                }
+                else
+                {
+                    //TOOLS ATE THIS SLOT. showing it as merely empty would promise room that doesn't exist - you'd
+                    //walk to a vase you can't carry and only find out when E did nothing.
+                    inventorySlotTexts[slot].text = "— tool —";
+                    inventorySlotTexts[slot].color = toolOccupiedSlotColor;
                 }
             }
         }

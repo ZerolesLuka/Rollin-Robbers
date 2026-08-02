@@ -34,6 +34,7 @@ public class WorldItem : NetworkBehaviour
     [SerializeField] private float baitFlickerSpeed = 4.5f;    // THE TELL. bait breathes; real loot sits dead still. subtle enough to miss when you're panicking, obvious once you know
     [SerializeField] private float baitFlickerAmount = 0.18f;  // how deep that breath is, as a fraction of the light's authored intensity. bigger = easier to spot = kinder
     private float glowBaseIntensity;                           // whatever the light was authored at, so the flicker is relative rather than absolute
+    private bool glowAuthoredEnabled;                          // whether the prefab wanted a glow at all - a safe hides it, and this is what it's restored to
     private AudioSource baitAudio;
 
     [HideInInspector] public bool pendingRemoval; // set locally the instant we grab it, so our own pickup scan can't re-grab it during the despawn lag
@@ -44,7 +45,8 @@ public class WorldItem : NetworkBehaviour
 
         if (glowLight != null)
         {
-            glowBaseIntensity = glowLight.intensity; //remember the authored brightness so the bait flicker rides on top of it instead of replacing it
+            glowBaseIntensity = glowLight.intensity;      //remember the authored brightness so the bait flicker rides on top of it instead of replacing it
+            glowAuthoredEnabled = glowLight.enabled;      //and whether it was meant to be lit at all, so hiding it in a safe can be undone without inventing a glow
         }
 
         //3D on purpose: a bait going off across the house should be a distant "oh no", one in your hands should be a
@@ -112,12 +114,15 @@ public class WorldItem : NetworkBehaviour
             return;
         }
 
-        //a glow leaking out of a shut safe would give away exactly what's inside before you've earned it
-        if (glowLight.enabled == LockedInSafe)
+        //a glow leaking out of a shut safe would give away exactly what's inside before you've earned it. restore the
+        //AUTHORED state rather than forcing it on, or a prefab whose light was deliberately switched off in the
+        //inspector would light up the moment this ran - which is what the first version of this did.
+        bool wantLit = glowAuthoredEnabled && !LockedInSafe;
+        if (glowLight.enabled != wantLit)
         {
-            glowLight.enabled = !LockedInSafe;
+            glowLight.enabled = wantLit;
         }
-        if (LockedInSafe)
+        if (!wantLit)
         {
             return;
         }
