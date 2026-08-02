@@ -49,7 +49,9 @@ public partial class Player
         return false; //both slots full - drop something first
     }
 
-    [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)] //RunManager took the money; this lands on the buyer and equips it
+    //RpcSources.All, NOT StateAuthority - see RPC_GrantWedge. RunManager sends this from the MASTER, which is not the
+    //state authority of the buyer's Player object, so the stricter source silently dropped it: money gone, no tool.
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //RunManager took the money; this lands on the buyer and equips it
     public void RPC_GrantTool(int toolTypeValue)
     {
         GrantTool((ToolType)toolTypeValue);

@@ -458,7 +458,10 @@ public partial class Player : NetworkBehaviour
         HidingSpotId = hiding ? spotId : HidingSpot.NoSpot;
     }
 
-    [Rpc(RpcSources.StateAuthority, RpcTargets.InputAuthority)] //the wedge's owner decided WE won it; this lands on our machine
+    //RpcSources.All, NOT StateAuthority. This is sent by the WEDGE's owner (the master), and in Shared Mode the state
+    //authority of a Player object is that player themselves - so restricting the source to StateAuthority meant the
+    //master could never send it, the wedge despawned, and nobody got one. Same shape as RPC_GrantPickup below.
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //the wedge's owner decided WE won it; this lands on our machine
     public void RPC_GrantWedge()
     {
         AddWedge();
