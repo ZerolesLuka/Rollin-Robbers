@@ -59,6 +59,14 @@ public class SwingingHinge : MonoBehaviour
     public bool IsOpen => isOpen;
     public float InteractRange => interactRange;
 
+    //CAN A PLAYER JUST PRESS E ON THIS? True for cupboards, drawers and doors. The safe sets it false on its own door
+    //in Spawned, because that door is owned by the crack/keypad system - leaving it true meant walking up to a safe
+    //and opening it with E like a kitchen cabinet, skipping the code, the note and the meter entirely.
+    //
+    //It's a property rather than a serialized field on purpose: whoever OWNS the hinge decides, so a new lockable
+    //thing can't forget to tick a box in the inspector.
+    public bool PlayerOperable { get; set; } = true;
+
     private void OnEnable()
     {
         AllHinges.Add(this);
@@ -77,6 +85,7 @@ public class SwingingHinge : MonoBehaviour
         float nearestDistance = float.MaxValue;
         foreach (SwingingHinge hinge in AllHinges)
         {
+            if (!hinge.PlayerOperable) continue; //a safe door, or anything else whose owner opens it on its own terms
             float distance = Vector3.Distance(hinge.transform.position, position);
             if (distance <= hinge.interactRange && distance < nearestDistance)
             {

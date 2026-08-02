@@ -64,6 +64,13 @@ public class Safe : NetworkBehaviour
         {
             doorHinge = GetComponentInChildren<SwingingHinge>();
         }
+        if (doorHinge != null)
+        {
+            //THE SAFE OWNS THIS DOOR. Without this the hinge is just another openable in SwingingHinge.AllHinges, so
+            //E at a safe swung it open like a kitchen cupboard - no code, no note, no meter, the entire mechanic
+            //walked past. Only Open() moves it now.
+            doorHinge.PlayerOperable = false;
+        }
         if (UseSpawnPoint)
         {
             StartCoroutine(PlaceOnceSpawnPointArrives()); //stocks the contents once it lands - see below for why it can't happen here

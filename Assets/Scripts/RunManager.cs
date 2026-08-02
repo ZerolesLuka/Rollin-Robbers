@@ -188,6 +188,11 @@ public class RunManager : NetworkBehaviour
         float nearestDistance = maxDoorMatchDistance;
         foreach (SwingingHinge hinge in SwingingHinge.AllHinges)
         {
+            //a safe's door isn't openable through here either. the interaction scan already refuses to target it, but
+            //this RPC resolves by POSITION and would happily match a safe stood next to a door - and the last time a
+            //guard like this only lived at the call site (the wedge check), the network path quietly bypassed it.
+            if (!hinge.PlayerOperable) continue;
+
             float distance = Vector3.Distance(hinge.transform.position, doorPosition);
             if (distance < nearestDistance)
             {
