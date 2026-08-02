@@ -109,6 +109,12 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float pickupRange = 2f;
     [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
     private readonly List<InventoryItem> inventory = new List<InventoryItem>(); //local only - carried loot (name + value), shown on this player's own HUD
+
+    //HOW MANY of those we're carrying, replicated. The list itself stays local (nobody else needs the names), but the
+    //COUNT has to cross the wire because other machines make decisions off it - RunManager checks it on the master
+    //before selling you a tool, and on the master a remote player's list is permanently empty, so reading the list
+    //there always said "bag's empty, go ahead". Anything asking about capacity from another machine reads this.
+    [Networked] public int CarriedCount { get; private set; }
     public IReadOnlyList<InventoryItem> Inventory => inventory;
     //Tools take LOOT slots. Every one you bring is a vase you can't carry home, which is what turns a loadout into a
     //decision - and it's why the Duffel Bag reads as buying back the room your other tool cost. Clamped at 1 so a
@@ -519,6 +525,7 @@ public partial class Player : NetworkBehaviour
     {
         if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
         inventory.Add(new InventoryItem(itemName.ToString(), value));
+        PublishCarriedCount();
     }
 
 

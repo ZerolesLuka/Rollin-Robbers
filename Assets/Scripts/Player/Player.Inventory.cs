@@ -11,9 +11,19 @@ using UnityEngine.SceneManagement;
 // this is just the G key spawning the held item back into the world so it falls to the floor.
 public partial class Player
 {
+    //Push the local list's size onto the wire. Called after EVERY change to the list, because the count is the one
+    //part of the inventory other machines make decisions from - and a machine that doesn't own this player has an
+    //empty list, so anything reading the list itself from over there gets a confident, wrong answer.
+    private void PublishCarriedCount()
+    {
+        if (!HasStateAuthority) return; //only the owner may write it; a remote copy asking would be dropped anyway
+        CarriedCount = inventory.Count;
+    }
+
     private void LoseCarriedLoot() //the guard grabbed you - you go home empty-handed. called the moment you're caught (eliminated) or hauled off to the closet (jailed), so getting caught actually costs the haul. the loot's already counted toward the house clear-% (reported at pickup); this just stops you banking it at the pawn shop
     {
         inventory.Clear();
+        PublishCarriedCount();
     }
 
     //Kick a wedge under the nearest shut, un-wedged house door. Returns whether it actually wedged something, so the
@@ -58,6 +68,7 @@ public partial class Player
 
         InventoryItem dropped = inventory[slot];
         inventory.RemoveAt(slot);
+        PublishCarriedCount();
 
         Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
         Runner.Spawn(worldItemPrefab, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point

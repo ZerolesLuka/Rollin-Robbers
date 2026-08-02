@@ -343,6 +343,7 @@ public partial class Player
                 {
                     RunManager.Instance.RPC_SellItems(CarriedValue); //bank the worth of my haul into the shared money
                     inventory.Clear();                                //handed it all over
+                    PublishCarriedCount();
                 }
                 break;
 

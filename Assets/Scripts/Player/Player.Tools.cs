@@ -32,7 +32,11 @@ public partial class Player
     public bool HasRoomForTool(ToolType tool)
     {
         if (tool == ToolType.DuffelBag) return true;
-        return inventory.Count < MaxInventorySlots; //room to lose one slot without going over
+
+        //CarriedCount, not inventory.Count. RunManager calls this on the MASTER to vet a purchase, and over there a
+        //remote player's local list is permanently empty - so reading the list always answered "bag's empty, sure",
+        //and the check only ever worked for whoever happened to be hosting.
+        return CarriedCount < MaxInventorySlots; //room to lose one slot without going over
     }
 
     public ToolType ToolInSlot(int index) => index == 0 ? ToolSlotA : ToolSlotB;
