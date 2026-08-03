@@ -11,6 +11,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Indoor.unity
     guid: b24eb731761b39b40b2aee8a969b52db
+  - enabled: 1
+    path: Assets/Scenes/PawnShop.unity
+    guid: cc35a01bc59ccfc4fa8ee5b52e2d0f0c
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

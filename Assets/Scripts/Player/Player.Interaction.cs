@@ -358,8 +358,6 @@ public partial class Player
                 EnterShop((ToolShop)target);
                 break;
 
-                break;
-
             case InteractKind.Hide:
                 HidingSpot spot = (HidingSpot)target;
                 if (spot.IsOccupiedByLocalPlayer)
