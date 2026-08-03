@@ -125,10 +125,18 @@ public class GuardTrap : NetworkBehaviour
 
         //a tripwire is a snitch, not a threat - it wakes HIM and nobody else. the alarm is the loud one and drags the
         //dog in too, which is what makes it worth the guard's remaining trap slots.
+        //
+        //both are pinged DIRECTLY and separately, never guard-tells-dog. the two AIs were deliberately decoupled so
+        //they hunt independently, and routing this through the guard would quietly put that back - one noise would
+        //once again summon the whole house. a trap going off is a world event they both happen to hear.
         bool pullTheDogIn = kind != TrapKind.Tripwire;
         if (GuardPatrol.Instance != null)
         {
-            GuardPatrol.Instance.AlertTo(transform.position, pullTheDogIn);
+            GuardPatrol.Instance.AlertTo(transform.position);
+        }
+        if (pullTheDogIn && DogAI.Instance != null)
+        {
+            DogAI.Instance.AlertTo(transform.position);
         }
 
         if (kind == TrapKind.BearTrap)
@@ -169,7 +177,7 @@ public class GuardTrap : NetworkBehaviour
         //content rather than an upgrade, and a crew without them would simply have to walk around every trap.
         if (!quietly && GuardPatrol.Instance != null)
         {
-            GuardPatrol.Instance.AlertTo(transform.position, false); //him only. the dog doesn't need to hear about a snipped wire
+            GuardPatrol.Instance.AlertTo(transform.position); //him only - AlertTo never passes anything to the dog, so a snipped wire stays between you and the guard
         }
 
         StartCoroutine(DespawnAfterSound());
