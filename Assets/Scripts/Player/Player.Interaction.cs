@@ -329,8 +329,12 @@ public partial class Player
                 break; //it's on the far side, or our hands are full. the prompt already said so
 
             case InteractKind.SwingDoor:
-                Door door = (Door)target;
-                RunManager.Instance.RPC_SetDoorOpen(door.transform.position, !door.IsOpen);
+                //a SwingingHinge, NOT a Door - the scan searches hinges so cupboards and drawers work without a Door
+                //script, and most openables in the house have no Door on them at all. casting to Door here threw on
+                //every single one. the hinge carries everything this needs, and its position is what RPC_SetDoorOpen
+                //matches against anyway, so routing through Door was never buying anything.
+                SwingingHinge swingHinge = (SwingingHinge)target;
+                RunManager.Instance.RPC_SetDoorOpen(swingHinge.transform.position, !swingHinge.IsOpen);
                 break;
 
             case InteractKind.ExitDoor:
@@ -465,8 +469,10 @@ public partial class Player
                 return CanCarryAnotherWedge ? "Wedged from the other side" : "You can't carry any more wedges";
 
             case InteractKind.SwingDoor:
-                Door door = target as Door;
-                return (door != null && door.IsOpen) ? "E  Close the door" : "E  Open the door";
+                //same mismatch as HandleInteract, but silent: `as Door` on a hinge just yielded null, so the prompt
+                //read "Open the door" on something already open instead of throwing. reading the hinge fixes both.
+                SwingingHinge labelHinge = target as SwingingHinge;
+                return (labelHinge != null && labelHinge.IsOpen) ? "E  Close the door" : "E  Open the door";
 
             case InteractKind.ExitDoor:
                 return "E  Go through";
