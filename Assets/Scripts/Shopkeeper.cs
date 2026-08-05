@@ -20,7 +20,11 @@ public class Shopkeeper : MonoBehaviour
     [Header("How he bargains")]
     [SerializeField, Range(0.1f, 1f)] private float openingFraction = 0.6f;  //his first offer, as a fraction of what the item is actually worth
     [SerializeField, Range(0.01f, 0.5f)] private float haggleStep = 0.12f;   //how much of the true value each successful push adds
-    [SerializeField, Range(0.1f, 1f)] private float ceilingFraction = 1.15f; //you CAN talk him above true value, which is what makes pushing tempting
+    //RANGE STARTS AT 1, NOT 0.1. The default is 1.15 but the slider used to stop at 1f, so the first time anyone
+    //dragged it in the inspector the ceiling silently clamped to sticker price - and a ceiling of 1.0 kills the whole
+    //mechanic, because pushing could then never beat simply accepting, and "never haggle" becomes the correct play.
+    //Below 1 is not a tuning option, it's a broken shopkeeper, so the slider no longer offers it.
+    [SerializeField, Range(1f, 2f)] private float ceilingFraction = 1.15f; //you CAN talk him above true value, which is what makes pushing tempting
     [SerializeField, Range(0f, 1f)] private float insultedFraction = 0.4f;   //what he drops to when he's had enough. deliberately below his opening offer, so pushing has a real cost
     [SerializeField] private int patience = 4;                               //total pushes across the whole visit before he snaps
 
