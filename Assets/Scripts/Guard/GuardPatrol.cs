@@ -760,7 +760,18 @@ public class GuardPatrol : NetworkBehaviour
         }
 
         shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
-        RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true);  //and tell every other client to swing their copy
+        //this was the ONLY unguarded RunManager.Instance in the file - the identical call in the wedge-breaking
+        //branch above checks it. Both are shouted about rather than skipped quietly: we've already swung the door on
+        //THIS machine, so losing the RPC leaves a door that is open for the guard and shut for every player, and a
+        //silent desync is far worse to debug than a line in the console saying exactly which one went missing.
+        if (RunManager.Instance != null)
+        {
+            RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true); //and tell every other client to swing their copy
+        }
+        else
+        {
+            Debug.LogError("[Guard] Opened a door with no RunManager to tell anyone - this client's door is now out of sync with the crew's.", this);
+        }
         //deliberately never closed behind him - a door left open is a free tell to the players that he came through here
     }
 

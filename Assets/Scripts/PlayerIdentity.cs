@@ -20,7 +20,11 @@ public static class PlayerIdentity
         get
         {
             if (!string.IsNullOrWhiteSpace(chosenName)) return chosenName;
-            chosenName = PlayerPrefs.GetString(PrefsKey, "");
+            //Sanitise on the way OUT as well as in. Only the setter used to run it, so a value already sitting in
+            //PlayerPrefs - written by a build from before MaxLength existed, or edited by hand - came straight back
+            //out at whatever length it was and went into a NetworkString<_16>, which is the exact silent truncation
+            //the constant above claims to prevent.
+            chosenName = Sanitise(PlayerPrefs.GetString(PrefsKey, ""));
             return chosenName;
         }
         set
