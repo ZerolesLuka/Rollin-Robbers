@@ -41,7 +41,7 @@ public partial class Player
 
         //pushesUsed is deliberately NOT cleared. it's how far you've worn him down this visit, and resetting it here
         //would make walking two steps away the optimal move before every single sale.
-        if (!isUsingComputer && !isEnteringSafeCode && !IsPaused && !IsShopping)
+        if (!KeyboardIsCaptured) //currentKeeper is already null above, so this asks whether anything ELSE still wants the cursor free
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;

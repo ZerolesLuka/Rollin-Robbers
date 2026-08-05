@@ -55,7 +55,7 @@ public partial class Player
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
-        else if (!isUsingComputer && !isEnteringSafeCode)
+        else if (!KeyboardIsCaptured) //this listed only the computer and the keypad, so closing the menu while a shop counter was open locked the cursor with its buttons still on screen
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;

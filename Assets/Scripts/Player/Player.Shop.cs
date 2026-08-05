@@ -31,8 +31,9 @@ public partial class Player
         currentShop = null;
 
         //hand the cursor back only if nothing ELSE still wants it loose - the computer and the safe keypad both free
-        //it too, and whoever left last shouldn't be able to re-lock it under the others.
-        if (!isUsingComputer && !isEnteringSafeCode && !IsPaused)
+        //it too, and whoever left last shouldn't be able to re-lock it under the others. This missed the fence's desk,
+        //so closing the shop while stood at the keeper re-locked the cursor underneath his still-open menu.
+        if (!KeyboardIsCaptured)
         {
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;

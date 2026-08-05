@@ -119,7 +119,7 @@ public partial class Player
         if (Keyboard.current == null) return;
         //anything that has taken your hands or your control also takes this. hiding matters most: your body is inside
         //a wardrobe, so the device would appear through the door as if you'd posted it out.
-        if (isUsingComputer || isEnteringSafeCode || IsPaused) return;
+        if (KeyboardIsCaptured) return; //used to miss both shop counters, so Q dropped a live jammer while you stood haggling in the pawn shop
         if (IsEliminated || IsHiding || IsLockedUp || IsBearTrapped || isBeingDragged) return;
         if (!Keyboard.current.qKey.wasPressedThisFrame) return;
         TryDeployJammer();

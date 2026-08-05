@@ -32,7 +32,7 @@ public partial class Player
         }
 
         //nothing to choose between, and no wheel while you're parked at a terminal or typing a safe code
-        bool canOpen = inventory.Count > 0 && !isUsingComputer && !isEnteringSafeCode && !IsPaused;
+        bool canOpen = inventory.Count > 0 && !KeyboardIsCaptured; //also missed both counters - the wheel opened straight over the haggling menu
 
         if (Mouse.current.middleButton.wasPressedThisFrame && canOpen)
         {
