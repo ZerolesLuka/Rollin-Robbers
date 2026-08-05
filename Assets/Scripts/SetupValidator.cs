@@ -56,6 +56,11 @@ public static class SetupValidator
             if (IsNull(GuardPatrol.Instance, "bearTrapPrefab")) dead.Add("Guard has no bearTrapPrefab - the trap that PINS you can never be placed.");
             if (IsNull(GuardPatrol.Instance, "alarmPrefab")) dead.Add("Guard has no alarmPrefab - the only trap that pulls the dog in can never be placed.");
             if (IsNull(GuardPatrol.Instance, "baitLootPrefab")) warn.Add("Guard has no baitLootPrefab - he will never plant fake loot, so every item you see is genuine.");
+            if (IsNull(GuardPatrol.Instance, "closetSpot"))
+            {
+                dead.Add("Guard has no closetSpot (assign it on GuardBootstrap) - there is nowhere to drag anyone, so " +
+                         "the low-anger warning catch cannot happen and EVERY catch is an outright elimination.");
+            }
             if (TrapPoint.All.Count == 0) warn.Add($"'{scene}' has no TrapPoints - he can still drop floor traps, but no tripwire will ever be strung.");
         }
 

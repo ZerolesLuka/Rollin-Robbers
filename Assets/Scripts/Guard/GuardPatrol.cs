@@ -53,6 +53,7 @@ public class GuardPatrol : NetworkBehaviour
     private NavMeshAgent agent; //guard
     private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
+    private bool warnedAboutMissingCloset; //latch, so a level with no closet complains once instead of on every catch
 
     private GuardVision vision; //reusable sight component on the same GameObject - config (range/fov/eye/mask) lives there now so the dog can reuse it
     private GuardHearing hearing; //reusable ears component - noise perception config (range/threshold) lives there
@@ -416,7 +417,20 @@ public class GuardPatrol : NetworkBehaviour
                     ChangeState(GuardState.Relaxed);
                     break;
                 }
-                if (Anger >= angerEliminateThreshold) //furious enough to throw them out for the run
+                //NO CLOSET IN THIS LEVEL = nowhere to drag anyone, so the drag is not an option and he throws them out
+                //instead. This is checked HERE rather than inside the Escorting entry, because entering Escorting
+                //without a closet dereferenced a null closetSpot in ChangeState - AFTER State had already flipped to
+                //Escorting and BEFORE RPC_GetDragged fired. The guard froze in Escorting for the rest of the run
+                //throwing an exception every tick at 32Hz, while the player he had just caught walked away never
+                //having been told anything happened. Refusing to enter the state makes that unreachable.
+                bool canDragThemOff = closetSpot != null;
+                if (!canDragThemOff && !warnedAboutMissingCloset)
+                {
+                    warnedAboutMissingCloset = true; //once per guard, not once per tick
+                    Debug.LogError("[Guard] No closetSpot assigned on GuardBootstrap, so there is nowhere to drag anyone - every catch is an elimination and the low-anger warning catch cannot happen at all. Assign it in the Indoor scene.", this);
+                }
+
+                if (Anger >= angerEliminateThreshold || !canDragThemOff) //furious enough to throw them out for the run
                 {
                     chaseTarget.RPC_GetCaught();
                     if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(chaseTarget.Object.InputAuthority); //tell the run tracker this specific player is out
