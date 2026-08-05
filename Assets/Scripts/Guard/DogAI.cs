@@ -434,7 +434,23 @@ public class DogAI : NetworkBehaviour
 
     public void SetWaypoints(Transform[] points)
     {
-        waypoints = points; //set from the spawner, since a prefab can't hold a scene reference
+        //STRIP EMPTY SLOTS. Set from the spawner, since a prefab can't hold a scene reference - and the normal way an
+        //inspector array arrives is sized up with some slots never filled. Indoor currently hands over an array of
+        //length 1 whose only element is empty, which sailed past the `Length == 1` branch below and threw on
+        //waypoints[0].position every single time the dog picked somewhere to wander. Filtering here rather than at
+        //each read site means the "no waypoints, roam near spawn" fallback catches an all-empty array for free.
+        if (points == null)
+        {
+            waypoints = null;
+            return;
+        }
+
+        List<Transform> kept = new List<Transform>(points.Length);
+        foreach (Transform point in points)
+        {
+            if (point != null) kept.Add(point);
+        }
+        waypoints = kept.Count > 0 ? kept.ToArray() : null;
     }
 
     public void AlertTo(Vector3 spot) //any sensor, or the guard, pings this to send the dog to investigate a spot
