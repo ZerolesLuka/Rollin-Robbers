@@ -72,6 +72,16 @@ public class RunManager : NetworkBehaviour
         }
     }
 
+    //GuardPatrol and DogAI both null their static Instance on the way out; this one never did, so on shutdown it was
+    //left pointing at a despawned RunManager. Unity's fake-null covers that only once the GameObject is actually
+    //destroyed - in the window between Runner.Despawn and that destruction, `RunManager.Instance != null` still
+    //passes, and the several call sites that check ONLY for null (rather than Object.IsValid too) went on to fire an
+    //RPC at an object that is no longer in the simulation.
+    public override void Despawned(NetworkRunner runner, bool hasState)
+    {
+        if (Instance == this) Instance = null; //only if it's still ours - a new session may already have claimed it
+    }
+
     public void RegisterPlayer()
     {
         if (!HasStateAuthority) return;
