@@ -27,7 +27,12 @@ public class PlayerSignals : NetworkBehaviour
 
     private void Update()
     {
-        if (HasInputAuthority && player.playerInputActions != null && !player.IsHiding && !player.IsEliminated && !player.IsLockedUp) //only our own ACTIVE player reads the keys - no signalling while hidden, jailed, or out (would broadcast your position)
+        //KeyboardIsCaptured matters most for the SAFE KEYPAD: signals live on 1-6 and the keypad reads the number row,
+        //so typing a four-digit code fired up to four signals - "Go", "Wait", "Loot" - popping over the head of
+        //someone crouched at a safe trying to be invisible. Silent comms that announce you every time you crack a
+        //safe are worse than no comms. It also covers the pause menu, both shop counters and the van computer.
+        if (HasInputAuthority && player.playerInputActions != null && !player.KeyboardIsCaptured
+            && !player.IsHiding && !player.IsEliminated && !player.IsLockedUp) //only our own ACTIVE player reads the keys - no signalling while hidden, jailed, or out (would broadcast your position)
         {
             ReadSignalInput();
         }

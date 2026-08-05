@@ -113,6 +113,11 @@ public partial class Player : NetworkBehaviour
     //three still need E to reach the body, because E is the only way back OUT of them.
     public bool MenuOwnsCursor => IsShopping || IsTalkingToKeeper || isUsingComputer;
 
+    //Separate question, separate property: is a KEY PRESS currently meant for a UI rather than for the world? The
+    //safe keypad never touches the cursor - it's a keyboard-only overlay and you keep full mouselook - so it does not
+    //belong in MenuOwnsCursor, but its digits absolutely should not also reach anything else reading the number row.
+    public bool KeyboardIsCaptured => MenuOwnsCursor || isEnteringSafeCode || IsPaused;
+
     [SerializeField] private NetworkObject worldItemPrefab; //spawned when you drop - the generic pickup item, named on spawn
     [SerializeField] private int maxInventorySlots = 4;
     [SerializeField] private float pickupRange = 2f;
