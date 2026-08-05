@@ -30,6 +30,8 @@ public static class PlaceholderPrefabBuilder
     private static readonly Color GuardAmber = new Color(0.85f, 0.45f, 0.06f);
     private static readonly Color CrewCyan = new Color(0.10f, 0.62f, 0.68f);
     private static readonly Color CrewYellow = new Color(0.85f, 0.72f, 0.15f);
+    private static readonly Color ShopBrown = new Color(0.45f, 0.32f, 0.22f);
+    private static readonly Color CounterGrey = new Color(0.38f, 0.38f, 0.40f);
 
     [MenuItem("Tools/Rollin' Robbers/Build Placeholder Prefabs")]
     public static void Build()
@@ -76,6 +78,8 @@ public static class PlaceholderPrefabBuilder
             Visual(root, PrimitiveType.Cylinder, new Vector3(0.08f, 0.3f, 0f), new Vector3(0.015f, 0.16f, 0.015f), CrewCyan);
         });
 
+        BuildPawnShopFixtures();
+
         NetworkObject worldItem = AssetDatabase.LoadAssetAtPath<GameObject>(WorldItemPrefabPath)?.GetComponent<NetworkObject>();
 
         Wire(GuardPrefabPath, ("tripwirePrefab", tripwire), ("bearTrapPrefab", bearTrap), ("alarmPrefab", alarm),
@@ -85,9 +89,39 @@ public static class PlaceholderPrefabBuilder
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("[PlaceholderPrefabBuilder] Built 5 prefabs in " + FolderPath +
-                  " and wired them onto the Guard, Player and Safe prefabs. If anything refuses to spawn at runtime, " +
-                  "open the Fusion Network Project Config and confirm all five are listed.");
+        Debug.Log("[PlaceholderPrefabBuilder] Built 6 prefabs in " + FolderPath +
+                  " and wired the five networked ones onto the Guard, Player and Safe prefabs. DRAG PawnShopFixtures " +
+                  "INTO PawnShop.unity - it is not wired automatically, because where the shop sits is a level " +
+                  "decision. If a trap refuses to spawn at runtime, open the Fusion Network Project Config and " +
+                  "confirm all five networked prefabs are listed.");
+    }
+
+    //ONE prefab holding both halves of the pawn shop, because they are useless apart: a Shopkeeper with no ToolShop is
+    //a room where money can be earned and never spent, and a ToolShop with no Shopkeeper is the reverse. PawnShop.unity
+    //currently contains neither, which is the only reason the money loop cannot be completed today. Drag this in once.
+    //
+    //THE 5-METRE GAP IS LOAD-BEARING. Both default to interactRange 2.5, and ToolShop sits ABOVE Shopkeeper in
+    //FindInteraction (opening the shop by accident is harmless; selling by accident costs your haul). Put them closer
+    //than twice that range and every spot that reaches the fence also reaches the counter, so E opens the shop every
+    //time and the fence becomes unreachable scenery. Keep them apart, or raise the gap if you widen either range.
+    private static void BuildPawnShopFixtures()
+    {
+        GameObject root = new GameObject("PawnShopFixtures");
+
+        GameObject fence = new GameObject("Fence (Shopkeeper)");
+        fence.transform.SetParent(root.transform, false);
+        fence.AddComponent<Shopkeeper>();
+        Visual(fence, PrimitiveType.Capsule, new Vector3(0f, 0.9f, 0f), new Vector3(0.5f, 0.9f, 0.5f), ShopBrown);
+        Visual(fence, PrimitiveType.Cube, new Vector3(0f, 0.5f, 0.8f), new Vector3(2f, 1f, 0.6f), CounterGrey); //the desk he stands behind
+
+        GameObject counter = new GameObject("Tool Counter (ToolShop)");
+        counter.transform.SetParent(root.transform, false);
+        counter.transform.localPosition = new Vector3(5f, 0f, 0f);
+        counter.AddComponent<ToolShop>();
+        Visual(counter, PrimitiveType.Cube, new Vector3(0f, 0.5f, 0f), new Vector3(2f, 1f, 0.6f), CounterGrey);
+        Visual(counter, PrimitiveType.Cube, new Vector3(0f, 1.1f, 0f), new Vector3(0.4f, 0.2f, 0.4f), CrewCyan); //a box of kit on top, so it reads as the place you BUY
+
+        SaveAndClean(root, "PawnShopFixtures");
     }
 
     //the three traps only differ by kind, radius and shape - everything else about them is identical
