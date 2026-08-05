@@ -17,12 +17,28 @@ public class GuardBootstrap : MonoBehaviour
     {
         if (!runner.IsSharedModeMasterClient) return;
 
-        runner.Spawn(guardPrefab, guardSpawn.position, Quaternion.identity, PlayerRef.None,
-            (spawnRunner, obj) =>
-            {
-                GuardPatrol guard = obj.GetComponent<GuardPatrol>();
-                guard.SetCloset(closetSpot);
-            });
+        //The OPTIONAL dog below is carefully null-checked; the mandatory guard was not, and that asymmetry was the
+        //dangerous way round. An empty guardSpawn slot threw on .position here, and because the exception aborts this
+        //whole method it took the dog spawn down with it - one unassigned field in the Indoor scene and the house
+        //contained no animals at all, with nothing in the log naming the field.
+        if (guardPrefab == null || guardSpawn == null)
+        {
+            Debug.LogError("[GuardBootstrap] guardPrefab or guardSpawn is unassigned, so no guard will exist in this house at all. The dog (if any) still spawns.", this);
+        }
+        else
+        {
+            runner.Spawn(guardPrefab, guardSpawn.position, Quaternion.identity, PlayerRef.None,
+                (spawnRunner, obj) =>
+                {
+                    GuardPatrol guard = obj.GetComponent<GuardPatrol>();
+                    if (guard == null)
+                    {
+                        Debug.LogError("[GuardBootstrap] The guard prefab has no GuardPatrol on it.", this);
+                        return;
+                    }
+                    guard.SetCloset(closetSpot); //may legitimately be null - GuardPatrol handles that and says so
+                });
+        }
 
         if (dogPrefab != null && dogSpawn != null)
         {
