@@ -40,12 +40,32 @@ public partial class Player
     {
         Cursor.lockState = CursorLockMode.Locked;
 
-        //safety net: any terminal we were sat at died with the scene we just left, and isUsingComputer freezes
-        //movement with no way to clear it once currentTerminal is a destroyed object. the route buttons stand us up
-        //properly now, but anything else that changes scene mid-session would otherwise strand us frozen here.
+        //SAFETY NET for every "something in the scene we just left is still holding us" state. All three freeze
+        //movement, and all three are held by an object that died with the old scene, so none of them can be undone
+        //the normal way once we've arrived. A teammate opening the exit door is enough to trigger any of them.
         if (isUsingComputer)
         {
+            //the terminal we were sat at is a destroyed object now, and E can't rescue us because exiting needs
+            //currentTerminal. the route buttons stand us up properly, but any OTHER scene change would strand us.
             ExitComputer();
+        }
+
+        if (IsHiding)
+        {
+            //the exact softlock the run-end van ride already guards against, which a mid-run scene change could still
+            //reach: IsHiding freezes movement AND hides playerVisuals, and the only way out is pressing E beside a
+            //hiding spot - which does not exist in the van or the pawn shop. Invisible, immobile, for the rest of the
+            //session. Clearing the id too, or that wardrobe reads as occupied for the whole next run.
+            SetHiding(false, HidingSpot.NoSpot);
+        }
+
+        if (IsBearTrapped)
+        {
+            //the trap despawns 0.6s after it springs (GuardTrap.DespawnAfterSound), so being pinned is pure player
+            //state with no object behind it - carrying it into the next scene leaves you held by nothing at all.
+            //bearTrapSelfEscapeSeconds would eventually free you, but that timer is documented as safe to set to 0
+            //for teammate-only rescues, and at 0 this is a permanent freeze. Same shape as the drag fix in July.
+            IsBearTrapped = false;
         }
 
         StartCoroutine(TeleportAfterLoad());

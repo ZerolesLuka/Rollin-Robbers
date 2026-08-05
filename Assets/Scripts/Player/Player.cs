@@ -354,6 +354,7 @@ public partial class Player : NetworkBehaviour
                 //immobile, forever. clearing the spot id too, or that closet reads as occupied all next run.
                 SetHiding(false, HidingSpot.NoSpot);
                 isBeingDragged = false;
+                IsBearTrapped = false; //the only held-in-place state this list was missing. the ride fires whether or not a scene reloaded, so it can't lean on the scene-change safety net to have cleared it
                 draggingGuard = null;
                 dragTrail.Clear();
                 TeleportTo(seat.transform.position);
