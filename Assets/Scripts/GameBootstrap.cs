@@ -95,13 +95,26 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         }
 
         NetworkInputData networkInputData = new NetworkInputData();
-        networkInputData.movementInput = Player.LocalPlayer.playerInputActions.Player.Move.ReadValue<Vector2>();
-        networkInputData.crouchInput = Player.LocalPlayer.playerInputActions.Player.Crouch.ReadValue<float>() > 0.5f; //read the crouch input from the player and store it in the struct, converts float to bool
-        networkInputData.sprintInput = Player.LocalPlayer.playerInputActions.Player.Sprint.ReadValue<float>() > 0.5f;
-        networkInputData.jumpInput = Player.LocalPlayer.playerInputActions.Player.Jump.ReadValue<float>() > 0.5f;
+
+        //E ALWAYS reaches the body, even with a menu up, because E is the only way back out of the shop, the fence's
+        //desk and the computer chair (see the IsShopping/IsTalkingToKeeper and isUsingComputer branches in
+        //HandleInteract). Suppressing it the way pause does would seal you into whichever one you opened.
         networkInputData.interactInput = Player.LocalPlayer.playerInputActions.Player.Interact.ReadValue<float>() > 0.5f; //E to free a trapped teammate (and later: loot, lockpick, extract)
-        networkInputData.flashlightInput = Player.LocalPlayer.playerInputActions.Player.Flashlight.ReadValue<float>() > 0.5f; //F to toggle the flashlight
-        networkInputData.dropInput = Player.LocalPlayer.playerInputActions.Player.Drop.ReadValue<float>() > 0.5f; //G to drop an item
+
+        //everything else stops at the menu. the cursor is free while you shop, haggle or drive, so the keys are still
+        //live: WASD walked you off the desk mid-negotiation (UpdateKeeperProximity then closed the menu on you), and G
+        //dropped an item, which RemoveAt-ed the list the fence's hagglingIndex points into - so the next push read a
+        //DIFFERENT item's value and accepting sold the wrong thing at the agreed price.
+        if (!Player.LocalPlayer.MenuOwnsCursor)
+        {
+            networkInputData.movementInput = Player.LocalPlayer.playerInputActions.Player.Move.ReadValue<Vector2>();
+            networkInputData.crouchInput = Player.LocalPlayer.playerInputActions.Player.Crouch.ReadValue<float>() > 0.5f; //read the crouch input from the player and store it in the struct, converts float to bool
+            networkInputData.sprintInput = Player.LocalPlayer.playerInputActions.Player.Sprint.ReadValue<float>() > 0.5f;
+            networkInputData.jumpInput = Player.LocalPlayer.playerInputActions.Player.Jump.ReadValue<float>() > 0.5f;
+            networkInputData.flashlightInput = Player.LocalPlayer.playerInputActions.Player.Flashlight.ReadValue<float>() > 0.5f; //F to toggle the flashlight
+            networkInputData.dropInput = Player.LocalPlayer.playerInputActions.Player.Drop.ReadValue<float>() > 0.5f; //G to drop an item
+        }
+
         input.Set(networkInputData); //set the network input to the struct
     }
 

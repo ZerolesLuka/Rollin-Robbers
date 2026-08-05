@@ -104,6 +104,15 @@ public partial class Player : NetworkBehaviour
     private ComputerTerminal currentTerminal; //the terminal we're currently "in", so E can exit it
     private ComputerTerminal pendingTerminal; //terminal we've asked to use and are waiting on the networked lock for
 
+    //EVERY state where a menu owns the cursor and the body should be standing still. ONE property because OnInput has
+    //to ask this question, and the next menu anyone adds should only have to be listed here - the fence and the tool
+    //shop were both added after the pause menu and neither inherited its input handling, which is exactly how you end
+    //up walking away from a negotiation mid-sentence.
+    //
+    //Pause is deliberately NOT in here. It suppresses input completely (see GameBootstrap.OnInput), whereas these
+    //three still need E to reach the body, because E is the only way back OUT of them.
+    public bool MenuOwnsCursor => IsShopping || IsTalkingToKeeper || isUsingComputer;
+
     [SerializeField] private NetworkObject worldItemPrefab; //spawned when you drop - the generic pickup item, named on spawn
     [SerializeField] private int maxInventorySlots = 4;
     [SerializeField] private float pickupRange = 2f;
