@@ -32,6 +32,7 @@ public static class PlaceholderPrefabBuilder
     private static readonly Color CrewYellow = new Color(0.85f, 0.72f, 0.15f);
     private static readonly Color ShopBrown = new Color(0.45f, 0.32f, 0.22f);
     private static readonly Color CounterGrey = new Color(0.38f, 0.38f, 0.40f);
+    private static readonly Color PaperWhite = new Color(0.92f, 0.90f, 0.82f);
 
     [MenuItem("Tools/Rollin' Robbers/Build Placeholder Prefabs")]
     public static void Build()
@@ -78,6 +79,13 @@ public static class PlaceholderPrefabBuilder
             Visual(root, PrimitiveType.Cylinder, new Vector3(0.08f, 0.3f, 0f), new Vector3(0.015f, 0.16f, 0.015f), CrewCyan);
         });
 
+        //the note is a NetworkObject like the traps; the spawner that places it is a plain scene object
+        GameObject note = BuildSimple<SafeNote>("SafeNote", root =>
+        {
+            Visual(root, PrimitiveType.Cube, new Vector3(0f, 0.01f, 0f), new Vector3(0.15f, 0.005f, 0.21f), PaperWhite);
+        });
+        BuildNoteSpawner(note);
+
         BuildPawnShopFixtures();
 
         NetworkObject worldItem = AssetDatabase.LoadAssetAtPath<GameObject>(WorldItemPrefabPath)?.GetComponent<NetworkObject>();
@@ -89,11 +97,45 @@ public static class PlaceholderPrefabBuilder
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("[PlaceholderPrefabBuilder] Built 6 prefabs in " + FolderPath +
-                  " and wired the five networked ones onto the Guard, Player and Safe prefabs. DRAG PawnShopFixtures " +
-                  "INTO PawnShop.unity - it is not wired automatically, because where the shop sits is a level " +
+        Debug.Log("[PlaceholderPrefabBuilder] Built 8 prefabs in " + FolderPath +
+                  " and wired the trap/wedge/jammer ones onto the Guard, Player and Safe prefabs. DRAG PawnShopFixtures " +
+                  "INTO PawnShop.unity AND NoteSpawner INTO Indoor.unity, then move its six markers to real hiding "
+                  + "places - neither is placed automatically, because where they sit is a level " +
                   "decision. If a trap refuses to spawn at runtime, open the Fusion Network Project Config and " +
                   "confirm all five networked prefabs are listed.");
+    }
+
+    //NoteSpawner.cs has been finished and correct for weeks; Indoor simply contains no instance of it, so no safe code
+    //has ever been learnable and the note -> read it out loud -> keypad chain - one of the few things in this game
+    //that is genuinely about talking to each other - has never once run. This builds the two pieces it needs.
+    //
+    //SIX MARKERS, SPREAD OUT, and they are the point: NoteSpawner picks ONE child at random each run, so the number of
+    //markers IS the search. Two markers and the crew learns both spots in a night; six and they have to actually look.
+    //They land in a ring around the prefab's origin purely so they're visible and separable when you drop it in -
+    //every one of them wants moving to somewhere a person would really leave a note. Under a keyboard, in a drawer,
+    //taped behind a painting. Never within sight of the safe, or the note stops being a search and becomes a label.
+    private static void BuildNoteSpawner(GameObject notePrefab)
+    {
+        GameObject root = new GameObject("NoteSpawner");
+        NoteSpawner spawner = root.AddComponent<NoteSpawner>();
+
+        if (notePrefab != null)
+        {
+            SerializedObject so = new SerializedObject(spawner);
+            SerializedProperty prop = so.FindProperty("notePrefab");
+            if (prop != null) prop.objectReferenceValue = notePrefab.GetComponent<NetworkObject>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            float angle = i / 6f * Mathf.PI * 2f;
+            GameObject marker = new GameObject($"Note spot {i + 1} (MOVE ME)");
+            marker.transform.SetParent(root.transform, false);
+            marker.transform.localPosition = new Vector3(Mathf.Cos(angle) * 2f, 0f, Mathf.Sin(angle) * 2f);
+        }
+
+        SaveAndClean(root, "NoteSpawner");
     }
 
     //ONE prefab holding both halves of the pawn shop, because they are useless apart: a Shopkeeper with no ToolShop is
