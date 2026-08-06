@@ -56,7 +56,11 @@ public class HUD : MonoBehaviour
     {
         if (Player.LocalPlayer != null && Player.LocalPlayer.Object != null && Player.LocalPlayer.Object.IsValid)
         {
-            staminaImage.fillAmount = Player.LocalPlayer.staminaNormalized;
+            //the ONLY unguarded field in this whole method - everything below it checks for null, which makes this an
+            //oversight rather than a decision. It matters more than it looks: Update() throwing here means every line
+            //AFTER it stops running, so one empty slot in the inspector silently takes the loot readout, the money,
+            //the timer, the inventory slots, the status line, the crack meter and both end-of-run panels with it.
+            if (staminaImage != null) staminaImage.fillAmount = Player.LocalPlayer.staminaNormalized;
 
             if (suffocationFade != null)
             {
