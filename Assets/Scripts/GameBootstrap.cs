@@ -123,9 +123,37 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         
     }
 
+    //WHERE A JOINING PLAYER LANDS. The van seats used to be reserved for the ride home - FindMyVanSeat is only
+    //reached from the run-end block, which is gated on the run being over - so joining dropped everyone on the one
+    //serialized playerSpawn and four players arrived standing inside each other, shoving apart on the first tick.
+    //
+    //Seats are claimed by the SAME rule the ride home uses (PlayerId % 4), so a player sits in the same place whether
+    //they just joined or just got back. playerSpawn stays as the fallback for any scene that has no seats in it.
+    private Vector3 ResolveJoinPosition(PlayerRef player)
+    {
+        UnityEngine.SceneManagement.Scene activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        int seatIndex = player.PlayerId % 4;
+
+        VanSeat anySeat = null;
+        foreach (VanSeat candidate in VanSeat.AllSeats)
+        {
+            //ignore seats lingering in the static list from a scene we've already left - they hold stale coordinates,
+            //the same trap SpawnPoint and FindMyVanSeat both guard against
+            if (candidate.gameObject.scene != activeScene) continue;
+            if (candidate.seatIndex == seatIndex) return candidate.transform.position; //ours
+            anySeat = candidate; //at least land in the van somewhere
+        }
+        if (anySeat != null) return anySeat.transform.position;
+
+        if (playerSpawn != null) return playerSpawn.position;
+
+        Debug.LogError("[GameBootstrap] No VanSeat in this scene and no playerSpawn assigned - spawning at the world origin, which is almost certainly inside the ground.", this);
+        return Vector3.zero;
+    }
+
     public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player)
     {
-        
+
     }
 
     public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player)
@@ -290,7 +318,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             networkRunner.Spawn(runManagerPrefab, Vector3.zero, Quaternion.identity, PlayerRef.None); //spawn the run manager BEFORE the local player, so the master's own player registers into it
         }
 
-        Vector3 spawnPos = playerSpawn.gameObject.transform.position; //where the player spawns in the world, can be changed to an array of spawn points later for more variety
+        Vector3 spawnPos = ResolveJoinPosition(networkRunner.LocalPlayer);
         networkRunner.Spawn(playerPrefab, spawnPos, Quaternion.identity, networkRunner.LocalPlayer); //spawns player prefab on spawnpos
         lobbyCamera.gameObject.SetActive(false); //turn off the lobby camera once we're in game
     }
