@@ -47,8 +47,16 @@ public class GuardPatrol : NetworkBehaviour
     private int asleepChances; //how many times the guard relaxes before he perma suspicious
     private int asleepChancesMax = 3; //false alarms he shrugs off before he stays permanently alert (never drops fully back to sleep)
     private float relaxPatrolTimer;
-    private float relaxIdleMin = 3f;
-    private float relaxIdleMax = 8f;
+    [Header("Idling - how much he stands about rather than pacing")]
+    [SerializeField] private float relaxIdleMin = 4f;    //shortest normal pause between wanders
+    [SerializeField] private float relaxIdleMax = 14f;   //longest normal pause. was 8 - a man who moves every few seconds reads as a patrol route, not a person in his own house
+    [SerializeField, Range(0f, 1f)] private float longIdleChance = 0.3f; //how often a pause becomes a proper stop instead
+    [SerializeField] private float longIdleMin = 20f;    //stood at a window, sat in front of the telly
+    [SerializeField] private float longIdleMax = 40f;    //the crew can rob a whole room in this window - that's the point, it's the reward for watching him first
+
+    [Header("Startling - one loud noise, not a sustained one")]
+    [SerializeField] private float startleLoudness = 12f;  //a SINGLE sample this loud skips the noise bucket entirely. above sprinting (~5 perceived) and below a hard landing, so a scream or a bang lands but footsteps never do
+    [SerializeField] private float startledWakeHold = 0.4f; //how long he's pinned getting up when startled, instead of the full wakeUpHoldTime. someone screamed next to his bed - he scrambles
 
     private NavMeshAgent agent; //guard
     private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
@@ -258,10 +266,27 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Relaxed:
                 ListenForNoise();
                 relaxPatrolTimer -= Runner.DeltaTime; //count down so he strolls again after idling
-                if (relaxPatrolTimer <= 0f && !agent.pathPending && agent.remainingDistance <= reachDistance)
+
+                bool waitingWhereHeStopped = !agent.pathPending && agent.remainingDistance <= reachDistance;
+                if (waitingWhereHeStopped && relaxPatrolTimer > 0f)
                 {
+                    //LOOK AROUND while he waits. A man standing perfectly motionless for ten seconds reads as a prop
+                    //you can walk straight past; the same man glancing left and right reads as someone half-watching
+                    //his own house, and suddenly the room feels like it's being occupied rather than decorated.
+                    //Same sweep the search uses, so there's one way to do this.
+                    if (!isSweepingSearchPoint)
+                    {
+                        isSweepingSearchPoint = true; //takes rotation off FaceMovementDirection - see the check there
+                        sweepBaseYaw = transform.eulerAngles.y;
+                        sweepPhaseTimer = 0f;
+                    }
+                    SweepLookAround();
+                }
+                else if (waitingWhereHeStopped)
+                {
+                    isSweepingSearchPoint = false; //hand rotation back before he walks off
                     PickWanderPoint(); //no fixed route at all - he drifts to random reachable spots, so there's nothing to memorise
-                    relaxPatrolTimer = Random.Range(relaxIdleMin, relaxIdleMax); //chill a random bit then move again
+                    relaxPatrolTimer = NextIdleDuration();
                 }
                 break;
             case GuardState.Suspicious:
@@ -871,10 +896,38 @@ public class GuardPatrol : NetworkBehaviour
         ChangeState(GuardState.Relaxed);
     }
 
+    //How long before he wanders again. Deliberately NOT a flat random range: a uniform timer is the tell that
+    //something is on a loop, and once the crew can predict the beat the house stops being tense. Most pauses are
+    //short, and every so often he settles somewhere for long enough that a room can be robbed properly - which is
+    //the reward for watching him before you move, rather than a window the game hands out on a schedule.
+    private float NextIdleDuration()
+    {
+        if (Random.value < longIdleChance) return Random.Range(longIdleMin, longIdleMax);
+        return Random.Range(relaxIdleMin, relaxIdleMax);
+    }
+
     private void ListenForNoise() //shared ears for Asleep + Relaxed
     {
         GuardHearing.Heard heard = hearing.LoudestNoise();
         float perceivedNoise = heard.loudness;
+
+        //ONE LOUD NOISE IS ENOUGH. The bucket below integrates loudness over time, which is right for a creak you're
+        //not sure you heard - but it means a scream that stops after half a second contributes almost nothing, so
+        //the loudest thing a player can possibly do was quieter to him than someone jogging past for four seconds.
+        //Nobody works like that. A bang makes you look NOW, and the bucket is only for deciding whether the quiet
+        //stuff adds up to something.
+        if (perceivedNoise >= startleLoudness && State != GuardState.Searching)
+        {
+            lastKnownPosition = heard.position;
+            noiseAccumulator = 0f;
+            quietTimer = 0f;
+            ChangeState(GuardState.Searching); //straight past Suspicious - he KNOWS he heard that, he isn't wondering
+            //ChangeState has just refilled the get-up hold if he was asleep. Cut it: someone shouted next to his bed
+            //and a man does not take a comfortable second and a half to stand up for that.
+            if (wakeUpHoldTimer > startledWakeHold) wakeUpHoldTimer = startledWakeHold;
+            return;
+        }
+
         if (perceivedNoise > 0f)
         {
             lastKnownPosition = heard.position; //remember WHERE the noise came from (used when he escalates to Searching)
