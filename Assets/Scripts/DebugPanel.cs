@@ -38,7 +38,33 @@ public class DebugPanel : MonoBehaviour
         //Keyboard.current, not Input.GetKeyDown: this project is set to the new Input System ONLY
         //(activeInputHandler 1), where the legacy Input class throws the moment you touch it. Read straight off the
         //device rather than adding an action, so the generated PlayerInputActions wrapper stays untouched.
-        if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame) open = !open;
+        if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame) SetOpen(!open);
+
+        //RE-ASSERT EVERY FRAME while it's up. The cursor is locked during play, and IMGUI needs a real pointer -
+        //with it locked the mouse is pinned to the middle of the screen, so every button in this panel was
+        //unclickable. Re-asserting rather than setting once, because anything else that hands the cursor back
+        //(ExitShop, ExitKeeper, closing the pause menu) would otherwise re-lock it out from under an open panel.
+        if (open)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+    }
+
+    private void SetOpen(bool wantOpen)
+    {
+        open = wantOpen;
+        if (open) return; //Update takes it from here
+
+        //Give the cursor back only if nothing ELSE still wants it loose. The shop, the fence, the van computer and
+        //the pause menu all free it too, and re-locking underneath one of those leaves a screen full of buttons you
+        //can suddenly no longer click - the exact bug this method exists to fix, just pointed the other way.
+        Player me = Player.LocalPlayer;
+        if (me == null || !me.KeyboardIsCaptured)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 
     private void OnGUI()
