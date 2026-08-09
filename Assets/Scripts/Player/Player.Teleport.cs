@@ -12,6 +12,54 @@ using UnityEngine.SceneManagement;
 // coroutine finds the right SpawnPoint after a scene change, and FindMyVanSeat picks this player's van seat.
 public partial class Player
 {
+    //WHERE WE WERE STOOD IN THE VAN, in the VAN'S OWN local space. Kept so a scene change can put us back in the same
+    //spot rather than stacking the whole crew on one point.
+    //
+    //Local space, not a world offset: the destination van may be parked facing a completely different direction, and
+    //a world-space delta would drop us outside it. Local space means "left of the wheel arch" stays left of the wheel
+    //arch whichever way the van is pointing.
+    //
+    //Plain private fields, NOT networked. Only our own machine cares where we personally were, and the Player object
+    //survives scene loads, so these ride across intact.
+    private Vector3 vanLocalPosition;
+    private bool hasVanLocalPosition;
+    private const float VanRememberRadius = 6f; //only note our spot while we're actually AT the van - otherwise we'd record a position from halfway across the garden and restore that into the next van, i.e. inside a wall
+
+    //Called every frame from Update on the local player only. Continuous capture rather than a snapshot taken as we
+    //leave, because there's no clean hook for the moment of departure - activeSceneChanged fires AFTER the load, by
+    //which point the old van is already destroyed.
+    private void RememberVanPosition()
+    {
+        Van van = FindVanInThisScene();
+        if (van == null)
+        {
+            return;
+        }
+        if (Vector3.Distance(transform.position, van.transform.position) > VanRememberRadius)
+        {
+            return;
+        }
+
+        vanLocalPosition = van.transform.InverseTransformPoint(transform.position);
+        hasVanLocalPosition = true;
+    }
+
+    private Van FindVanInThisScene()
+    {
+        Scene activeScene = SceneManager.GetActiveScene();
+        foreach (Van candidate in Van.AllVans)
+        {
+            //vans from the scene we just left linger in the static list for a frame or two holding stale coordinates -
+            //the SpawnPoint search below guards against exactly the same thing
+            if (candidate == null || candidate.gameObject.scene != activeScene)
+            {
+                continue;
+            }
+            return candidate;
+        }
+        return null;
+    }
+
     public void TeleportTo(Vector3 position) //called after a scene load to reposition the local player
     {
         if (!HasInputAuthority) return; //only move our own player; Fusion syncs the position to everyone else
@@ -116,6 +164,20 @@ public partial class Player
                 Debug.LogWarning($"[Player] Matching SpawnPoint not found in time - falling back to '{spawnPoint.name}'.");
                 break;
             }
+        }
+
+        //BACK TO WHERE WE WERE STANDING, if the place we've arrived at has a van and we noted a spot inside the last
+        //one. This outranks the SpawnPoint because a SpawnPoint is a single fixed marker - route four players through
+        //it and they arrive inside each other, since CharacterControllers don't push each other apart.
+        //
+        //Deliberately checked AFTER the loop above rather than waiting on its own: the van and the SpawnPoints are
+        //scene objects that register together, so if a SpawnPoint has turned up the van has too. Polling separately
+        //would just add a stall to every trip into the house, which has no van at all.
+        Van arrivalVan = hasVanLocalPosition ? FindVanInThisScene() : null;
+        if (arrivalVan != null)
+        {
+            TeleportTo(arrivalVan.transform.TransformPoint(vanLocalPosition));
+            yield break;
         }
 
         if (spawnPoint != null)

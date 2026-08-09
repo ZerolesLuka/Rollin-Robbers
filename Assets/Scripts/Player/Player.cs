@@ -225,6 +225,7 @@ public partial class Player : NetworkBehaviour
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
 
+        RememberVanPosition(); //keep noting where we're stood inside the van, so a scene change can put us back there
         UpdateKeeperProximity(); //same for the fence's desk
         UpdateShopProximity(); //walked away from the counter, or got dragged off it - close the shop rather than leaving it open on a frozen screen
         UpdatePause();     //Escape brings the menu up. it does NOT stop the game for anyone, including us
