@@ -18,6 +18,11 @@ using UnityEngine.InputSystem;
 // Creates itself on play in the editor and development builds, and compiles to nothing in a release build.
 public class DebugPanel : MonoBehaviour
 {
+    //DELIBERATELY OUTSIDE the editor-only block below, so Player.MenuOwnsCursor can read it without wrapping itself
+    //in conditional compilation. In a release build nothing ever sets it, so it is a bool that is always false and
+    //the check costs nothing - which is a much smaller price than putting #if directives through shipping code.
+    public static bool IsOpen { get; private set; }
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Create()
@@ -54,6 +59,7 @@ public class DebugPanel : MonoBehaviour
     private void SetOpen(bool wantOpen)
     {
         open = wantOpen;
+        IsOpen = wantOpen; //set BEFORE the KeyboardIsCaptured check below, which now counts this panel among the menus
         if (open) return; //Update takes it from here
 
         //Give the cursor back only if nothing ELSE still wants it loose. The shop, the fence, the van computer and
