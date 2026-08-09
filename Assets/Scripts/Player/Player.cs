@@ -111,7 +111,7 @@ public partial class Player : NetworkBehaviour
     //
     //Pause is deliberately NOT in here. It suppresses input completely (see GameBootstrap.OnInput), whereas these
     //three still need E to reach the body, because E is the only way back OUT of them.
-    public bool MenuOwnsCursor => IsShopping || IsTalkingToKeeper || isUsingComputer;
+    public bool MenuOwnsCursor => IsShopping || IsTalkingToKeeper || isUsingComputer || DebugPanel.IsOpen;
 
     //Separate question, separate property: is a KEY PRESS currently meant for a UI rather than for the world? The
     //safe keypad never touches the cursor - it's a keyboard-only overlay and you keep full mouselook - so it does not
@@ -232,7 +232,9 @@ public partial class Player : NetworkBehaviour
 
         //the menu being up, or us watching someone else, both mean our own look and reach are off. the SIMULATION
         //carries on regardless - our body is still stood there and can still be caught while we read the menu.
-        if (IsPaused || spectatorActive || IsShopping || IsTalkingToKeeper)
+        //DebugPanel is in here for the same reason as the shop counters: its cursor is free, so without this the mouse
+        //aimed at its buttons ALSO spun the camera, and the panel was unusable.
+        if (IsPaused || spectatorActive || IsShopping || IsTalkingToKeeper || DebugPanel.IsOpen)
         {
             InteractPrompt = "";
             InteractAnchor = null;

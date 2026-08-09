@@ -101,6 +101,8 @@ MonoBehaviour:
   wakeThresholdMax: 6
   catchRange: 2
   chaseSenseRange: 5
+  wedgeBreakSecondsSameSide: 2
+  wedgeBreakSecondsFarSide: 5
   doorOpenRange: 1.8
   patrolRadius: 25
   minPatrolStepDistance: 4
@@ -115,6 +117,19 @@ MonoBehaviour:
   chaseSpeed: 6.5
   escortSpeed: 2.5
   angerEliminateThreshold: 60
+  tripwirePrefab: {fileID: 152258593786380468, guid: 10637365c3aff594bb3d6a4d6c9aece2, type: 3}
+  bearTrapPrefab: {fileID: 500109058612668480, guid: 133e811934e9ea34da3b90744cc65c78, type: 3}
+  alarmPrefab: {fileID: 1825078831968366701, guid: 42b8c5bc5701f5742bfaa24e89fb16aa, type: 3}
+  baitLootPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
+  baitItemName: Jewellery
+  baitValueMin: 700
+  baitValueMax: 1600
+  baitChance: 0.3
+  angerToSetTraps: 25
+  maxTrapsPerRun: 5
+  trapPointSearchRange: 12
+  trapScatterRadius: 4
+  minTrapSpacing: 3
   _Anger: 0
 --- !u!114 &9012763324479585337
 MonoBehaviour:
@@ -432,7 +447,19 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[43]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
       propertyPath: 'm_BlendShapeWeights.Array.data[53]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[55]'
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}
+      propertyPath: 'm_BlendShapeWeights.Array.data[56]'
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8417361359673230750, guid: 86359c55532aa7a429d2b6a8f0d49475, type: 3}

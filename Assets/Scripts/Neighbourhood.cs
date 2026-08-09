@@ -30,7 +30,12 @@ public static class Neighbourhood
         {
             name = "14 Maple Street",
             detail = "One guard, one dog. Nothing fancy.",
-            sceneBuildIndex = 1, spawnPointId = 0, startsNewRun = true, unlocked = true,
+            //index 0 is OUTDOOR - where the van is ALREADY parked - not Indoor. The house stands right beside the van,
+            //so taking this job isn't a journey, it's the crew agreeing on a target. Pointing it at Indoor teleported
+            //everyone straight into the living room, skipping the walk up to the house and making the three outdoor
+            //doors unreachable. RPC_Route sees the destination is the scene we're standing in and loads nothing: the
+            //barrier just drops and the run begins. Indoor loads when somebody actually opens a door.
+            sceneBuildIndex = 0, spawnPointId = 0, startsNewRun = true, unlocked = true,
         },
         new Destination
         {
@@ -39,10 +44,9 @@ public static class Neighbourhood
             sceneBuildIndex = 2, spawnPointId = 0, startsNewRun = false, unlocked = true,
         },
 
-        //LOCKED - demo scope is one house. These exist to make the street feel like a street.
-        new Destination { name = "22 Maple Street",  detail = "Alarmed. Come back with better tools.", unlocked = false },
-        new Destination { name = "The Ashcroft place", detail = "Two dogs. Not yet.",                  unlocked = false },
-        new Destination { name = "Riverside Row",    detail = "Too far to walk back from.",            unlocked = false },
+        //Locked entries were tried here and cut - three greyed-out rows read as padding rather than as a street with
+        //more of it coming. The screen still SUPPORTS them, so adding one back is a single line if that judgement
+        //changes: name, detail, unlocked = false, and it greys itself out.
     };
 
     public static Destination[] Stops => stops;

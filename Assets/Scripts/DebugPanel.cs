@@ -18,6 +18,10 @@ using UnityEngine.InputSystem;
 // Creates itself on play in the editor and development builds, and compiles to nothing in a release build.
 public class DebugPanel : MonoBehaviour
 {
+    //DELIBERATELY OUTSIDE the #if below. Player reads this to know a menu owns the cursor, and that read has to
+    //compile in a release build too - where this stays false forever and the whole thing costs one bool.
+    public static bool IsOpen;
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Create()
@@ -38,7 +42,34 @@ public class DebugPanel : MonoBehaviour
         //Keyboard.current, not Input.GetKeyDown: this project is set to the new Input System ONLY
         //(activeInputHandler 1), where the legacy Input class throws the moment you touch it. Read straight off the
         //device rather than adding an action, so the generated PlayerInputActions wrapper stays untouched.
-        if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame) open = !open;
+        if (Keyboard.current != null && Keyboard.current.f1Key.wasPressedThisFrame)
+        {
+            open = !open;
+            IsOpen = open;
+            ApplyCursor();
+        }
+    }
+
+    //A panel full of buttons is useless while the game holds the mouse captive for mouselook - you can see the thing
+    //and never click it. Freeing the cursor is only half of it though: Player reads IsOpen through MenuOwnsCursor, so
+    //WASD, Q, G and the loot wheel all stop too. Without that you'd be walking around blind behind the panel.
+    private void ApplyCursor()
+    {
+        if (open)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            return;
+        }
+
+        //Closing does NOT unconditionally grab the cursor back - you might have opened this while stood at the fence's
+        //desk or sat at the van computer, and yanking mouselook back would leave their buttons on screen unclickable.
+        Player localPlayer = Player.LocalPlayer;
+        if (localPlayer == null || !localPlayer.MenuOwnsCursor)
+        {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
     }
 
     private void OnGUI()

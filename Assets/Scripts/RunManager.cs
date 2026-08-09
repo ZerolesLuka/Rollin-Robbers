@@ -173,6 +173,16 @@ public class RunManager : NetworkBehaviour
         {
             ResetForNewRun(); //House button - back to InProgress so the run-over van ride doesn't instantly re-trigger
         }
+
+        //ALREADY PARKED THERE? Then don't drive. The van sits in the Outdoor scene and so does the house it's robbing,
+        //so choosing 14 Maple Street isn't a journey - it's the crew agreeing on a job. Reloading the scene you're
+        //standing in would cost a black frame, respawn everyone, and throw away the walk up to the house, which is the
+        //tense part. Picking it just drops the barrier and starts the run; Indoor loads when someone opens a door.
+        if (buildIndex == SceneManager.GetActiveScene().buildIndex)
+        {
+            return;
+        }
+
         LoadSceneForEveryone(buildIndex);
     }
 
