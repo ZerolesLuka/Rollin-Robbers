@@ -54,6 +54,20 @@ public class GuardVision : MonoBehaviour
         return true;
     }
 
+    //"Is there a wall between me and this point?" - no cone, no range, no player state. Deliberately separate from
+    //CanSee, because reaching into a hiding spot isn't seeing: a hidden player is invisible to CanSee by definition,
+    //yet a wall should still stop him hauling them out of a wardrobe in the next room. Sharing obstacleMask with
+    //sight is the point - what blocks him seeing has to be the same thing that blocks him reaching.
+    public bool HasClearLineTo(Vector3 worldPoint)
+    {
+        Vector3 eyePos = transform.position + Vector3.up * eyeHeight;
+        Vector3 toPoint = worldPoint - eyePos;
+        float distance = toPoint.magnitude;
+        if (distance <= 0.01f) return true; //standing on it
+
+        return !Physics.Raycast(eyePos, toPoint / distance, distance, obstacleMask);
+    }
+
     private void OnDrawGizmos() //draws the view cone in the editor
     {
         Vector3 eye = transform.position + Vector3.up * eyeHeight;

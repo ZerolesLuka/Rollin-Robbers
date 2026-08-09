@@ -808,6 +808,13 @@ public class GuardPatrol : NetworkBehaviour
             if (player.NoiseLevel <= hidingNoiseTolerance) continue; //quiet in there - he walks right past
             if (Vector3.Distance(transform.position, player.transform.position) > hidingSearchRange) continue; //heard something, but not from close enough to place which spot
 
+            //A WALL HAS TO STOP HIM. This was a bare distance check, so his reach was a sphere that punched straight
+            //through geometry - stand in the room next door, within hidingSearchRange of a wardrobe on the far side
+            //of the wall, and he'd rip its door open through the brickwork. He can still HEAR you through the wall
+            //(that's what brings him round, and it should), but hauling someone out is a physical act and needs a
+            //physical route. Same obstacleMask his eyes use, so what blocks seeing blocks reaching.
+            if (!vision.HasClearLineTo(player.transform.position + Vector3.up)) continue;
+
             //talking, and he's right next to the door. that's the whole tell - open it.
             player.RPC_PulledFromHiding();
             chaseTarget = player;
