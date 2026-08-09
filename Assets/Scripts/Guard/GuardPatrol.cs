@@ -244,9 +244,13 @@ public class GuardPatrol : NetworkBehaviour
         {
             case GuardState.Asleep:
                 ListenForNoise();
+                if (State != GuardState.Asleep) break; //that woke him - don't also run the sleeping behaviour this tick
                 ReturnToSleep();
+                if (State != GuardState.Asleep) break; //couldn't reach his bed and went Relaxed; let that state drive
 
-                if(!agent.pathPending && agent.remainingDistance <= reachDistance)
+                //hasPath matters: remainingDistance reads 0 when the agent has NO path at all, so without it this
+                //fires the instant he has nothing to walk and counts standing still as having arrived.
+                if(!agent.pathPending && agent.hasPath && agent.remainingDistance <= reachDistance)
                 {
                     agent.ResetPath(); //arrived at bed, stop
                 }
@@ -840,10 +844,24 @@ public class GuardPatrol : NetworkBehaviour
     }
     private void ReturnToSleep()
     {
-        if (!IsAtSpawn() && !agent.hasPath) //walk home only if not there and not already heading somewhere
+        if (IsAtSpawn() || agent.hasPath) return; //home already, or already walking there
+
+        //VALIDATE THE ROUTE, exactly the way PickWanderPoint does, and for the same reason. SetDestination happily
+        //accepts an unreachable target and hands back a PARTIAL path that stops wherever the NavMesh runs out - the
+        //top of a staircase, a doorway, the far side of a gap. He walks to the end of it, the arrival check below
+        //cannot tell that from actually reaching his bed, so he stops there and plays the sleeping animation in the
+        //middle of the stairs. Worse, any noise then loops him Asleep -> Suspicious -> Asleep on that exact spot,
+        //because every trip home re-issues the same partial path whose end he is already standing on.
+        NavMeshPath route = new NavMeshPath();
+        if (agent.CalculatePath(spawnPosition, route) && route.status == NavMeshPathStatus.PathComplete)
         {
-            agent.SetDestination(spawnPosition);
+            agent.SetPath(route);
+            return;
         }
+
+        //He genuinely cannot get back to his bed from here. Relaxed is the honest state for that - awake, on his
+        //feet, wandering - rather than sleeping upright wherever the path happened to give out.
+        ChangeState(GuardState.Relaxed);
     }
 
     private void ListenForNoise() //shared ears for Asleep + Relaxed
