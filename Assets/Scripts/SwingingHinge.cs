@@ -47,17 +47,40 @@ public class SwingingHinge : MonoBehaviour
 
     private Quaternion closedRotation;
     private Vector3 closedPosition;
-    private bool isOpen;
     private AudioSource hingeAudio;
 
-    private float openProgress;      // 0 = shut, 1 = fully open. drives both modes, so one speed covers degrees and metres alike
+    private float openProgress;      // 0 = shut, 1 = fully open. WHERE IT IS. drives both modes, so one speed covers degrees and metres alike
+    private float targetProgress;    // WHERE IT'S HEADING. scripted opens (the guard shoving a door) ease toward this; a player dragging sets both at once so it tracks the hand exactly
     private float mySpeed;
     private float thisOpenFraction = 1f; // re-rolled each time it opens, so it doesn't land in exactly the same spot twice
     private int openCount;           // feeds the per-open roll. bumped in SetOpen, which every client runs off the same RPC
     private int positionSeed;
 
-    public bool IsOpen => isOpen;
+    //DERIVED, not stored. A door can now rest at any angle, so "is it open" became a judgement rather than a fact -
+    //but Door, GuardPatrol's search, Safe and the wedge all still just want a yes or no, and none of them need to
+    //learn that it turned into a float. Ajar counts as open: a door cracked 20% is one the guard can see through.
+    private const float OpenThreshold = 0.12f;
+    public bool IsOpen => openProgress > OpenThreshold;
+
+    public float OpenAmount => openProgress; //0 shut, 1 fully open. what the drag reads and writes
     public float InteractRange => interactRange;
+    public bool SlidesOpen => slidesOpen;    //the drag needs to know whether it's turning something or pulling it
+    public float TravelDegrees => openAngle; //how far a full open goes, so drag sensitivity can scale with it
+    public float TravelDistance => slideDistance;
+
+    //Which way the door FACES when shut. The drag uses this to work out whether you're pushing or pulling, and it has
+    //to be the CLOSED facing rather than the live one - read live, the sign would flip underneath you the moment the
+    //door swung past your shoulder, and the thing would jam halfway.
+    public Vector3 ClosedFaceNormal
+    {
+        get
+        {
+            Vector3 localNormal = axis == HingeAxis.Y ? Vector3.forward : Vector3.up; //perpendicular to whatever it turns around
+            return transform.parent != null
+                ? transform.parent.TransformDirection(closedRotation * localNormal)
+                : closedRotation * localNormal;
+        }
+    }
 
     //CAN A PLAYER JUST PRESS E ON THIS? True for cupboards, drawers and doors. The safe sets it false on its own door
     //in Spawned, because that door is owned by the crack/keypad system - leaving it true meant walking up to a safe
@@ -151,10 +174,12 @@ public class SwingingHinge : MonoBehaviour
     private void Update()
     {
         //one 0-to-1 progress value drives both modes, which is why a single speed field can cover degrees and metres
-        //without caring which. ease toward it every frame - a clean movement, not a snap. any collider rides along,
-        //so as it opens the gap physically clears and closing blocks it again.
-        float target = isOpen ? 1f : 0f;
-        openProgress = Mathf.MoveTowards(openProgress, target, mySpeed * Time.deltaTime);
+        //without caring which. ease toward the target every frame - a clean movement, not a snap. any collider rides
+        //along, so as it opens the gap physically clears and closing blocks it again.
+        //
+        //Only SCRIPTED opens ease. A player dragging writes both values together (SetOpenAmount), so the door tracks
+        //their hand exactly instead of lagging a fixed speed behind it - which would feel like pushing treacle.
+        openProgress = Mathf.MoveTowards(openProgress, targetProgress, mySpeed * Time.deltaTime);
 
         if (slidesOpen)
         {
@@ -166,9 +191,31 @@ public class SwingingHinge : MonoBehaviour
         }
     }
 
+    //PUT IT EXACTLY HERE, no easing. This is what a dragging hand and the network both call - the door has to sit
+    //precisely where it's told, because "where it's told" IS the player's hand position or a teammate's replicated
+    //copy of it. Easing toward it would make a dragged door lag behind the mouse and a remote door lag behind reality.
+    public void SetOpenAmount(float amount)
+    {
+        amount = Mathf.Clamp01(amount);
+
+        //creak as it comes off the frame, once, rather than every frame it's in motion
+        if (openProgress <= OpenThreshold && amount > OpenThreshold)
+        {
+            PlaySound(true);
+        }
+        else if (openProgress > OpenThreshold && amount <= OpenThreshold)
+        {
+            PlaySound(false); //and thud as it shuts
+        }
+
+        thisOpenFraction = 1f; //a hand-dragged door goes exactly where the hand puts it - the per-open roll is for SCRIPTED opens, so the guard's shove isn't identical every time
+        openProgress = amount;
+        targetProgress = amount;
+    }
+
     public void SetOpen(bool open)
     {
-        if (isOpen == open)
+        if (IsOpen == open)
         {
             return; //already in that state - bail before the sound, so a caller re-asserting "open" every tick can't machine-gun the creak
         }
@@ -183,7 +230,7 @@ public class SwingingHinge : MonoBehaviour
             thisOpenFraction = RollBetween(openRandom, MinOpenFraction, 1f);
         }
 
-        isOpen = open; //explicit state, not a toggle - two callers on the same tick can't flip it twice and cancel out
+        targetProgress = open ? 1f : 0f; //explicit state, not a toggle - two callers on the same tick can't flip it twice and cancel out. Update eases openProgress toward this, which is what makes a shoved door SWING rather than teleport
         PlaySound(open);
     }
 

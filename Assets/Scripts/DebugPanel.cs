@@ -109,7 +109,7 @@ public class DebugPanel : MonoBehaviour
 
         Header("Carry");
         if (GUILayout.Button("+1 wedge")) me.RPC_GrantWedge();
-        if (GUILayout.Button("+1 loot (1200)")) me.RPC_GrantPickup("Debug Loot", 1200);
+        if (GUILayout.Button("+1 loot (1200)")) me.RPC_GrantPickup("Debug Loot", 1200, (int)ToolType.None); //None = ordinary loot rather than a tool
 
         Header("Travel");
         if (GUILayout.Button("to the van")) run.RPC_Route(VanScene, 0, false);

@@ -22,7 +22,8 @@ public partial class Player
     //Plain private fields, NOT networked. Only our own machine cares where we personally were, and the Player object
     //survives scene loads, so these ride across intact.
     private Vector3 vanLocalPosition;
-    private bool hasVanLocalPosition;
+    private bool hasVanLocalPosition;   //are we in the van THIS FRAME - cleared as soon as we step out
+    private bool departedFromTheVan;    //were we in it at the moment the scene changed - latched in OnSceneChanged, read by the coroutine
     private const float VanRememberRadius = 6f; //only note our spot while we're actually AT the van - otherwise we'd record a position from halfway across the garden and restore that into the next van, i.e. inside a wall
 
     //Called every frame from Update on the local player only. Continuous capture rather than a snapshot taken as we
@@ -31,12 +32,15 @@ public partial class Player
     private void RememberVanPosition()
     {
         Van van = FindVanInThisScene();
-        if (van == null)
+        bool insideTheVan = van != null && Vector3.Distance(transform.position, van.transform.position) <= VanRememberRadius;
+
+        //CLEARS ITSELF the moment we walk away. The flag therefore means "we are in the van RIGHT NOW", not "we were
+        //once", and that distinction is the whole fix: leaving the house through a door has to land on the door's
+        //SpawnPoint, but Outdoor also contains a van - so a stale flag hijacked every door transition and dumped us
+        //back in the van instead of on the doorstep.
+        if (!insideTheVan)
         {
-            return;
-        }
-        if (Vector3.Distance(transform.position, van.transform.position) > VanRememberRadius)
-        {
+            hasVanLocalPosition = false;
             return;
         }
 
@@ -116,6 +120,12 @@ public partial class Player
             IsBearTrapped = false;
         }
 
+        //LATCH IT HERE, before the coroutine runs. activeSceneChanged fires before any Update in the new scene, so
+        //this still reflects whether we were in the van as we left. Reading hasVanLocalPosition inside the coroutine
+        //instead would race: the coroutine yields, Update runs first, finds we're nowhere near the NEW scene's van,
+        //and clears the flag before the coroutine ever gets to look at it.
+        departedFromTheVan = hasVanLocalPosition;
+
         StartCoroutine(TeleportAfterLoad());
     }
 
@@ -173,7 +183,7 @@ public partial class Player
         //Deliberately checked AFTER the loop above rather than waiting on its own: the van and the SpawnPoints are
         //scene objects that register together, so if a SpawnPoint has turned up the van has too. Polling separately
         //would just add a stall to every trip into the house, which has no van at all.
-        Van arrivalVan = hasVanLocalPosition ? FindVanInThisScene() : null;
+        Van arrivalVan = departedFromTheVan ? FindVanInThisScene() : null;
         if (arrivalVan != null)
         {
             TeleportTo(arrivalVan.transform.TransformPoint(vanLocalPosition));

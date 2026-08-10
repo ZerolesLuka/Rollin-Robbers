@@ -87,6 +87,32 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
     private float safeInteractHoldTime;                         //how long E has been held at a safe this press
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
+    //PROPS THAT APPEAR IN YOUR HAND. Park them all as CHILDREN of the player model roughly where a hand would be,
+    //leave every one DISABLED in the prefab, and UpdateHeldItemVisual switches on whichever matches what you're
+    //holding. Any slot left empty just means that item shows nothing - the feature degrades one item at a time
+    //rather than falling over.
+    //ONE list, one row per thing you can hold. The row whose tool is None is ORDINARY LOOT, and it doubles as the
+    //fallback for any tool nobody has modelled yet - so a crowbar with no model of its own still puts something in
+    //your hand rather than nothing.
+    [SerializeField] private HeldProp[] heldProps;
+
+    [System.Serializable]
+    public struct HeldProp
+    {
+        public ToolType tool;   //None = ordinary loot / fallback
+        public GameObject prop; //a child of the player model, left DISABLED in the prefab
+    }
+
+    //WHICH item is in our hand, replicated so every client's copy of us holds the same thing. -1 means empty-handed.
+    //CarriedCount alone was only ever enough to answer "is he carrying something"; a crowbar and a vase need to look
+    //different in someone else's view, and SelectedSlot is deliberately local-only.
+    [Networked] public int HeldKind { get; private set; }
+
+    private void PublishHeldKind()
+    {
+        int slot = ResolveDropSlot();
+        HeldKind = slot < 0 ? -1 : (int)inventory[slot].tool; //ToolType.None is 0, which is the ordinary-loot case
+    }
     private bool wasHiding;
 
     [Networked] public bool IsFlashlightOn { get; private set; } //replicated so teammates see your beam, same idea as IsHiding driving playerVisuals
@@ -133,7 +159,9 @@ public partial class Player : NetworkBehaviour
     //Tools take LOOT slots. Every one you bring is a vase you can't carry home, which is what turns a loadout into a
     //decision - and it's why the Duffel Bag reads as buying back the room your other tool cost. Clamped at 1 so a
     //full kit can never leave you unable to pick anything up at all.
-    public int MaxInventorySlots => Mathf.Max(1, maxInventorySlots + ToolInventoryBonus - ToolsCarried);
+    //No "- ToolsCarried" any more. Tools sit in the bag as real items, so they take a slot by BEING there - subtracting
+    //them as well charged you twice for the same tool.
+    public int MaxInventorySlots => Mathf.Max(1, maxInventorySlots + ToolInventoryBonus);
     public int CarriedValue //total worth of what this player is holding - the HUD reads it, selling banks it
     {
         get
@@ -222,6 +250,7 @@ public partial class Player : NetworkBehaviour
         }
 
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
+        UpdateHeldItemVisual(); //likewise - your crew needs to SEE you're carrying something, so it's driven by the networked CarriedCount
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
 
@@ -242,6 +271,7 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
+        UpdateDoorDrag();   //hold left mouse on a door, drawer or cupboard and push it open by hand
         UpdateDeployKey();  //Q sets down a Signal Jammer, read straight off the keyboard like the safe keypad so it needs no new binding
         UpdateLootWheel(); //hold MMB to pick which item G drops
         UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
@@ -474,6 +504,7 @@ public partial class Player : NetworkBehaviour
         if (HasStateAuthority)
         {
             lookPitch = xRotation; //publish our up/down look angle so remote clients can aim our flashlight beam (their copy never runs HandleLook)
+            PublishHeldKind();     //and WHICH item is in our hand, so everyone else's copy of us holds the right prop
         }
 
         PlayerGravity();
@@ -557,10 +588,16 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
-    public void RPC_GrantPickup(NetworkString<_32> itemName, int value)
+    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind)
     {
         if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
-        inventory.Add(new InventoryItem(itemName.ToString(), value));
+
+        //toolKind rides along so a DROPPED TOOL is still a tool when someone picks it back up. Without it a crowbar
+        //left on the floor came back as a worthless nameless trinket, which is a silent way to destroy 600 credits.
+        ToolType tool = (ToolType)toolKind;
+        inventory.Add(tool == ToolType.None
+            ? new InventoryItem(itemName.ToString(), value)
+            : new InventoryItem(tool));
         PublishCarriedCount();
     }
 

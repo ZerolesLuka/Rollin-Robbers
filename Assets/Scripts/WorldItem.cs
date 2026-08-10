@@ -15,6 +15,7 @@ public class WorldItem : NetworkBehaviour
     [SerializeField] private Light glowLight;               // optional child light - tinted by rarity so pricey loot glows. leave empty for no glow
     [Networked] public NetworkString<_32> ItemName { get; set; }
     [Networked] public int Value { get; set; }              // what it sells for at the pawn shop
+    [Networked] public int ToolKind { get; set; }           // 0 = ordinary loot. anything else is a dropped TOOL (a ToolType cast to int) and picking it up puts the tool back in your kit rather than a worthless trinket
     [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
     [Networked] public Vector3 SpawnPoint { get; set; }       // where this item should be. sent as networked data because a deferred spawn (prefab still loading) silently drops the position argument and dumps the item at origin
     [Networked] public NetworkBool UseSpawnPoint { get; set; } // true = runtime-spawned loot, re-apply SpawnPoint in Spawned. false = an item placed directly in the scene, which keeps its own transform
@@ -179,7 +180,7 @@ public class WorldItem : NetworkBehaviour
         {
             if (player != null && player.Object != null && player.Object.InputAuthority == requester)
             {
-                player.RPC_GrantPickup(ItemName, Value);
+                player.RPC_GrantPickup(ItemName, Value, ToolKind);
                 break;
             }
         }

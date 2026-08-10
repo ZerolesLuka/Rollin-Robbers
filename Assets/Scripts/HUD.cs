@@ -15,6 +15,7 @@ public class HUD : MonoBehaviour
     [SerializeField, Range(0.2f, 1f)] private float unselectedSlotDim = 0.55f; //how far the slots you're NOT holding drop back, so the selected one stands out
     [SerializeField] private Color toolOccupiedSlotColor = new Color(0.45f, 0.4f, 0.3f, 0.7f); //a slot a tool is taking up. distinct from empty, because it isn't empty - it's spent
     [SerializeField] private GameObject lootWheelRoot; //optional radial graphic, shown only while MMB is held. the slot list works without it
+    [SerializeField] private Text heldItemText; //top-right: the ONE item you're currently holding, i.e. the one G drops and the one shown in your hand. optional - leave unassigned to hide it
 
     [Header("Status line - what's currently happening TO you")]
     [SerializeField] private Text statusText;      //"a teammate has to pry it off you" etc. optional
@@ -104,11 +105,12 @@ public class HUD : MonoBehaviour
 
                     //mark the one G will actually drop. it was invisible before, so players had no way to know what
                     //they were about to put on the floor.
-                    inventorySlotTexts[slot].text = isSelected
-                        ? $"> {carried.name} (${carried.value})"
-                        : $"{carried.name} (${carried.value})";
+                    //a tool shows no price - it's kit, not swag, and "Crowbar ($0)" reads like a bug rather than
+                    //like something you chose to bring
+                    string slotLabel = carried.IsTool ? carried.name : $"{carried.name} (${carried.value})";
+                    inventorySlotTexts[slot].text = isSelected ? $"> {slotLabel}" : slotLabel;
 
-                    Color slotColor = LootRarityTable.ColorFor(carried.value); //tint the slot by how valuable the item is - orange = jackpot
+                    Color slotColor = carried.IsTool ? toolOccupiedSlotColor : LootRarityTable.ColorFor(carried.value); //tint the slot by how valuable the item is - orange = jackpot. tools get their own colour so kit reads apart from loot at a glance
                     if (!isSelected) slotColor *= unselectedSlotDim; //dim the rest so the selected one reads at a glance
                     slotColor.a = 1f;
                     inventorySlotTexts[slot].color = slotColor;
@@ -120,9 +122,11 @@ public class HUD : MonoBehaviour
                 }
                 else
                 {
-                    //TOOLS ATE THIS SLOT. showing it as merely empty would promise room that doesn't exist - you'd
-                    //walk to a vase you can't carry and only find out when E did nothing.
-                    inventorySlotTexts[slot].text = "— tool —";
+                    //BEYOND OUR CAPACITY. Showing it as merely empty would promise room that doesn't exist - you'd
+                    //walk to a vase you can't carry and only find out when E did nothing. This used to be the "a tool
+                    //ate this slot" case; tools now sit in the list as real items, so this only fires when there are
+                    //more slot labels wired up than the bag can ever hold.
+                    inventorySlotTexts[slot].text = "—";
                     inventorySlotTexts[slot].color = toolOccupiedSlotColor;
                 }
             }
@@ -134,6 +138,14 @@ public class HUD : MonoBehaviour
         {
             bool wheelUp = localPlayerLive && Player.LocalPlayer.IsLootWheelOpen;
             if (lootWheelRoot.activeSelf != wheelUp) lootWheelRoot.SetActive(wheelUp);
+        }
+
+        //WHAT'S IN YOUR HAND, top right. Deliberately just the name and no panel: an empty string leaves the corner
+        //blank rather than announcing "None", so the HUD is quiet when you're carrying nothing. This names the exact
+        //item the prop in your hand represents and the exact item G will drop - all three read the same slot.
+        if (heldItemText != null)
+        {
+            heldItemText.text = localPlayerLive ? Player.LocalPlayer.HeldItemName : string.Empty;
         }
 
         UpdateStatusLine(localPlayerLive);

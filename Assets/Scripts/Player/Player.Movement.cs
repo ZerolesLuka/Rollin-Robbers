@@ -109,6 +109,13 @@ public partial class Player
 
     private void HandleLook()
     {
+        //A HAND ON A DOOR IS NOT A HEAD TURNING. While you're pushing something open the mouse is moving the door, so
+        //letting it also swing the camera would spin you on the spot every time you opened anything.
+        if (IsDraggingDoor)
+        {
+            return;
+        }
+
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
 
         // Vertical camera pitch
