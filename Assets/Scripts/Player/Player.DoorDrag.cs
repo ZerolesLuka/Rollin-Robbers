@@ -127,18 +127,13 @@ public partial class Player
         draggedVelocity = 0f;
         draggedHandOff = false;
 
-        //WHICH SIDE ARE WE ON. Pushing a door from the far side has to swing it the other way, or half your
-        //encounters with a door will have you pulling it into your own face. Compared against the CLOSED facing, not
-        //the live one - otherwise the sign flips underneath you as the door passes you by.
+        //MEASURED, NOT GUESSED. Ask the door itself whether opening carries its far edge away from where we're
+        //standing, by nudging it a fraction and looking. Pushing the mouse away from us then always pushes the door
+        //away from us, from either side, on any prefab - the previous version inferred this from the hinge axis,
+        //which is a guess about how the mesh was built and needed a per-door override when it guessed wrong.
         //
-        //The -1 is the "push away from you" convention: dragging the mouse right should shove the far edge away, and
-        //the dot product on its own gave the opposite. Per-hinge InvertDrag exists for prefabs whose mesh was built
-        //facing the other way, since ClosedFaceNormal can only guess from the axis.
-        Vector3 toPlayer = transform.position - hinge.transform.position;
-        draggedSideSign = Vector3.Dot(toPlayer, hinge.ClosedFaceNormal) >= 0f ? -1f : 1f;
-        if (hinge.InvertDrag)
-        {
-            draggedSideSign = -draggedSideSign;
-        }
+        //Taken ONCE at grab time rather than every frame: read live, the sign would flip the instant the door swung
+        //past your shoulder and it would jam halfway.
+        draggedSideSign = hinge.OpeningMovesAwayFrom(transform.position);
     }
 }

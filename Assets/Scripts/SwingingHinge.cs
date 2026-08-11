@@ -32,7 +32,6 @@ public class SwingingHinge : MonoBehaviour
     [SerializeField] private float openAngle = 90f;     // swing mode: degrees. negative goes the other way
     [SerializeField] private float slideDistance = 0.4f; // slide mode: metres. negative goes the other way
     [SerializeField] private float openSpeed = 3f;      // how many times per second it could open fully. 3 = about a third of a second
-    [SerializeField] private bool invertDrag;           // TICK IF THIS ONE PUSHES THE WRONG WAY. ClosedFaceNormal can only guess which way the mesh faces from the hinge axis, so a prefab built back-to-front needs telling
 
     [Header("Sound - drop in as many clips as you like, one is picked at random")]
     [SerializeField] private AudioClip[] openClips;
@@ -66,23 +65,8 @@ public class SwingingHinge : MonoBehaviour
     public float OpenAmount => openProgress; //0 shut, 1 fully open. what the drag reads and writes
     public float InteractRange => interactRange;
     public bool SlidesOpen => slidesOpen;    //the drag needs to know whether it's turning something or pulling it
-    public bool InvertDrag => invertDrag;    //this one's mesh faces the other way - flip which mouse direction pushes it
     public float TravelDegrees => openAngle; //how far a full open goes, so drag sensitivity can scale with it
     public float TravelDistance => slideDistance;
-
-    //Which way the door FACES when shut. The drag uses this to work out whether you're pushing or pulling, and it has
-    //to be the CLOSED facing rather than the live one - read live, the sign would flip underneath you the moment the
-    //door swung past your shoulder, and the thing would jam halfway.
-    public Vector3 ClosedFaceNormal
-    {
-        get
-        {
-            Vector3 localNormal = axis == HingeAxis.Y ? Vector3.forward : Vector3.up; //perpendicular to whatever it turns around
-            return transform.parent != null
-                ? transform.parent.TransformDirection(closedRotation * localNormal)
-                : closedRotation * localNormal;
-        }
-    }
 
     //CAN A PLAYER JUST PRESS E ON THIS? True for cupboards, drawers and doors. The safe sets it false on its own door
     //in Spawned, because that door is owned by the crack/keypad system - leaving it true meant walking up to a safe
@@ -182,15 +166,48 @@ public class SwingingHinge : MonoBehaviour
         //Only SCRIPTED opens ease. A player dragging writes both values together (SetOpenAmount), so the door tracks
         //their hand exactly instead of lagging a fixed speed behind it - which would feel like pushing treacle.
         openProgress = Mathf.MoveTowards(openProgress, targetProgress, mySpeed * Time.deltaTime);
+        ApplyPose(openProgress);
+    }
 
+    //Put the transform where a given open amount says it should be. Pulled out of Update so the same maths can be run
+    //speculatively - see OpeningMovesAwayFrom, which nudges the door, measures, and puts it straight back.
+    private void ApplyPose(float amount)
+    {
         if (slidesOpen)
         {
-            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * openProgress);
+            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * amount);
         }
         else
         {
-            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * openProgress, AxisVector());
+            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * amount, AxisVector());
         }
+    }
+
+    //A point ON the moving part, out away from the pivot - the renderer's centre. The pivot itself is useless for
+    //this: it sits on the hinge and barely moves however far the door swings.
+    private Vector3 ProbeWorldPoint()
+    {
+        Renderer renderer = GetComponentInChildren<Renderer>();
+        return renderer != null ? renderer.bounds.center : transform.position + transform.right * 0.5f;
+    }
+
+    //DOES OPENING THIS CARRY IT AWAY FROM THAT POINT, OR TOWARD IT? +1 for away, -1 for toward.
+    //
+    //Measured rather than inferred. Nudge the thing a fraction, see which way its far edge actually went relative to
+    //where you're standing, put it back. That's the real question the drag needs answered, and asking it directly
+    //means no guessing a mesh's facing from its hinge axis and no per-prefab override to forget to tick.
+    public float OpeningMovesAwayFrom(Vector3 fromPosition)
+    {
+        float saved = openProgress;
+        float step = saved > 0.9f ? -0.05f : 0.05f; //step toward whichever end we aren't already pinned against
+
+        Vector3 before = ProbeWorldPoint();
+        ApplyPose(Mathf.Clamp01(saved + step));
+        Vector3 after = ProbeWorldPoint();
+        ApplyPose(saved); //straight back, within the same frame - nothing renders in between
+
+        bool movedAway = Vector3.Distance(after, fromPosition) >= Vector3.Distance(before, fromPosition);
+        return movedAway == (step > 0f) ? 1f : -1f; //if we stepped CLOSED to measure, the answer is inverted
     }
 
     //PUT IT EXACTLY HERE, no easing. This is what a dragging hand and the network both call - the door has to sit
