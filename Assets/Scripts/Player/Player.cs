@@ -118,10 +118,19 @@ public partial class Player : NetworkBehaviour
     [Networked] public bool IsFlashlightOn { get; private set; } //replicated so teammates see your beam, same idea as IsHiding driving playerVisuals
     [Networked] private float lookPitch { get; set; } //owner writes its up/down look angle here so remote clients can aim its flashlight beam vertically (their camera pitch isn't otherwise networked)
     [SerializeField] private Light flashlight; //spotlight child; assign in inspector
-    [SerializeField] private float flashlightFollowSpeed = 8f; //how fast the beam catches up to where you're looking - lower = more lag/sway off the camera
+    //A SPRING, not a smooth-follow. The beam used to ease toward where you were looking, which never overshoots and
+    //so reads as "smoothed" rather than "held". A real torch has weight - it swings past where you stopped and settles
+    //back, and that settle is the whole tell. Stiffness is how hard it's pulled toward your aim, damping is how fast
+    //the wobble dies: low damping = a loose wrist, high damping = a clamp.
+    [SerializeField] private float flashlightSpringStiffness = 90f;
+    [SerializeField] private float flashlightSpringDamping = 9f;
     [SerializeField] private float flashlightSwayAmount = 1.5f; //idle handheld tremor, in degrees - keeps the beam alive when you're still
     [SerializeField] private float flashlightSwayFrequency = 1.1f; //how fast that tremor drifts
     [SerializeField] private float flashlightWalkSwayMultiplier = 3f; //how much bigger the sway gets while walking - the bob that sells "handheld"
+    private float flashlightAimPitch;      //where the beam actually points, as opposed to where you're looking
+    private float flashlightAimYaw;
+    private float flashlightPitchVelocity; //the spring's momentum - this is what produces the overshoot
+    private float flashlightYawVelocity;
     private bool flashlightHeldLastTick; //rising-edge detect so one press = one toggle
     private Vector3 flashlightLastPosition; //to gauge how fast this player is moving, for the walk bob
     private bool hasRiddenVanForRunEnd; //one-shot so the run-end van teleport only fires once

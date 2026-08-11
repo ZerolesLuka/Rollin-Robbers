@@ -33,9 +33,32 @@ public partial class Player
         float swayPitch = (Mathf.PerlinNoise(Time.time * flashlightSwayFrequency, 0f) - 0.5f) * 2f * swayScale;
         float swayYaw = (Mathf.PerlinNoise(0f, Time.time * flashlightSwayFrequency) - 0.5f) * 2f * swayScale;
 
-        //aim where the player looks (networked yaw + pitch), plus the handheld sway, eased in so the beam trails the camera instead of snapping
-        Quaternion aimRotation = Quaternion.Euler(lookPitch + swayPitch, transform.eulerAngles.y + swayYaw, 0f);
-        flashlight.transform.rotation = Quaternion.Slerp(flashlight.transform.rotation, aimRotation, flashlightFollowSpeed * Time.deltaTime);
+        //SPRUNG toward where you're looking, rather than eased. Pitch and yaw are sprung separately because they're
+        //the only two axes a torch needs, and doing it on angles rather than quaternions means the overshoot is a
+        //number you can actually reason about.
+        float targetPitch = lookPitch + swayPitch;
+        float targetYaw = transform.eulerAngles.y + swayYaw;
+
+        flashlightAimPitch = SpringAngle(flashlightAimPitch, targetPitch, ref flashlightPitchVelocity);
+        flashlightAimYaw = SpringAngle(flashlightAimYaw, targetYaw, ref flashlightYawVelocity);
+
+        flashlight.transform.rotation = Quaternion.Euler(flashlightAimPitch, flashlightAimYaw, 0f);
+    }
+
+    //One axis of a damped spring. Returns where the beam has got to this frame.
+    private float SpringAngle(float current, float target, ref float velocity)
+    {
+        //DeltaAngle, not plain subtraction: yaw wraps at 360, and without this the beam takes the long way round the
+        //whole circle every time you turn past north.
+        float offset = Mathf.DeltaAngle(current, target);
+
+        velocity += offset * flashlightSpringStiffness * Time.deltaTime;
+
+        //exponential decay rather than a per-frame multiply, so the feel is identical at 60fps and 144. the old
+        //Slerp used speed * deltaTime as its blend factor, which quietly changed behaviour with framerate.
+        velocity *= Mathf.Exp(-flashlightSpringDamping * Time.deltaTime);
+
+        return current + velocity * Time.deltaTime;
     }
 
     private void HandleFlashlight(bool flashlightPressed)
