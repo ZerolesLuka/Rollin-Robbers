@@ -88,6 +88,10 @@ public class Door : MonoBehaviour
 
     public bool IsOpen => hinge != null && hinge.IsOpen;
 
+    //Wide enough for a person to walk through, which is NOT the same as "not shut". A door sitting at 20% is open by
+    //any reasonable reading and still a wall as far as walking is concerned.
+    public bool IsWideEnoughToPass => hinge != null && hinge.IsWideEnoughToPass;
+
     //The wedge jamming this door, or null. Derived from the wedges themselves rather than stored here: a Door isn't a
     //NetworkObject, so it can't hold networked state - but DoorWedge is one, and every client can read it.
     public DoorWedge Wedge => DoorWedge.WedgeOn(this);
@@ -102,6 +106,20 @@ public class Door : MonoBehaviour
         if (hinge != null)
         {
             hinge.SetOpen(open);
+        }
+    }
+
+    //Shove it open away from whoever's pushing - the guard's version, so the leaf never swings through him. Same
+    //wedge rule as above: a jammed door doesn't care which direction you'd have liked it to go.
+    public void SetOpenAwayFrom(Vector3 openerPosition)
+    {
+        if (IsWedged)
+        {
+            return;
+        }
+        if (hinge != null)
+        {
+            hinge.SetOpenAwayFrom(openerPosition);
         }
     }
 
@@ -139,7 +157,10 @@ public class Door : MonoBehaviour
         float bestDistance = float.MaxValue;
         foreach (Door door in AllDoors)
         {
-            if (door.IsOpen)
+            //IsWideEnoughToPass, NOT IsOpen. This is the AI asking "is this door in my way", and a door a player left
+            //ajar at 20% is very much in his way even though it reads as open. Using IsOpen had him walk straight
+            //through a gap far too narrow for a person rather than shoving it wider.
+            if (door.IsWideEnoughToPass)
             {
                 continue;
             }

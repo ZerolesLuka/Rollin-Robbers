@@ -212,6 +212,19 @@ public class RunManager : NetworkBehaviour
     //
     //Cheap despite the rate: one small RPC per tick per door actually being handled, and a player can only hold one
     //door at a time. Same position-matching as the bool version, so it needs no NetworkObjects either.
+    //THE GUARD SHOVING A DOOR. Carries the opener's position so every client works out the same swing direction from
+    //the same two vectors - computing it locally from the guard's replicated transform would mostly agree, but two
+    //clients disagreeing about which way a door swung is a desync nobody would ever think to look for.
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_ShoveDoorOpen(Vector3 doorPosition, Vector3 openerPosition)
+    {
+        SwingingHinge hinge = FindHingeAt(doorPosition);
+        if (hinge != null)
+        {
+            hinge.SetOpenAwayFrom(openerPosition);
+        }
+    }
+
     [Rpc(RpcSources.All, RpcTargets.All)]
     public void RPC_SetHingeAmount(Vector3 hingePosition, float amount)
     {

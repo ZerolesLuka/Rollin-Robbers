@@ -52,6 +52,7 @@ public class SwingingHinge : MonoBehaviour
     private float openProgress;      // 0 = shut, 1 = fully open. WHERE IT IS. drives both modes, so one speed covers degrees and metres alike
     private float targetProgress;    // WHERE IT'S HEADING. scripted opens (the guard shoving a door) ease toward this; a player dragging sets both at once so it tracks the hand exactly
     private float mySpeed;
+    private float swingDirection = 1f; //+1 opens the way the prefab was authored, -1 mirrors it. set per open so a door always swings away from whoever opened it
     private float thisOpenFraction = 1f; // re-rolled each time it opens, so it doesn't land in exactly the same spot twice
     private int openCount;           // feeds the per-open roll. bumped in SetOpen, which every client runs off the same RPC
     private int positionSeed;
@@ -63,6 +64,12 @@ public class SwingingHinge : MonoBehaviour
     public bool IsOpen => openProgress > OpenThreshold;
 
     public float OpenAmount => openProgress; //0 shut, 1 fully open. what the drag reads and writes
+
+    //CAN SOMEBODY ACTUALLY WALK THROUGH THIS? A different question from IsOpen, and conflating the two is a bug.
+    //IsOpen means "not shut" - true at 13%, which is enough to see through and nowhere near enough to pass. The guard
+    //asks THIS before deciding whether to shove a door wider, because a door left ajar by a player is still in his way.
+    private const float PassableThreshold = 0.7f;
+    public bool IsWideEnoughToPass => openProgress >= PassableThreshold;
     public float InteractRange => interactRange;
     public bool SlidesOpen => slidesOpen;    //the drag needs to know whether it's turning something or pulling it
     public float TravelDegrees => openAngle; //how far a full open goes, so drag sensitivity can scale with it
@@ -175,12 +182,30 @@ public class SwingingHinge : MonoBehaviour
     {
         if (slidesOpen)
         {
-            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * amount);
+            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * swingDirection * amount);
         }
         else
         {
-            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * amount, AxisVector());
+            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * swingDirection * amount, AxisVector());
         }
+    }
+
+    //OPEN IT AWAY FROM WHOEVER'S PUSHING. A real door swings one way and you pull it from the other side - but the
+    //guard is a NavMeshAgent walking a straight line, so a door opening into his face just clips through him. Letting
+    //the leaf pick its side means he always shoves it out of his path, from either approach.
+    //
+    //Only ever chosen while the door is essentially SHUT. Flipping the direction of a door that's already part-open
+    //would snap it through the frame to a mirrored angle.
+    public void SetOpenAwayFrom(Vector3 openerPosition)
+    {
+        if (openProgress <= OpenThreshold)
+        {
+            if (OpeningMovesAwayFrom(openerPosition) < 0f)
+            {
+                swingDirection = -swingDirection;
+            }
+        }
+        SetOpen(true);
     }
 
     //A point ON the moving part, out away from the pivot - the renderer's centre. The pivot itself is useless for
@@ -234,9 +259,14 @@ public class SwingingHinge : MonoBehaviour
 
     public void SetOpen(bool open)
     {
-        if (IsOpen == open)
+        //Compared against where it's HEADING, not against IsOpen. IsOpen is true from 13% onward, so a door a player
+        //had nudged ajar answered "already open" and the guard's shove did nothing at all - he'd stand there while a
+        //15% gap stayed a 15% gap. Asking about the target still stops a caller re-asserting the same thing every
+        //tick and machine-gunning the creak, which is what this guard is actually for.
+        float wantedTarget = open ? 1f : 0f;
+        if (Mathf.Approximately(targetProgress, wantedTarget))
         {
-            return; //already in that state - bail before the sound, so a caller re-asserting "open" every tick can't machine-gun the creak
+            return;
         }
 
         if (open)
