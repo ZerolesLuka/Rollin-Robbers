@@ -108,7 +108,8 @@ public class DebugPanel : MonoBehaviour
         }
 
         Header("Carry");
-        if (GUILayout.Button("+1 wedge")) me.RPC_GrantWedge();
+        //no separate wedge button - a wedge is an ordinary purchasable item now, so the "grant DoorWedge" button in
+        //the tool list above does it, and two buttons for one thing is how the kit confusion started
         if (GUILayout.Button("+1 loot (1200)")) me.RPC_GrantPickup("Debug Loot", 1200, (int)ToolType.None); //None = ordinary loot rather than a tool
 
         Header("Travel");

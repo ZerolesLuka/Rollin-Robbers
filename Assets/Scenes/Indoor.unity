@@ -2344,7 +2344,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!43 &52095526
 Mesh:
   m_ObjectHideFlags: 0
@@ -6242,22 +6242,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!64 &123636719
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -7521,6 +7514,63 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 8358114634361474258, guid: ba53ee4562bc66c45bb73bbf21522cd8, type: 3}
+--- !u!1001 &171717332
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 799103199429560953, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_Name
+      value: SecurityCamera
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -83.26526
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 8.45
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -59.997185
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: -0.7071057
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.7071079
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 270
+      objectReference: {fileID: 0}
+    - target: {fileID: 4176832619496145024, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
 --- !u!64 &184191195
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -13390,22 +13440,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!114 &374800865
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16316,22 +16359,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!43 &474798853
 Mesh:
   m_ObjectHideFlags: 0
@@ -17265,6 +17301,18 @@ MonoBehaviour:
   timerText: {fileID: 0}
   inventorySlotTexts: []
   emptySlotColor: {r: 0.5, g: 0.5, b: 0.5, a: 0.5}
+  unselectedSlotDim: 0.55
+  toolOccupiedSlotColor: {r: 0.45, g: 0.4, b: 0.3, a: 0.7}
+  lootWheelRoot: {fileID: 0}
+  heldItemText: {fileID: 0}
+  statusText: {fileID: 0}
+  statusRoot: {fileID: 0}
+  statusUrgentColor: {r: 1, g: 0.35, b: 0.3, a: 1}
+  statusCalmColor: {r: 0.85, g: 0.85, b: 0.85, a: 1}
+  interactPromptText: {fileID: 0}
+  crackPanel: {fileID: 0}
+  crackFillImage: {fileID: 0}
+  crackText: {fileID: 0}
   caughtPanel: {fileID: 949354957}
   caughtCanvasGroup: {fileID: 949354959}
   caughtBackground: {fileID: 1525543466}
@@ -19170,22 +19218,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 2
 --- !u!64 &547179123
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -21280,7 +21321,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!1 &606724093
 GameObject:
   m_ObjectHideFlags: 0
@@ -35551,23 +35592,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4085775992608928, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.5599169
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4085775992608928, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4085775992608928, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0.8285488
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4085775992608928, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4085775992608928, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: -111.9
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4085775992608928, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_ConstrainProportionsScale
@@ -35575,23 +35616,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4336262001060578, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.58337337
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4336262001060578, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4336262001060578, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.8122041
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4336262001060578, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4336262001060578, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 108.624
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 4336262001060578, guid: 25236079c9f60024fa37eb8a8eeac99c, type: 3}
       propertyPath: m_ConstrainProportionsScale
@@ -43006,7 +43047,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!1 &1084569304
 GameObject:
   m_ObjectHideFlags: 0
@@ -48981,7 +49022,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!114 &1228632609
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -49014,22 +49055,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!1 &1236471931
 GameObject:
   m_ObjectHideFlags: 0
@@ -52791,7 +52825,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!114 &1339021857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -52824,22 +52858,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!43 &1340317642
 Mesh:
   m_ObjectHideFlags: 0
@@ -54488,7 +54515,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!114 &1389733167
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -54521,22 +54548,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!1 &1389817518
 GameObject:
   m_ObjectHideFlags: 0
@@ -55852,22 +55872,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!114 &1476012215
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -55880,22 +55893,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!1 &1481696588
 GameObject:
   m_ObjectHideFlags: 0
@@ -62521,7 +62527,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!114 &1603810109
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -62554,22 +62560,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!1001 &1605246015
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -76935,7 +76934,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81df7f4798063d14cab6bbd0c335a433, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Door
-  interactRange: 2
+  throughDoorwayAxis: 0
 --- !u!114 &1951742219
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -76968,22 +76967,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: 90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
+  invertDrag: 0
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
-  swingAxis: 1
 --- !u!1001 &1954579704
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -86774,3 +86766,4 @@ SceneRoots:
   - {fileID: 1490454299}
   - {fileID: 1810808026}
   - {fileID: 1074580410}
+  - {fileID: 171717332}

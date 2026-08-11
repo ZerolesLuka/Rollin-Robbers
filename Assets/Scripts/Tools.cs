@@ -9,15 +9,21 @@ using UnityEngine;
 //
 // Deliberately NOT ScriptableObjects. Those would mean an asset per tool to create and wire before any of this runs,
 // and the table below is the same data with none of that. Add a tool by adding an enum entry and a row.
+//NUMBERED EXPLICITLY. These values are serialized - in the Player prefab's held-prop rows, in the networked ToolMask,
+//in every dropped WorldItem's ToolKind - so they can never be allowed to shift. 5 is a hole where WedgeKit used to be
+//and it stays a hole; renumbering to close it would silently turn every saved SignalJammer into something else.
 public enum ToolType
 {
     None = 0,
-    PaddedBoots, //quieter on your feet
-    Crowbar,     //force a safe faster
-    WireCutters, //disarm the guard's traps without announcing it
-    DuffelBag,   //carry more loot
-    WedgeKit,    //start the run with door wedges
-    SignalJammer,//blinds cameras near you, but hums
+    PaddedBoots = 1, //quieter on your feet
+    Crowbar = 2,     //force a safe faster
+    WireCutters = 3, //disarm the guard's traps without announcing it
+    DuffelBag = 4,   //carry more loot
+    //5 was WedgeKit - removed. It bought you two wedges per run while itself occupying a bag slot, so once wedges
+    //became real items you paid for the same thing twice and walked into the house with three of four slots full.
+    //Wedges are sold directly now, which is what a consumable should be.
+    SignalJammer = 6,//blinds cameras near you, but hums
+    DoorWedge = 7,   //a single wedge. bought by the handful, spent one per door, and the only tool that STACKS
 }
 
 public struct ToolDefinition
@@ -39,7 +45,10 @@ public static class ToolTable
     //which quietly deleted the crouch decision for 450. 0.8 gives 5.6: still clearly quieter, still heard.
     public const float CrowbarCrackMultiplier = 0.6f;    //fraction of the normal time to force a safe
     public const int DuffelBagExtraSlots = 2;
-    public const int WedgeKitWedges = 2;
+
+    //THE ONLY STACKING ENTRY. Every other tool is a thing you either own or don't, and owning two does nothing -
+    //which is why GrantTool refuses duplicates. A wedge is a consumable, so that rule has to bend for exactly this.
+    public static bool Stacks(ToolType type) => type == ToolType.DoorWedge;
 
     //The jammer is PLACED, not merely owned. Deploying spends it: the device sits where you dropped it, blinds every
     //camera inside JammerRadius, and dies when the battery does. Nobody gets it back.
@@ -56,7 +65,7 @@ public static class ToolTable
         new ToolDefinition { type = ToolType.Crowbar,     name = "Crowbar",      cost = 600,  description = "Forcing a safe takes noticeably less time. Still just as loud." },
         new ToolDefinition { type = ToolType.WireCutters, name = "Wire Cutters", cost = 500,  description = "Disarm his traps quietly. Without them it can be done, but he'll hear it." },
         new ToolDefinition { type = ToolType.DuffelBag,   name = "Duffel Bag",   cost = 750,  description = "Two more slots for loot. Nothing else." },
-        new ToolDefinition { type = ToolType.WedgeKit,    name = "Wedge Kit",    cost = 300,  description = "Start each run carrying two door wedges." },
+        new ToolDefinition { type = ToolType.DoorWedge,   name = "Door Wedge",   cost = 150,  description = "Jams one door shut from the side you kicked it in. Buy as many as you'll carry - each one takes a slot." },
         new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 550,  description = "Press Q to set it down. Blinds every camera around it for about a minute, then the battery dies and it's gone." },
     };
 

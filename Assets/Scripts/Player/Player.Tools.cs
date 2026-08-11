@@ -65,7 +65,7 @@ public partial class Player
     public bool GrantTool(ToolType tool)
     {
         if (tool == ToolType.None) return false;
-        if (HasTool(tool)) return false; //no point owning two of the same thing - the effects don't stack
+        if (HasTool(tool) && !ToolTable.Stacks(tool)) return false; //no point owning two of the same tool - the effects don't stack. wedges are the exception, being a consumable
         if (inventory.Count >= MaxInventorySlots) return false; //bag's full. drop something first - and now that CAN be a tool
 
         inventory.Add(new InventoryItem(tool));
@@ -187,15 +187,10 @@ public partial class Player
     //which is the whole point of making it a thing you place.
     public static bool IsPositionJammed(Vector3 position) => JammerDevice.CoversPosition(position);
 
-    //Hand out the wedges a WedgeKit promises. Called when a fresh run starts rather than when the tool is bought, so
-    //the kit refills every heist instead of being a one-off purchase of two wedges.
+    //Nothing refills any more. Wedges are bought individually and spent individually, so what you carry into a house
+    //is exactly what you paid for - no tool quietly topping you up between runs. Kept as an empty hook because the
+    //run-start path calls it, and a future consumable will want somewhere to go.
     public void RefillToolConsumables()
     {
-        if (!HasTool(ToolType.WedgeKit)) return;
-        for (int i = 0; i < ToolTable.WedgeKitWedges; i++)
-        {
-            if (!CanCarryAnotherWedge) break;
-            AddWedge(); //direct, not the RPC - we're already on the machine that owns this player
-        }
     }
 }

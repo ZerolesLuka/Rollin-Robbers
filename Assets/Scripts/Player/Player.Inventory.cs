@@ -47,7 +47,7 @@ public partial class Player
                 if (mapping.prop == null) continue;
                 if ((int)mapping.tool == held)
                 {
-                    wanted = mapping.prop; //exact match for this tool
+                    wanted = mapping.prop; //exact match for this item
                     break;
                 }
                 if (mapping.tool == ToolType.None && wanted == null)
@@ -78,11 +78,15 @@ public partial class Player
         //mutation of the list is potentially a change of kit - and Safe, RunManager and anything else asking about our
         //tools from another machine reads the mask, never the list.
         int mask = 0;
+        int wedges = 0;
         foreach (InventoryItem item in inventory)
         {
-            if (item.IsTool) mask |= 1 << (int)item.tool;
+            if (!item.IsTool) continue;
+            mask |= 1 << (int)item.tool;
+            if (item.tool == ToolType.DoorWedge) wedges++; //a mask is a SET, so it can't count - and you carry several wedges
         }
         ToolMask = mask;
+        WedgesCarried = wedges; //derived from the bag now. still networked, because teammates' prompts and the HUD read it
     }
 
     private void LoseCarriedLoot() //the guard grabbed you - you go home empty-handed. called the moment you're caught (eliminated) or hauled off to the closet (jailed), so getting caught actually costs the haul. the loot's already counted toward the house clear-% (reported at pickup); this just stops you banking it at the pawn shop
@@ -123,17 +127,24 @@ public partial class Player
         dropHeldLastTick = dropPressed;
         if (!pressed) return;
 
-        //G at a shut door kicks a wedge under it. wedging lives on G rather than E because E already opens the door,
-        //and G already means "put down the thing you're carrying" - which is exactly what this is.
-        if (WedgesCarried > 0 && TryWedgeNearestDoor())
+        int slot = ResolveDropSlot(); //whatever you're actually holding. -1 means empty hands, and G does nothing
+        if (slot < 0) return;
+
+        //THE ITEM IN YOUR HAND DECIDES, not a priority list. G used to try wedging first no matter what you were
+        //holding, and when that quietly failed it dropped a vase at your feet instead - a surprising outcome from an
+        //unrelated check. Now: holding a wedge at a door wedges it; holding anything else drops that thing.
+        //There's only ONE wedge-shaped thing now, so this can't pick the wrong one. Holding a wedge and pressing G at
+        //a door means wedge it; nothing else about the press is ambiguous.
+        if (inventory[slot].tool == ToolType.DoorWedge)
         {
-            return; //wedged something, that was this press
+            //EAT THE PRESS EITHER WAY. If there's no door in reach it stays in your bag rather than being thrown on
+            //the floor - dropping the thing you were trying to use is never what you meant, and it's exactly how this
+            //whole area kept producing surprises.
+            TryWedgeNearestDoor();
+            return;
         }
 
-        if (inventory.Count == 0 || worldItemPrefab == null) return;
-
-        int slot = ResolveDropSlot(); //whatever the loot wheel is pointing at, clamped - the list shrinks under a stale index
-        if (slot < 0) return;
+        if (worldItemPrefab == null) return;
 
         InventoryItem dropped = inventory[slot];
         inventory.RemoveAt(slot);

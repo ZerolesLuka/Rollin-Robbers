@@ -540,12 +540,19 @@ public partial class Player : NetworkBehaviour
         AddWedge();
     }
 
-    private void AddWedge() //the actual increment, so local grants (a WedgeKit refilling) don't have to route through an RPC to reach it
+    //A WEDGE IS AN ITEM NOW, not a counter. It goes in the bag beside the loot and the tools, so it shows in your
+    //slots, shows in your hand, can be scrolled to and can be dropped - none of which a bare int could do. Kept local
+    //so a WedgeKit refilling doesn't have to route through an RPC to reach it.
+    private void AddWedge()
     {
-        if (WedgesCarried < maxWedgesCarried) WedgesCarried++;
+        if (!CanCarryAnotherWedge) return;
+        inventory.Add(new InventoryItem(ToolType.DoorWedge));
+        PublishCarriedCount(); //recomputes WedgesCarried from the bag, along with CarriedCount and ToolMask
     }
 
-    public bool CanCarryAnotherWedge => WedgesCarried < maxWedgesCarried;
+    //Two limits, and they mean different things. maxWedgesCarried stops you being a walking wedge dispenser; bag room
+    //is the real cost, because every wedge you bring is a slot you can't fill with something worth money.
+    public bool CanCarryAnotherWedge => WedgesCarried < maxWedgesCarried && inventory.Count < MaxInventorySlots;
 
     //Kick one under this door, on the side we're stood on. Returns whether it ACTUALLY went down - the caller needs
     //to know, because if this fails G has to carry on and do its other job rather than silently eating the press.
@@ -562,13 +569,36 @@ public partial class Player : NetworkBehaviour
             return false;
         }
 
-        WedgesCarried--;
+        //spend one out of the bag. removing the ITEM is what decrements WedgesCarried - the count is derived now
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            if (inventory[i].tool != ToolType.DoorWedge) continue;
+            inventory.RemoveAt(i);
+            PublishCarriedCount();
+            break;
+        }
 
         //remember WHICH SIDE we were on. that's the whole mechanic: only somebody stood on this side can pull it back
         //out, so wedging a door decides who ends up shut in with what.
         int side = door.SideOf(transform.position);
         Vector3 doorPosition = door.transform.position;
-        Vector3 wedgePosition = doorPosition + door.ThroughDoorway * (0.35f * side); //sat at the foot of the door, on our side of it
+        //PLACE IT AT OUR OWN FEET, not by measuring out from the door. Deriving it from the door pivot kept burying it
+        //INSIDE the leaf: the pivot is at the hinge, its height depends entirely on how each prefab was authored, and
+        //once a door has swung toward you the leaf is occupying exactly the spot the offset points at.
+        //
+        //Our feet can't be inside the door - we're standing there. And it's where you'd actually kick a wedge.
+        Vector3 wedgePosition = transform.position + transform.forward * 0.45f;
+
+        //then drop it to whatever floor is really beneath, so it isn't hovering at the player's centre height
+        Vector3 rayStart = wedgePosition + Vector3.up * 1f;
+        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit floorHit, 3f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            wedgePosition = floorHit.point + Vector3.up * 0.02f; //a hair above the surface so it isn't z-fighting with the floor
+        }
+        else
+        {
+            wedgePosition.y = transform.position.y - (characterController != null ? characterController.height * 0.5f : 1f); //no floor found: fall back to our own feet
+        }
 
         //PlayerRef.None, not us: a wedge owned by the player who placed it would go with them when they disconnect,
         //silently un-jamming a door someone was counting on. the master holds it, like the traps and the loot.
