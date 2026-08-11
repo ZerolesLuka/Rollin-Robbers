@@ -3511,6 +3511,37 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4779121468303016, guid: 34ef0a476ff181d4b85cfbfadeba7cc8, type: 3}
   m_PrefabInstance: {fileID: 504974670}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &507233387
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 507233388}
+  m_Layer: 0
+  m_Name: ClosestSpot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &507233388
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 507233387}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -17.169998, y: 6.324045, z: -1.6450005}
+  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 2096217681}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &540563590
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -6332,10 +6363,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GuardBootstrap
   guardPrefab: {fileID: 3837652101745290742, guid: 2bf81f3c129295546aad82e11f156588, type: 3}
-  guardSpawn: {fileID: 0}
-  closetSpot: {fileID: 0}
+  guardSpawn: {fileID: 2096217682}
+  closetSpot: {fileID: 507233388}
   dogPrefab: {fileID: 5647142314712709375, guid: 8e394e6e17792f04cb9484ae0a8e0720, type: 3}
-  dogSpawn: {fileID: 0}
+  dogSpawn: {fileID: 2096217683}
   dogWaypoints:
   - {fileID: 0}
   - {fileID: 0}
@@ -13288,9 +13319,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 708594796125074583, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 507233388}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+--- !u!4 &2096217681 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 708594796125074583, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+  m_PrefabInstance: {fileID: 2096217680}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2096217682 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3752422537458370947, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+  m_PrefabInstance: {fileID: 2096217680}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2096217683 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 6463240304935065671, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+  m_PrefabInstance: {fileID: 2096217680}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2101850638
 PrefabInstance:
   m_ObjectHideFlags: 0

@@ -20,9 +20,13 @@ public class ScreenshotTool : MonoBehaviour
         go.AddComponent<ScreenshotTool>();
     }
 
-    //4 renders the frame at FOUR TIMES the window's resolution and scales it down. That downsample is free
-    //anti-aliasing, and it's why a captured shot looks noticeably crisper than anything grabbed off a video.
-    private const int ResolutionMultiplier = 4;
+    //1 = capture at exactly the Game view's resolution, so a 1920x1080 Game view gives a 1920x1080 file ready to
+    //upload with no resizing.
+    //
+    //Raise it to 2 or 4 when shooting CAPSULE source rather than screenshots: it renders that many times larger and
+    //the downscale you do afterwards is free anti-aliasing, which matters when you're cropping a 920x430 header out
+    //of a frame and can't afford to upscale.
+    private const int ResolutionMultiplier = 1;
 
     private bool uiHidden;
     private int shotCount;
