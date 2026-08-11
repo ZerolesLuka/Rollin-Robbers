@@ -374,10 +374,10 @@ Light:
   serializedVersion: 12
   m_Type: 0
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 1.2
-  m_Range: 15
-  m_SpotAngle: 86.157646
-  m_InnerSpotAngle: 45
+  m_Intensity: 4.5
+  m_Range: 25
+  m_SpotAngle: 35
+  m_InnerSpotAngle: 14
   m_CookieSize2D: {x: 0.5, y: 0.5}
   m_Shadows:
     m_Type: 2
@@ -790,6 +790,11 @@ MonoBehaviour:
   rescueRange: 2.5
   suffocateDuration: 20
   voiceMuffleCutoff: 1000
+  doorGrabRange: 2.5
+  doorDragSensitivity: 320
+  doorSwingDamping: 3.2
+  doorMaxSwingSpeed: 2.5
+  doorVelocitySmoothing: 12
   wheelDeadzone: 40
   pauseMenuRoot: {fileID: 0}
   spectatorCamera: {fileID: 7169547524091870801}
@@ -1506,8 +1511,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.12745959, y: 0.006578015, z: -0.0008005412, w: 0.99182165}
-  m_LocalPosition: {x: 55.369827, y: 3.8373342, z: 27.803328}
+  m_LocalRotation: {x: 0, y: -1, z: 0, w: -0.00000035762784}
+  m_LocalPosition: {x: 0, y: 0.559, z: -0.262}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1522,8 +1527,8 @@ Camera:
   m_GameObject: {fileID: 9146868429791103059}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.063412234, g: 0.079031676, b: 0.14150941, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
