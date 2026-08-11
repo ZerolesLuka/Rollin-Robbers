@@ -99,7 +99,12 @@ public partial class Player
         float nearestDistance = wedgePlaceRange;
         foreach (Door door in Door.AllDoors)
         {
-            if (door.IsOpen || door.IsWedged) continue; //can't wedge a door that's standing open, and one wedge is enough
+            //ONLY "already wedged" disqualifies a door now. This used to skip anything where IsOpen was true, which
+            //made sense when a door was strictly open or shut - but doors rest at any angle since they became
+            //hand-pushed, and IsOpen is a threshold, so a door you'd nudged and released looked shut to you and read
+            //as open to this. G then fell through and dropped a vase at your feet instead. Jamming a door that's ajar
+            //is a perfectly good thing to want anyway - it holds the gap exactly where it is.
+            if (door.IsWedged) continue; //one is enough, and two would just fight over who owns the door
             float distance = Vector3.Distance(transform.position, door.transform.position);
             if (distance < nearestDistance)
             {
@@ -109,8 +114,7 @@ public partial class Player
         }
 
         if (nearest == null) return false;
-        PlaceWedgeIn(nearest);
-        return true;
+        return PlaceWedgeIn(nearest); //report what ACTUALLY happened. this used to return true unconditionally, so a wedge that never went down still ate the G press and nothing at all occurred
     }
 
     private void HandleDrop(bool dropPressed)

@@ -547,10 +547,20 @@ public partial class Player : NetworkBehaviour
 
     public bool CanCarryAnotherWedge => WedgesCarried < maxWedgesCarried;
 
-    public void PlaceWedgeIn(Door door) //kick one under this door, on the side we're stood on
+    //Kick one under this door, on the side we're stood on. Returns whether it ACTUALLY went down - the caller needs
+    //to know, because if this fails G has to carry on and do its other job rather than silently eating the press.
+    public bool PlaceWedgeIn(Door door)
     {
-        if (WedgesCarried <= 0 || doorWedgePrefab == null || door == null) return;
-        if (door.IsWedged) return; //one is enough, and two would just fight over who owns the door
+        if (WedgesCarried <= 0 || door == null) return false;
+        if (door.IsWedged) return false; //one is enough, and two would just fight over who owns the door
+
+        if (doorWedgePrefab == null)
+        {
+            //loud, because this one is a SETUP mistake rather than a gameplay outcome, and it is otherwise completely
+            //invisible - you press G at a door holding two wedges and simply nothing happens, forever.
+            Debug.LogError("[Player] doorWedgePrefab is not assigned, so wedges can never be placed. Run Tools/Rollin' Robbers/Build Placeholder Prefabs.", this);
+            return false;
+        }
 
         WedgesCarried--;
 
@@ -574,6 +584,7 @@ public partial class Player : NetworkBehaviour
                 wedge.UseSpawnPoint = true;
             }
         });
+        return true;
     }
 
     public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
