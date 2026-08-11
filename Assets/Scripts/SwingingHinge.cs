@@ -32,6 +32,7 @@ public class SwingingHinge : MonoBehaviour
     [SerializeField] private float openAngle = 90f;     // swing mode: degrees. negative goes the other way
     [SerializeField] private float slideDistance = 0.4f; // slide mode: metres. negative goes the other way
     [SerializeField] private float openSpeed = 3f;      // how many times per second it could open fully. 3 = about a third of a second
+    [SerializeField] private bool invertDrag;           // TICK IF THIS ONE PUSHES THE WRONG WAY. ClosedFaceNormal can only guess which way the mesh faces from the hinge axis, so a prefab built back-to-front needs telling
 
     [Header("Sound - drop in as many clips as you like, one is picked at random")]
     [SerializeField] private AudioClip[] openClips;
@@ -65,6 +66,7 @@ public class SwingingHinge : MonoBehaviour
     public float OpenAmount => openProgress; //0 shut, 1 fully open. what the drag reads and writes
     public float InteractRange => interactRange;
     public bool SlidesOpen => slidesOpen;    //the drag needs to know whether it's turning something or pulling it
+    public bool InvertDrag => invertDrag;    //this one's mesh faces the other way - flip which mouse direction pushes it
     public float TravelDegrees => openAngle; //how far a full open goes, so drag sensitivity can scale with it
     public float TravelDistance => slideDistance;
 
