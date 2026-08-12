@@ -29,7 +29,7 @@ public class ScreenshotTool : MonoBehaviour
     private const int ResolutionMultiplier = 1;
 
     private bool uiHidden;
-    private int shotCount;
+    private int shotCount = -1; //-1 = not yet seeded from disk. See Capture.
 
     private void Update()
     {
@@ -67,17 +67,48 @@ public class ScreenshotTool : MonoBehaviour
 
     private void Capture()
     {
-        shotCount++;
-
         //written beside the project folder rather than inside Assets, so Unity doesn't import a pile of PNGs as game
-        //assets every time you take one
-        string path = System.IO.Path.Combine(Application.dataPath, "../Screenshots");
+        //assets every time you take one. GetFullPath so the log prints a real path you can paste, not one with an
+        //"Assets/.." still in the middle of it.
+        string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../Screenshots"));
         System.IO.Directory.CreateDirectory(path);
+
+        //This object is rebuilt by RuntimeInitializeOnLoadMethod on every Play, so a counter that just started at
+        //zero silently overwrote the previous session's shots - shot_001 landed on top of shot_001 and a whole
+        //session's work vanished with no error. Read the highest number already on disk instead, once, the first
+        //time a shot is taken. Once per session rather than per shot because CaptureScreenshot writes the file at
+        //end of frame, so scanning every time would race against a capture that hasn't landed yet.
+        if (shotCount < 0)
+        {
+            shotCount = HighestExistingShotNumber(path);
+        }
+
+        shotCount++;
 
         string file = System.IO.Path.Combine(path, $"shot_{shotCount:000}.png");
         ScreenCapture.CaptureScreenshot(file, ResolutionMultiplier);
 
         Debug.Log($"[Screenshot] saved {file} at {ResolutionMultiplier}x resolution.");
+    }
+
+    //Highest shot_NNN already sitting in the folder, or 0 if there are none.
+    private static int HighestExistingShotNumber(string directory)
+    {
+        const string prefix = "shot_";
+        int highest = 0;
+
+        foreach (string existing in System.IO.Directory.GetFiles(directory, prefix + "*.png"))
+        {
+            //anything that doesn't parse is a file someone dropped in by hand - skip it rather than letting it
+            //reset the count and start overwriting again
+            string digits = System.IO.Path.GetFileNameWithoutExtension(existing).Substring(prefix.Length);
+            if (int.TryParse(digits, out int number) && number > highest)
+            {
+                highest = number;
+            }
+        }
+
+        return highest;
     }
 #endif
 }
