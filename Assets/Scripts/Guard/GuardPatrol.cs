@@ -437,7 +437,19 @@ public class GuardPatrol : NetworkBehaviour
                 if (Anger >= angerEliminateThreshold || !canDragThemOff) //furious enough to throw them out for the run
                 {
                     chaseTarget.RPC_GetCaught();
-                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(chaseTarget.Object.InputAuthority); //tell the run tracker this specific player is out
+                    if (RunManager.Instance != null)
+                    {
+                        RunManager.Instance.OnPlayerCaught(chaseTarget.Object.InputAuthority); //tell the run tracker this specific player is out
+                    }
+
+                    //Catching the last player ends the run, and that tears this guard down while we are still inside
+                    //this tick - the same queued-despawn window IsLive exists for, except here the object dies BETWEEN
+                    //the switch on State above and this line, so a guard at the top of the method would already have
+                    //passed. State is dead by now, so changing it throws every time the final player is caught. Bail
+                    //instead: a guard that is being despawned has no state worth setting, and returning also skips the
+                    //agent/facing work at the bottom, which has nothing left to drive.
+                    if (!IsLive) return;
+
                     ChangeState(GuardState.Relaxed);
                 }
                 else //just annoyed - drag them off to the closet instead of eliminating
