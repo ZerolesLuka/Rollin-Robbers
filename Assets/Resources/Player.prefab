@@ -778,7 +778,7 @@ MonoBehaviour:
   _IsFlashlightOn: 0
   flashlight: {fileID: 8160274470397713396}
   flashlightSpringStiffness: 90
-  flashlightSpringDamping: 9
+  flashlightSpringDamping: 13
   flashlightSwayAmount: 1.5
   flashlightSwayFrequency: 1.1
   flashlightWalkSwayMultiplier: 3
@@ -1513,7 +1513,7 @@ Transform:
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
   m_LocalRotation: {x: 0.12745959, y: 0.006578015, z: -0.0008005412, w: 0.99182165}
-  m_LocalPosition: {x: 55.369827, y: 3.8373342, z: 27.803328}
+  m_LocalPosition: {x: 92.48818, y: 4.4273343, z: 9.591328}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

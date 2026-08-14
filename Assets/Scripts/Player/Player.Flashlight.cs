@@ -20,6 +20,17 @@ public partial class Player
         if (!beamOn)
         {
             flashlightLastPosition = transform.position; //keep this current while off so we don't get a huge fake "speed" spike the frame it turns on
+
+            //Park the aim on where we're actually looking while the beam is dark, and kill any momentum it had. These
+            //angles used to be left frozen wherever the beam happened to be pointing the moment it switched off, so
+            //turning it back on - out of a hiding spot, after a rescue, or just tapping F having turned around since -
+            //sprang the beam across the room from a stale angle. It read as the torch randomly snapping on its own,
+            //with no input behind it. Same reasoning as flashlightLastPosition above: nothing is animating while the
+            //beam is off, so there is nothing worth remembering, and a spring resumed from stale state is a lie.
+            flashlightAimPitch = lookPitch;
+            flashlightAimYaw = transform.eulerAngles.y;
+            flashlightPitchVelocity = 0f;
+            flashlightYawVelocity = 0f;
             return;
         }
 
