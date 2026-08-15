@@ -79,7 +79,6 @@ GameObject:
   - component: {fileID: 4416719196328871772}
   - component: {fileID: 422981128725570224}
   - component: {fileID: 1403060912711104355}
-  - component: {fileID: 1483661804593365644}
   m_Layer: 0
   m_Name: cm
   m_TagString: Untagged
@@ -163,23 +162,6 @@ MonoBehaviour:
   m_YawDamping: 0
   m_RollDamping: 0
   m_AngularDamping: 0
---- !u!114 &1483661804593365644
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1228162666357218741}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 68bb026fafb42b14791938953eaace77, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Cinemachine::Cinemachine.CinemachineBasicMultiChannelPerlin
-  m_NoiseProfile: {fileID: 11400000, guid: 8608ec81ee27a15488d33f9dad239e91, type: 2}
-  m_PivotOffset: {x: 0, y: 0, z: 0}
-  m_AmplitudeGain: 0.8
-  m_FrequencyGain: 0.8
-  mNoiseOffsets: {x: 110.263214, y: 597.54395, z: -528.8456}
 --- !u!1 &1651233146243541298
 GameObject:
   m_ObjectHideFlags: 0
@@ -782,6 +764,29 @@ MonoBehaviour:
   flashlightSwayAmount: 1.5
   flashlightSwayFrequency: 1.1
   flashlightWalkSwayMultiplier: 3
+  tangledSpeedMultiplier: 0.45
+  _TangledSecondsLeft: 0
+  headBobVerticalAmount: 0.085
+  headBobHorizontalAmount: 0.055
+  headBobRollDegrees: 1.7
+  headBobPitchDegrees: 1.1
+  weakFootMultiplier: 0.78
+  sprintBobMultiplier: 1.55
+  lookLagAmount: 0.35
+  lookLagMaxDegrees: 4
+  lookLagRecoverSpeed: 9
+  landingDipAmount: 0.22
+  landingRollDegrees: 2.4
+  landingDipFullSpeed: 14
+  landingDipStiffness: 130
+  landingDipDamping: 16
+  breathSwayAmount: 0.35
+  breathSwayFrequency: 0.6
+  exhaustedBreathMultiplier: 4.5
+  sprintFieldOfViewBoost: 8
+  fieldOfViewLerpSpeed: 6
+  strafeTiltAmount: 1.4
+  strafeTiltSpeed: 6
   worldItemPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
   maxInventorySlots: 4
   pickupRange: 2

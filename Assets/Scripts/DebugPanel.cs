@@ -115,6 +115,14 @@ public class DebugPanel : MonoBehaviour
         //the tool list above does it, and two buttons for one thing is how the kit confusion started
         if (GUILayout.Button("+1 loot (1200)")) me.RPC_GrantPickup("Debug Loot", 1200, (int)ToolType.None); //None = ordinary loot rather than a tool
 
+        Header("Camera");
+        //DEV TUNING ONLY - this is not a player setting, and this panel compiles out of a release build. Drag it while
+        //WALKING; tuning camera feel by editing a number, pressing play and walking a corridor is how you end up
+        //nowhere. It edits the live Player, so whatever number feels right has to be copied onto the Player PREFAB by
+        //hand to stick - it deliberately doesn't persist, so nobody can leave a playtest in a weird state.
+        GUILayout.Label($"camera motion {me.CameraMotionScale:F2}   (authored value, copy onto the prefab)");
+        me.CameraMotionScale = GUILayout.HorizontalSlider(me.CameraMotionScale, 0f, 1f);
+
         Header("Travel");
         if (GUILayout.Button("to the van")) run.RPC_Route(VanScene, 0, false);
         if (GUILayout.Button("to the house (new run)")) run.RPC_Route(HouseScene, 0, true);

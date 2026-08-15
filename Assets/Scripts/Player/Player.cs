@@ -138,10 +138,36 @@ public partial class Player : NetworkBehaviour
     //Every one of these produces an OFFSET that is added to the crouch eye-height and the look pitch. Nothing here
     //writes the camera transform; ApplyCameraFeel sums the lot and writes it once. Two systems writing the same
     //transform field is how you get an effect that silently does nothing because the other one ran second.
-    [SerializeField] private float headBobFrequency = 9f;             //footfalls per second at full walking speed
-    [SerializeField] private float headBobVerticalAmount = 0.045f;    //metres of dip at the bottom of a step
-    [SerializeField] private float headBobHorizontalAmount = 0.035f;  //metres of side-to-side per stride
-    [SerializeField] private float landingDipAmount = 0.13f;          //how far the view drops on the hardest landing
+    //MASTER SCALE for everything below - bob, landing dip, breathing, tilt, look lag, sprint FOV.
+    //
+    //0.1 was arrived at by dragging the F1 debug slider while walking, which is the only way this is tunable. It is
+    //deliberately NOT a player setting: the feel is authored, the same for everyone, and not something to negotiate
+    //in a menu. The individual numbers below stay at readable magnitudes rather than being pre-multiplied, so they
+    //can still be reasoned about relative to each other.
+    [SerializeField] private float cameraMotionScale = 0.1f;
+    public float CameraMotionScale { get => cameraMotionScale; set => cameraMotionScale = Mathf.Clamp01(value); } //F1 panel only
+
+    //Halved from the first pass - the original numbers were tuned blind and read as a shake rather than a walk.
+    //Tune with the F1 slider while WALKING, not by guessing here.
+    [SerializeField] private float headBobVerticalAmount = 0.04f;     //metres the view drops as weight lands
+    [SerializeField] private float headBobHorizontalAmount = 0.025f;  //metres of side-to-side per step
+    [SerializeField] private float headBobRollDegrees = 0.75f;        //the camera tilting as weight shifts foot to foot
+    [SerializeField] private float headBobPitchDegrees = 0.45f;       //nod on impact. positional bob alone reads as a camera on rails
+    [SerializeField] private float weakFootMultiplier = 0.9f;         //every other step is slightly lighter - subtle, or it reads as a limp
+    [SerializeField] private float sprintBobMultiplier = 1.3f;        //sprinting should be visibly rougher, not just wider FOV
+
+    //LOOK LAG - the view trails the mouse slightly on fast turns, then catches up. This is what sells "piloting a
+    //body" rather than "being a camera". Deliberately kept small and clamped: it moves the VIEW, never where you're
+    //actually aiming, so it can't make interacting with things feel broken.
+    //Deliberately NOT a spring. A spring rings, and a view that rings after every mouse movement is an earthquake -
+    //which is exactly what the first version did, because it clamped the position but let velocity keep building, so
+    //it buzzed between the two clamps every frame. This is a plain trail-and-recover: it cannot oscillate.
+    [SerializeField] private float lookLagAmount = 0.35f;             //fraction of this frame's turn the view lags behind by
+    [SerializeField] private float lookLagMaxDegrees = 4f;            //hard clamp, so a fast 180 doesn't fling the view
+    [SerializeField] private float lookLagRecoverSpeed = 9f;          //how fast it catches back up. higher = tighter
+
+    [SerializeField] private float landingDipAmount = 0.22f;          //how far the view drops on the hardest landing
+    [SerializeField] private float landingRollDegrees = 2.4f;         //and it twists as you absorb it - landing square on is a robot
     [SerializeField] private float landingDipFullSpeed = 14f;         //fall speed that earns the full dip; terminal is 20
     [SerializeField] private float landingDipStiffness = 130f;        //how hard the view is pulled back to level
     [SerializeField] private float landingDipDamping = 16f;           //higher = fewer bounces on the way back up
@@ -157,10 +183,16 @@ public partial class Player : NetworkBehaviour
     private Vector3 cameraRestLocalPosition;  //the prefab's camera placement; bob is an offset from this, not a replacement
     private float cameraEyeHeight;            //eased crouch/stand height - the BASE the bob rides on
     private float baseFieldOfView;            //whatever the vcam shipped with, so sprint returns to the right number
-    private float headBobTimer;               //advances with distance travelled, not wall time, so bob tracks your stride
+    private float strideDistance;             //metres walked into the current step. THE clock for head bob - shared with PlayerFootsteps so the dip lands on the sound
+    private Vector3 lastStridePosition;       //measured position change, NOT characterController.velocity - see UpdateStridePhase for why that lies
+    private int strideStepIndex;              //which foot - drives the roll direction and the weak-foot asymmetry
     private float headBobSpeedFactor;         //smoothed 0-1 of how fast we're really moving
     private float landingDipOffset;           //current drop from a landing, in metres (negative = down)
     private float landingDipVelocity;
+    private float landingRoll;                //the twist that comes with a landing, decays with the dip
+    private float lookLagYaw;                 //visual-only trail behind the mouse
+    private float lookLagPitch;
+    private Vector2 lookDegreesTurnedThisFrame; //published by HandleLook - the ACTUAL degrees turned, not raw mouse pixels
     private float strafeTilt;                 //current roll in degrees, eased
     private bool isSprintingNow;              //published out of HandleMovement so the render frame can drive FOV
     private Vector2 lastMoveInput;            //likewise, for the strafe tilt
@@ -263,6 +295,7 @@ public partial class Player : NetworkBehaviour
             //the camera in the prefab doesn't quietly break the bob's rest position or send sprint FOV to a wrong number
             playerVirtualCamera = virtualCam;
             cameraRestLocalPosition = playerCamera.localPosition;
+            lastStridePosition = transform.position; //seed it, or the first frame counts our whole spawn offset as one enormous step
             cameraEyeHeight = standCamHeight; //start stood up; HandleCrouchCamera eases this from here on
             baseFieldOfView = virtualCam.m_Lens.FieldOfView;
             playerInputActions = new PlayerInputActions(); //our input actions

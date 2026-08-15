@@ -82,6 +82,10 @@ public partial class Player
             float landingHardness = Mathf.Clamp01(-verticalVelocity / landingDipFullSpeed);
             landingDipOffset = -landingDipAmount * landingHardness; //negative = the head drops
             landingDipVelocity = 0f; //a second landing mid-recovery restarts the dip instead of fighting the old spring
+
+            //and it twists as you absorb it, whichever way you happened to be leaning. landing perfectly square is
+            //the single most robotic thing a first-person camera can do.
+            landingRoll = landingRollDegrees * landingHardness * ((strideStepIndex & 1) == 1 ? -1f : 1f);
         }
         wasGroundedForLanding = groundedNow;
 
@@ -139,6 +143,13 @@ public partial class Player
         }
 
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
+
+        //Published in DEGREES ACTUALLY TURNED, not raw mouse pixels. Feeding the lag raw input made its kicks scale
+        //with whatever the mouse reported rather than with how far the view really moved, which is how the first
+        //version ended up violently shaking.
+        lookDegreesTurnedThisFrame = new Vector2(
+            lookInput.x * GameSettings.MouseSensitivity,
+            lookInput.y * GameSettings.LookSensitivityY);
 
         // Vertical camera pitch. Only the ANGLE is updated here - breathing sway and strafe tilt are added on top of it
         // in ApplyCameraFeel, which is the one place the camera's rotation is written.
