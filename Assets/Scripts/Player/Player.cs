@@ -127,6 +127,44 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float flashlightSwayAmount = 1.5f; //idle handheld tremor, in degrees - keeps the beam alive when you're still
     [SerializeField] private float flashlightSwayFrequency = 1.1f; //how fast that tremor drifts
     [SerializeField] private float flashlightWalkSwayMultiplier = 3f; //how much bigger the sway gets while walking - the bob that sells "handheld"
+    //TRIPWIRE TANGLE. A hobble with a timer, not a hold - the bear trap is the one that stops you dead and needs a
+    //teammate. Networked so everyone sees you stumbling, and so the timer survives the host being someone else.
+    [SerializeField] private float tangledSpeedMultiplier = 0.45f; //slow enough to be frightening, fast enough to still make a run for it
+    [Networked] public float TangledSecondsLeft { get; set; }
+    public bool IsTangled => TangledSecondsLeft > 0f;
+
+    //CAMERA FEEL - head bob, landing dip, breathing, strafe tilt, sprint FOV. See Player.CameraFeel.cs.
+    //
+    //Every one of these produces an OFFSET that is added to the crouch eye-height and the look pitch. Nothing here
+    //writes the camera transform; ApplyCameraFeel sums the lot and writes it once. Two systems writing the same
+    //transform field is how you get an effect that silently does nothing because the other one ran second.
+    [SerializeField] private float headBobFrequency = 9f;             //footfalls per second at full walking speed
+    [SerializeField] private float headBobVerticalAmount = 0.045f;    //metres of dip at the bottom of a step
+    [SerializeField] private float headBobHorizontalAmount = 0.035f;  //metres of side-to-side per stride
+    [SerializeField] private float landingDipAmount = 0.13f;          //how far the view drops on the hardest landing
+    [SerializeField] private float landingDipFullSpeed = 14f;         //fall speed that earns the full dip; terminal is 20
+    [SerializeField] private float landingDipStiffness = 130f;        //how hard the view is pulled back to level
+    [SerializeField] private float landingDipDamping = 16f;           //higher = fewer bounces on the way back up
+    [SerializeField] private float breathSwayAmount = 0.35f;          //degrees of idle drift while rested
+    [SerializeField] private float breathSwayFrequency = 0.6f;        //how fast that drift wanders
+    [SerializeField] private float exhaustedBreathMultiplier = 4.5f;  //how much heavier the breathing gets fully gassed
+    [SerializeField] private float sprintFieldOfViewBoost = 8f;       //degrees of extra FOV while sprinting
+    [SerializeField] private float fieldOfViewLerpSpeed = 6f;
+    [SerializeField] private float strafeTiltAmount = 1.4f;           //degrees of roll at full sideways input
+    [SerializeField] private float strafeTiltSpeed = 6f;
+
+    private CinemachineVirtualCamera playerVirtualCamera; //FOV lives on the VCAM's lens, never on the Camera - see UpdateSprintFieldOfView
+    private Vector3 cameraRestLocalPosition;  //the prefab's camera placement; bob is an offset from this, not a replacement
+    private float cameraEyeHeight;            //eased crouch/stand height - the BASE the bob rides on
+    private float baseFieldOfView;            //whatever the vcam shipped with, so sprint returns to the right number
+    private float headBobTimer;               //advances with distance travelled, not wall time, so bob tracks your stride
+    private float headBobSpeedFactor;         //smoothed 0-1 of how fast we're really moving
+    private float landingDipOffset;           //current drop from a landing, in metres (negative = down)
+    private float landingDipVelocity;
+    private float strafeTilt;                 //current roll in degrees, eased
+    private bool isSprintingNow;              //published out of HandleMovement so the render frame can drive FOV
+    private Vector2 lastMoveInput;            //likewise, for the strafe tilt
+
     private float flashlightAimPitch;      //where the beam actually points, as opposed to where you're looking
     private float flashlightAimYaw;
     private float flashlightPitchVelocity; //the spring's momentum - this is what produces the overshoot
@@ -220,6 +258,13 @@ public partial class Player : NetworkBehaviour
             DisplayName = PlayerIdentity.ResolveName(Object.InputAuthority.PlayerId); //only the owner names itself; it replicates to everyone else's nameplate
             mainCam.enabled = true; //this our camera
             playerCamera = virtualCam.transform; //set the player camera to the virtual cam's transform, which is used for looking up and down
+
+            //camera-feel baselines, captured from whatever the prefab shipped with rather than hard-coded, so moving
+            //the camera in the prefab doesn't quietly break the bob's rest position or send sprint FOV to a wrong number
+            playerVirtualCamera = virtualCam;
+            cameraRestLocalPosition = playerCamera.localPosition;
+            cameraEyeHeight = standCamHeight; //start stood up; HandleCrouchCamera eases this from here on
+            baseFieldOfView = virtualCam.m_Lens.FieldOfView;
             playerInputActions = new PlayerInputActions(); //our input actions
             playerInputActions.Player.Enable(); //our input actions enabled
             Cursor.lockState = CursorLockMode.Locked; //our cursor locked
@@ -287,8 +332,9 @@ public partial class Player : NetworkBehaviour
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
         UpdateInteractPrompt(); //what E would do from where we're standing - the HUD reads InteractPrompt. runs before the computer bail-out because it has to clear itself when we sit down
         if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
-        HandleLook(); //our player only
+        HandleLook(); //our player only - updates xRotation, does NOT touch the camera transform
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
+        UpdateCameraFeel(); //bob, landing dip, breathing, tilt, sprint FOV - and the single write of the camera transform. MUST be last
     }
 
     private void UpdateVoiceMuffle() //Photon spawns a Speaker(Clone) under this player at runtime to play its voice; we find it and low-pass its audio while the player is locked up (taped mouth)
@@ -696,6 +742,17 @@ public partial class Player : NetworkBehaviour
         characterController.enabled = true;
         IsLockedUp = true;
         suffocateTimer = suffocateDuration; //start the air clock the moment the closet closes
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //same routing as the bear trap: the victim's own machine owns their movement in Shared Mode, so the slow has to be applied there
+    public void RPC_TangledInTripwire(float seconds)
+    {
+        if (IsEliminated || IsLockedUp || IsBearTrapped) return; //already stopped by something stronger - a slow on top of a hold is meaningless
+
+        //REFRESHED, not stacked. Walking back through a second wire restarts the clock rather than adding to it, so a
+        //cluster of wires can't quietly total up to a thirty-second immobilisation, which is the bear trap's job and
+        //isn't fun even when the bear trap does it.
+        TangledSecondsLeft = Mathf.Max(TangledSecondsLeft, seconds);
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //fired by the trap; runs on the victim's own machine, which owns their movement in Shared Mode

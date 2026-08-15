@@ -10,10 +10,11 @@ using UnityEngine;
 // and the change is audible under your finger. There's no Apply button to forget to press.
 public static class GameSettings
 {
-    private const string SensitivityKey = "rr_sensitivity";
-    private const string InvertYKey     = "rr_invert_y";
-    private const string MasterVolKey   = "rr_master_volume";
-    private const string VoiceVolKey    = "rr_voice_volume";
+    private const string SensitivityKey  = "rr_sensitivity";
+    private const string InvertYKey      = "rr_invert_y";
+    private const string MasterVolKey    = "rr_master_volume";
+    private const string VoiceVolKey     = "rr_voice_volume";
+    private const string CameraMotionKey = "rr_camera_motion";
 
     //the values a fresh install starts on. sensitivity matches what the Player prefab used to carry, so nobody's
     //existing feel changes the day this lands.
@@ -27,6 +28,7 @@ public static class GameSettings
     private static bool invertLookY;
     private static float masterVolume = 1f;
     private static float voiceVolume = 1f;
+    private static float cameraMotionAmount = 1f;
 
     public static float MouseSensitivity
     {
@@ -78,6 +80,23 @@ public static class GameSettings
         }
     }
 
+    //Scales every bit of camera movement that ISN'T the mouse: head bob, the landing dip, breathing sway, strafe tilt
+    //and the sprint FOV push. One slider instead of five toggles, because someone who needs one of them off almost
+    //always needs the lot off - and 0 has to mean a genuinely still camera, not "mostly still".
+    //
+    //This exists at all because head bob is the single most common motion-sickness complaint in first-person games,
+    //and shipping it with no way to turn it down would lock those players out of the game entirely.
+    public static float CameraMotionAmount
+    {
+        get { EnsureLoaded(); return cameraMotionAmount; }
+        set
+        {
+            EnsureLoaded();
+            cameraMotionAmount = Mathf.Clamp01(value);
+            PlayerPrefs.SetFloat(CameraMotionKey, cameraMotionAmount);
+        }
+    }
+
     //Effective look sensitivity for the vertical axis, sign included - so nothing else has to remember the invert flag.
     public static float LookSensitivityY => MouseSensitivity * (InvertLookY ? -1f : 1f);
 
@@ -90,6 +109,7 @@ public static class GameSettings
         invertLookY = PlayerPrefs.GetInt(InvertYKey, 0) == 1;
         masterVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(MasterVolKey, 1f));
         voiceVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(VoiceVolKey, 1f));
+        cameraMotionAmount = Mathf.Clamp01(PlayerPrefs.GetFloat(CameraMotionKey, 1f));
 
         AudioListener.volume = masterVolume; //the saved volume has to take effect before anything plays, not when the menu is first opened
     }
@@ -105,6 +125,7 @@ public static class GameSettings
         InvertLookY = false;
         MasterVolume = 1f;
         VoiceVolume = 1f;
+        CameraMotionAmount = 1f;
         Save();
     }
 }

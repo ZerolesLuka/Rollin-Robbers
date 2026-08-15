@@ -15,7 +15,15 @@ public partial class Player
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
-        bool isSprinting = sprinting && !isCrouching && !exhausted && stamina > 0f;
+        //tangled in a wire: no sprinting out of it, and the timer runs on the tick so it's the same length for everyone
+        if (TangledSecondsLeft > 0f)
+        {
+            TangledSecondsLeft = Mathf.Max(0f, TangledSecondsLeft - Runner.DeltaTime);
+        }
+
+        bool isSprinting = sprinting && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
+        isSprintingNow = isSprinting; //published for the render frame, which drives the sprint FOV push
+        lastMoveInput = inputVector;  //likewise, for the strafe tilt - the tick is the only place the real input lands
         if (isSprinting)
         {
             stamina -= Runner.DeltaTime; //sprinting burns stamina
@@ -44,6 +52,11 @@ public partial class Player
             speed = moveSpeed * sprintSpeedMultiplier;
         }
 
+        if (IsTangled)
+        {
+            speed *= tangledSpeedMultiplier; //applied AFTER crouch/sprint so it hobbles you whatever you were doing
+        }
+
         float moveDistance = speed * Runner.DeltaTime;
         if (jumpInput && !jumpHeldLastTick && characterController.isGrounded && !isCrouching) //rising edge only: must release + repress to jump again (no bunnyhop from holding space)
         {
@@ -61,6 +74,14 @@ public partial class Player
             {
                 playerFootsteps.PlayLanding(); //thud on every client
             }
+
+            //and the view takes the hit. Sized by how fast we were actually falling, so stepping off a kerb is a
+            //twitch and dropping off the landing is a proper buckle. Sprung back to level in UpdateLandingDip.
+            //Set here rather than on the render frame because this is the only place that knows we JUST landed -
+            //by the next Update, isGrounded is simply true and the impact is indistinguishable from standing.
+            float landingHardness = Mathf.Clamp01(-verticalVelocity / landingDipFullSpeed);
+            landingDipOffset = -landingDipAmount * landingHardness; //negative = the head drops
+            landingDipVelocity = 0f; //a second landing mid-recovery restarts the dip instead of fighting the old spring
         }
         wasGroundedForLanding = groundedNow;
 
@@ -101,10 +122,11 @@ public partial class Player
 
     private void HandleCrouchCamera() //eases the crouch eye-height on the RENDER frame (local only) so it's smooth at any FPS, not stepped at the 32Hz network tick
     {
+        //This only moves the NUMBER. It used to write playerCamera.localPosition directly, but head bob and the
+        //landing dip need to ride on top of this height, and two systems writing the same field means the one that
+        //runs second wins while the other silently does nothing. ApplyCameraFeel does the single write now.
         float targetCamY = isCrouching ? crouchCamHeight : standCamHeight;
-        Vector3 camPos = playerCamera.localPosition;
-        camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
-        playerCamera.localPosition = camPos;
+        cameraEyeHeight = Mathf.Lerp(cameraEyeHeight, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
     }
 
     private void HandleLook()
@@ -118,10 +140,10 @@ public partial class Player
 
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
 
-        // Vertical camera pitch
+        // Vertical camera pitch. Only the ANGLE is updated here - breathing sway and strafe tilt are added on top of it
+        // in ApplyCameraFeel, which is the one place the camera's rotation is written.
         xRotation -= lookInput.y * GameSettings.LookSensitivityY; //LookSensitivityY carries the invert flag as its sign, so nothing here has to know about it
         xRotation = Mathf.Clamp(xRotation, -90f, 90f); //clamp to prevent flipping over
-        playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
         // Horizontal player body
         yRotation += lookInput.x * GameSettings.MouseSensitivity; //horizontal never inverts - that setting is only ever about the Y axis

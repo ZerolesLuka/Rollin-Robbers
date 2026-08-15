@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 3051816832795906878}
   - component: {fileID: 1784584513364979525}
   m_Layer: 0
-  m_Name: Cube
+  m_Name: Wire
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -136,7 +136,7 @@ GameObject:
   - component: {fileID: 4538788897955153531}
   - component: {fileID: 7874533608847351460}
   m_Layer: 0
-  m_Name: Cube
+  m_Name: PostA
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -226,7 +226,7 @@ GameObject:
   - component: {fileID: 6862734468451779165}
   - component: {fileID: 249305334161196106}
   m_Layer: 0
-  m_Name: Cube
+  m_Name: PostB
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -377,6 +377,14 @@ MonoBehaviour:
   disarmClip: {fileID: 0}
   volume: 0.85
   soundMaxDistance: 25
+  wirePostA: {fileID: 566887395338361068}
+  wirePostB: {fileID: 5397932726315595120}
+  wireBar: {fileID: 4946161468567791861}
+  barLengthAtScaleOne: 1
+  tangleSeconds: 3.5
+  wireTriggerRadius: 0.55
   _SpawnPoint: {x: 0, y: 0, z: 0}
   _UseSpawnPoint:
     _value: 0
+  _WireEndA: {x: 0, y: 0, z: 0}
+  _WireEndB: {x: 0, y: 0, z: 0}

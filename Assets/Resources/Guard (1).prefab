@@ -130,6 +130,7 @@ MonoBehaviour:
   trapPointSearchRange: 12
   trapScatterRadius: 4
   minTrapSpacing: 3
+  anchorPauseTime: 0.8
   _Anger: 0
 --- !u!114 &9012763324479585337
 MonoBehaviour:
@@ -262,7 +263,7 @@ MonoBehaviour:
   eyeHeight: 3.5
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 8
+    m_Bits: 1
 --- !u!114 &7008704312940971623
 MonoBehaviour:
   m_ObjectHideFlags: 0

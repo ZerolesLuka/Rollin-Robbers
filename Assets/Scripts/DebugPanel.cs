@@ -94,6 +94,9 @@ public class DebugPanel : MonoBehaviour
         }
 
         GUILayout.Label($"money {run.Money}   loot {me.CarriedCount}/{me.MaxInventorySlots}   wedges {me.WedgesCarried}");
+        //a readout rather than a one-off log: "did the wire actually tangle me" is a question worth being able to
+        //answer at a glance every time, and a countdown also shows how long it lasted rather than just that it fired
+        GUILayout.Label($"tangled {me.TangledSecondsLeft:F1}s   traps live {GuardTrap.AllTraps.Count}");
         GUILayout.Label($"tools  {me.ToolSlotA} / {me.ToolSlotB}");
 
         Header("Money");
@@ -126,6 +129,9 @@ public class DebugPanel : MonoBehaviour
         {
             GUILayout.Label($"state {GuardPatrol.Instance.State}   anger {GuardPatrol.Instance.Anger:F0}");
             if (GUILayout.Button("send him to me")) GuardPatrol.Instance.AlertTo(me.transform.position);
+            //skips the anger gate and the per-run trap budget on purpose - see DebugPlantWireNear. watch the state
+            //readout above flip to Planting, then follow him: he walks one anchor, pauses, walks the other, wire exists
+            if (GUILayout.Button("string a wire (nearest span)")) GuardPatrol.Instance.DebugPlantWireNear(me.transform.position);
             anger = GUILayout.HorizontalSlider(anger, 0f, 100f);
             if (GUILayout.Button($"set anger to {anger:F0}")) SetAnger(anger);
             GUILayout.Label("<i>traps need anger above 25 AND him having seen you</i>", Rich());

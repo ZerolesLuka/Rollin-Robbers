@@ -52,7 +52,7 @@ public static class SetupValidator
         //---- the guard's kit ----
         if (GuardPatrol.Instance != null)
         {
-            if (IsNull(GuardPatrol.Instance, "tripwirePrefab")) dead.Add("Guard has no tripwirePrefab - he can never wire a doorway. TrapPoints in the scene do nothing.");
+            if (IsNull(GuardPatrol.Instance, "tripwirePrefab")) dead.Add("Guard has no tripwirePrefab - he can never wire a doorway. TripwireSpans in the scene do nothing.");
             if (IsNull(GuardPatrol.Instance, "bearTrapPrefab")) dead.Add("Guard has no bearTrapPrefab - the trap that PINS you can never be placed.");
             if (IsNull(GuardPatrol.Instance, "alarmPrefab")) dead.Add("Guard has no alarmPrefab - the only trap that pulls the dog in can never be placed.");
             if (IsNull(GuardPatrol.Instance, "baitLootPrefab")) warn.Add("Guard has no baitLootPrefab - he will never plant fake loot, so every item you see is genuine.");
@@ -61,7 +61,7 @@ public static class SetupValidator
                 dead.Add("Guard has no closetSpot (assign it on GuardBootstrap) - there is nowhere to drag anyone, so " +
                          "the low-anger warning catch cannot happen and EVERY catch is an outright elimination.");
             }
-            if (TrapPoint.All.Count == 0) warn.Add($"'{scene}' has no TrapPoints - he can still drop floor traps, but no tripwire will ever be strung.");
+            if (TripwireSpan.All.Count == 0) warn.Add($"'{scene}' has no TripwireSpans - he can still drop floor traps, but no tripwire will ever be strung.");
         }
 
         //---- the crew's kit ----
@@ -98,6 +98,19 @@ public static class SetupValidator
         }
 
         if (SwingingHinge.AllHinges.Count == 0) warn.Add($"'{scene}' has no SwingingHinges - nothing in it opens.");
+
+        //---- tripwire spans ----
+        //A span with a missing far end, both ends stacked, or a wall through the middle can never hold a wire. The
+        //guard silently skips those when picking one, so without this the only symptom is a guard who mysteriously
+        //stops setting traps - and you'd be debugging his anger thresholds for an hour before suspecting the level.
+        foreach (TripwireSpan span in TripwireSpan.All)
+        {
+            string problem = span.DescribeProblem();
+            if (problem != null)
+            {
+                warn.Add($"'{scene}' {problem}");
+            }
+        }
 
         //---- the money loop ----
         bool anyShop = Shopkeeper.AllKeepers.Count > 0 || ToolShop.AllShops.Count > 0;

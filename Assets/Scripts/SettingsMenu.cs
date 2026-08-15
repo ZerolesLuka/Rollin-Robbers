@@ -10,6 +10,7 @@ using UnityEngine.UI;
 //   Sensitivity Slider  -> OnValueChanged (Dynamic float)  -> SetSensitivity
 //   Master Slider       -> OnValueChanged (Dynamic float)  -> SetMasterVolume
 //   Voice Slider        -> OnValueChanged (Dynamic float)  -> SetVoiceVolume
+//   Camera Motion Slider-> OnValueChanged (Dynamic float)  -> SetCameraMotion   (range 0-1)
 //   Invert Y Toggle     -> OnValueChanged (Dynamic bool)   -> SetInvertY
 //   Reset Button        -> OnClick                         -> ResetToDefaults
 public class SettingsMenu : MonoBehaviour
@@ -18,11 +19,13 @@ public class SettingsMenu : MonoBehaviour
     [SerializeField] private Toggle invertYToggle;
     [SerializeField] private Slider masterVolumeSlider;
     [SerializeField] private Slider voiceVolumeSlider;
+    [SerializeField] private Slider cameraMotionSlider; //head bob, landing dip, breathing, tilt, sprint FOV - 0 is a dead-still camera
 
     [Header("Optional readouts next to the sliders")]
     [SerializeField] private Text sensitivityValueText;
     [SerializeField] private Text masterVolumeValueText;
     [SerializeField] private Text voiceVolumeValueText;
+    [SerializeField] private Text cameraMotionValueText;
 
     private bool applyingSavedValues; //true while WE'RE setting the controls, so their change events don't write straight back
 
@@ -46,6 +49,12 @@ public class SettingsMenu : MonoBehaviour
         if (invertYToggle != null) invertYToggle.isOn = GameSettings.InvertLookY;
         if (masterVolumeSlider != null) masterVolumeSlider.value = GameSettings.MasterVolume;
         if (voiceVolumeSlider != null) voiceVolumeSlider.value = GameSettings.VoiceVolume;
+        if (cameraMotionSlider != null)
+        {
+            cameraMotionSlider.minValue = 0f; //0 has to be reachable - for a player who gets motion sick, anything above it is unplayable
+            cameraMotionSlider.maxValue = 1f;
+            cameraMotionSlider.value = GameSettings.CameraMotionAmount;
+        }
 
         applyingSavedValues = false;
         RefreshLabels();
@@ -78,6 +87,13 @@ public class SettingsMenu : MonoBehaviour
         RefreshLabels();
     }
 
+    public void SetCameraMotion(float value)
+    {
+        if (applyingSavedValues) return;
+        GameSettings.CameraMotionAmount = value;
+        RefreshLabels();
+    }
+
     public void ResetToDefaults()
     {
         GameSettings.ResetToDefaults();
@@ -94,5 +110,6 @@ public class SettingsMenu : MonoBehaviour
         if (sensitivityValueText != null) sensitivityValueText.text = GameSettings.MouseSensitivity.ToString("0.00");
         if (masterVolumeValueText != null) masterVolumeValueText.text = Mathf.RoundToInt(GameSettings.MasterVolume * 100f) + "%";
         if (voiceVolumeValueText != null) voiceVolumeValueText.text = Mathf.RoundToInt(GameSettings.VoiceVolume * 100f) + "%";
+        if (cameraMotionValueText != null) cameraMotionValueText.text = Mathf.RoundToInt(GameSettings.CameraMotionAmount * 100f) + "%";
     }
 }
