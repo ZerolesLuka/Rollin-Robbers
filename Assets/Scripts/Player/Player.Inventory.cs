@@ -144,14 +144,18 @@ public partial class Player
             return;
         }
 
-        if (worldItemPrefab == null) return;
-
         InventoryItem dropped = inventory[slot];
+
+        //the item's OWN prefab where one is mapped, so a dropped crowbar is a crowbar on the floor rather than a
+        //generic box wearing the word "crowbar". Falls back to worldItemPrefab for loot and unmapped tools.
+        NetworkObject prefabToDrop = WorldPrefabFor(dropped.tool);
+        if (prefabToDrop == null) return;
+
         inventory.RemoveAt(slot);
         PublishCarriedCount();
 
         Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
-        Runner.Spawn(worldItemPrefab, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point
+        Runner.Spawn(prefabToDrop, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point
             (runner, spawnedObject) =>
             {
                 WorldItem item = spawnedObject.GetComponent<WorldItem>();

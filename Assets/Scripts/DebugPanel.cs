@@ -98,6 +98,7 @@ public class DebugPanel : MonoBehaviour
         //answer at a glance every time, and a countdown also shows how long it lasted rather than just that it fired
         GUILayout.Label($"tangled {me.TangledSecondsLeft:F1}s   traps live {GuardTrap.AllTraps.Count}");
         GUILayout.Label($"tools  {me.ToolSlotA} / {me.ToolSlotB}");
+        GUILayout.Label($"jammer  charges {me.JammerChargesLeft}   active {me.JammerActiveSecondsLeft:F1}s   cooldown {me.JammerCooldownSecondsLeft:F1}s");
 
         Header("Money");
         //RPC_SellItems is the real path money arrives by, so this exercises the same authority-side code a sale does

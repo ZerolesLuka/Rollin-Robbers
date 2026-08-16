@@ -68,7 +68,7 @@ public static class SetupValidator
         if (Player.LocalPlayer != null)
         {
             if (IsNull(Player.LocalPlayer, "doorWedgePrefab")) dead.Add("Player has no doorWedgePrefab - G near a shut door can never wedge it. The whole side-of-the-door mechanic is off.");
-            if (IsNull(Player.LocalPlayer, "jammerDevicePrefab")) dead.Add("Player has no jammerDevicePrefab - Q does nothing and the 550-credit Signal Jammer is unbuyable value.");
+            if (IsNull(Player.LocalPlayer, "jammerDevicePrefab")) dead.Add("Player has no jammerDevicePrefab - dropping a Signal Jammer with G destroys it instead of leaving it on the floor.");
             if (IsNull(Player.LocalPlayer, "worldItemPrefab")) dead.Add("Player has no worldItemPrefab - dropping loot with G destroys it instead of putting it on the floor.");
             if (IsNull(Player.LocalPlayer, "spectatorCamera")) warn.Add("Player has no spectatorCamera - eliminated players get a frozen view instead of orbiting the house.");
             if (IsNull(Player.LocalPlayer, "pauseMenuRoot")) warn.Add("Player has no pauseMenuRoot - Escape does nothing.");

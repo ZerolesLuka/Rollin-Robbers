@@ -36,7 +36,16 @@ public struct ToolDefinition
 
 public static class ToolTable
 {
-    public const int SlotCount = 2; //TWO on purpose. the interesting part of a loadout is what you LEAVE behind, and three slots is enough to bring one of everything
+    //NO SlotCount any more. It was 2 and it only ever drove the shop's display loop, while the real limit was the
+    //bag's MaxInventorySlots (4, or 6 with the Duffel Bag) - so a third tool was carryable but invisible and
+    //undroppable in the shop UI. One source of truth now: the bag. The loadout tension that constant was protecting
+    //survives anyway, because tools share slots with loot - four tools means nothing left to steal with.
+
+    //SIGNAL JAMMER. Charges rather than a battery: it's re-usable, but every activation is spent, so switching it on
+    //stays a decision. The cooldown stops it being held on permanently by re-triggering the instant it lapses.
+    public const int JammerCharges = 3;
+    public const float JammerActiveSeconds = 15f;
+    public const float JammerCooldownSeconds = 25f;
 
     //Balance lives here and nowhere else, so tuning is one file rather than a hunt through five systems.
     public const float PaddedBootsNoiseMultiplier = 0.8f;
@@ -57,7 +66,8 @@ public static class ToolTable
     //appear once in a house, so you could carry it a full run and never see it do anything. Placing it makes every
     //part legible: you chose the spot, it's sat there, and you know exactly when it stops.
     public const float JammerRadius = 7f;
-    public const float JammerSeconds = 45f;
+    //JammerSeconds (the old 45s battery) is gone - the unit isn't consumed on placement any more, so there's no
+    //single lifetime to give it. JammerActiveSeconds above is how long one charge runs for.
 
     private static readonly ToolDefinition[] all = new ToolDefinition[]
     {

@@ -106,6 +106,9 @@ public class JammerDevice : NetworkBehaviour
     }
 
     //Is this spot inside a live jammer's bubble? Asked by cameras, which know where they're pointing but nothing else.
+    //
+    //TWO SOURCES now: units sitting on the floor, and players carrying one they've switched on with right-click. A
+    //camera shouldn't have to care which - it only wants to know whether it can see.
     public static bool CoversPosition(Vector3 position)
     {
         foreach (JammerDevice jammer in AllJammers)
@@ -113,6 +116,6 @@ public class JammerDevice : NetworkBehaviour
             if (jammer.SecondsLeft <= 0f) continue; //flat battery, still finishing its death sound
             if (Vector3.Distance(jammer.transform.position, position) <= ToolTable.JammerRadius) return true;
         }
-        return false;
+        return Player.AnyCarriedJammerCovers(position);
     }
 }

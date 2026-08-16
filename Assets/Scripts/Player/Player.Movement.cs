@@ -15,6 +15,8 @@ public partial class Player
     {
         Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
+        TickJammer(); //active/cooldown timers, on the tick so the duration is the same length for everyone
+
         //tangled in a wire: no sprinting out of it, and the timer runs on the tick so it's the same length for everyone
         if (TangledSecondsLeft > 0f)
         {

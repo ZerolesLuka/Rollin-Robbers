@@ -78,6 +78,17 @@ public partial class Player : NetworkBehaviour
     [Networked] public NetworkString<_16> DisplayName { get; private set; } //who this is, for nameplates. written once by the owner in Spawned; the source lives in PlayerIdentity so Steam can take over later
 
     [Networked] public int WedgesCarried { get; private set; } //door wedges in your pockets. networked so teammates' prompts and the HUD can see what you're holding
+    //SIGNAL JAMMER, carried. Right-click while it's in your bag to burn a charge and blind cameras around YOU for a
+    //few seconds; put it down with Q and it covers a fixed spot instead so you can walk away from it.
+    //
+    //All three are [Networked] because the jamming has to be true for everyone - a camera is evaluated on the master,
+    //not on the machine of whoever pressed the button.
+    [Networked] public int JammerChargesLeft { get; set; }
+    [Networked] public float JammerActiveSecondsLeft { get; set; }
+    [Networked] public float JammerCooldownSecondsLeft { get; set; }
+    public bool IsJammerActive => JammerActiveSecondsLeft > 0f;
+    private bool jammerHeldLastFrame; //rising-edge detect so holding right-click doesn't burn every charge at once
+
     [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you press Q with a Signal Jammer in your kit. leave empty and it simply can't be deployed
     [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
     [SerializeField] private int maxWedgesCarried = 3;
@@ -227,7 +238,31 @@ public partial class Player : NetworkBehaviour
     //belong in MenuOwnsCursor, but its digits absolutely should not also reach anything else reading the number row.
     public bool KeyboardIsCaptured => MenuOwnsCursor || isEnteringSafeCode || IsPaused;
 
-    [SerializeField] private NetworkObject worldItemPrefab; //spawned when you drop - the generic pickup item, named on spawn
+    [SerializeField] private NetworkObject worldItemPrefab; //FALLBACK for dropped loot - the generic pickup, named on spawn
+
+    //A dropped crowbar should look like a crowbar on the floor, not like a generic box wearing its name. Map each
+    //tool to its own world prefab here and the drop uses it; anything unmapped falls back to worldItemPrefab, so this
+    //can be filled in one tool at a time rather than all at once.
+    //
+    //EVERY prefab listed here must still carry a WorldItem component - that's what makes it pick-up-able, and what
+    //carries the name, value and tool kind back into the bag. The mesh changes; the plumbing doesn't.
+    [System.Serializable]
+    private struct ToolWorldPrefab
+    {
+        public ToolType tool;
+        public NetworkObject prefab;
+    }
+    [SerializeField] private ToolWorldPrefab[] toolWorldPrefabs;
+
+    private NetworkObject WorldPrefabFor(ToolType tool)
+    {
+        if (tool == ToolType.None || toolWorldPrefabs == null) return worldItemPrefab;
+        foreach (ToolWorldPrefab entry in toolWorldPrefabs)
+        {
+            if (entry.tool == tool && entry.prefab != null) return entry.prefab;
+        }
+        return worldItemPrefab;
+    }
     [SerializeField] private int maxInventorySlots = 4;
     [SerializeField] private float pickupRange = 2f;
     [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
@@ -363,7 +398,7 @@ public partial class Player : NetworkBehaviour
         }
 
         UpdateDoorDrag();   //hold left mouse on a door, drawer or cupboard and push it open by hand
-        UpdateDeployKey();  //Q sets down a Signal Jammer, read straight off the keyboard like the safe keypad so it needs no new binding
+        UpdateJammerInput(); //right-click burns a charge while the jammer is the SELECTED item. no deploy key - G drops it like anything else
         UpdateLootWheel(); //hold MMB to pick which item G drops
         UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)

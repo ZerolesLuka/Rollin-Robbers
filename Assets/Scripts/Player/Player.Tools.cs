@@ -68,6 +68,11 @@ public partial class Player
         if (HasTool(tool) && !ToolTable.Stacks(tool)) return false; //no point owning two of the same tool - the effects don't stack. wedges are the exception, being a consumable
         if (inventory.Count >= MaxInventorySlots) return false; //bag's full. drop something first - and now that CAN be a tool
 
+        if (tool == ToolType.SignalJammer)
+        {
+            JammerChargesLeft = ToolTable.JammerCharges; //a fresh unit comes with a full set. buying a second one is blocked above, so this can't top up a spent one
+        }
+
         inventory.Add(new InventoryItem(tool));
         PublishCarriedCount(); //also republishes ToolMask, which is what makes the effects live for everyone else
         return true;
@@ -149,42 +154,36 @@ public partial class Player
         }
     }
 
-    //Q, read straight off the keyboard the way the safe keypad already reads digits, so this needs no new action in
-    //the input asset (which would mean regenerating the C# wrapper before anything compiled).
-    private void UpdateDeployKey()
-    {
-        if (Keyboard.current == null) return;
-        //anything that has taken your hands or your control also takes this. hiding matters most: your body is inside
-        //a wardrobe, so the device would appear through the door as if you'd posted it out.
-        if (KeyboardIsCaptured) return; //used to miss both shop counters, so Q dropped a live jammer while you stood haggling in the pawn shop
-        if (IsEliminated || IsHiding || IsLockedUp || IsBearTrapped || isBeingDragged) return;
-        if (!Keyboard.current.qKey.wasPressedThisFrame) return;
-        TryDeployJammer();
-    }
+    //NO DEPLOY KEY. Q used to spend the jammer and place it; it's an ordinary carried item now - scroll to it, right
+    //click to switch it on, G to put it down like anything else in the bag. One less binding to teach.
 
-    //Deploying spends the tool and frees its slot.
-    public void TryDeployJammer()
+    //Put a jammer on the floor, carrying over whatever it has left. Called by the normal G drop, so dropping it
+    //mid-burst leaves the bubble sitting where it landed and dropping it cold leaves an inert unit someone can pick
+    //up later.
+    public void DropJammerToFloor()
     {
         if (jammerDevicePrefab == null || !HasTool(ToolType.SignalJammer)) return;
 
         Vector3 dropAt = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
+        float secondsStillRunning = JammerActiveSecondsLeft;
 
-        //spend it FIRST. spawning is deferred, so waiting for the callback to remove it leaves a window where holding
-        //Q would place a second jammer off a single tool.
+        //spend it FIRST. spawning is deferred, so waiting for the callback to remove it leaves a window where a second
+        //press would place a second unit off one tool.
         RemoveToolFromBag(ToolType.SignalJammer);
+        JammerActiveSecondsLeft = 0f;      //the bubble goes with the object, not with us
+        JammerCooldownSecondsLeft = 0f;    //and so does the recharge - we aren't holding it any more
 
         Runner.Spawn(jammerDevicePrefab, dropAt, Quaternion.identity, PlayerRef.None, (runner, spawnedObject) =>
         {
             JammerDevice device = spawnedObject.GetComponent<JammerDevice>();
             if (device == null) return;
-            device.SecondsLeft = ToolTable.JammerSeconds;
+            device.SecondsLeft = secondsStillRunning; //0 if it was off - an inert box on the floor, which is allowed
             device.SpawnPoint = dropAt;   //networked-position safeguard - a deferred spawn drops the position argument
             device.UseSpawnPoint = true;
         });
     }
 
-    //Cameras ask this. It reads DEPLOYED devices, not who's carrying what - a jammer in your pocket does nothing,
-    //which is the whole point of making it a thing you place.
+    //Cameras ask this. Reads BOTH deployed units and players carrying a switched-on one.
     public static bool IsPositionJammed(Vector3 position) => JammerDevice.CoversPosition(position);
 
     //Nothing refills any more. Wedges are bought individually and spent individually, so what you carry into a house

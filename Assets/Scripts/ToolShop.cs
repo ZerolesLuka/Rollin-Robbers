@@ -82,7 +82,9 @@ public class ToolShop : MonoBehaviour
         GUI.Label(new Rect(x, y, width, 24f), "Carrying:");
         y += 26f;
 
-        for (int slot = 0; slot < ToolTable.SlotCount; slot++)
+        //the BAG's size, not a separate constant. those two used to disagree - the shop drew two rows while the bag
+        //held four - so a third tool was carryable but invisible here, and there was no way to drop it.
+        for (int slot = 0; slot < me.MaxInventorySlots; slot++)
         {
             ToolType carried = me.ToolInSlot(slot);
             GUI.Label(new Rect(x, y + 4f, 150f, 24f), $"Slot {slot + 1}:  {ToolTable.NameOf(carried)}");
