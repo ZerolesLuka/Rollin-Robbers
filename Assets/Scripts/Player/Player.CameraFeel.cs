@@ -70,6 +70,19 @@ public partial class Player
     {
         Vector3 delta = transform.position - lastStridePosition;
         lastStridePosition = transform.position;
+
+        //STAIRS. A step-up is a sudden rise while already on the ground - the controller teleporting the capsule up by
+        //stepOffset. Take that rise off the camera so it stays where it was, then let it climb back at its own pace.
+        //
+        //Grounded-only and upward-only on purpose: falling and jumping are meant to be felt, and this must never
+        //smooth them. Clamped so an oversized rise - a teleport, a rescue, a scene change - can't bury the camera in
+        //the floor while it recovers.
+        if (characterController.isGrounded && delta.y > 0f && delta.y < stairSmoothMaxDrop)
+        {
+            stairSmoothOffset = Mathf.Max(stairSmoothOffset - delta.y, -stairSmoothMaxDrop);
+        }
+        stairSmoothOffset = Mathf.MoveTowards(stairSmoothOffset, 0f, stairSmoothRecoverSpeed * Time.deltaTime);
+
         delta.y = 0f;
 
         float targetSpeedFactor = 0f;
@@ -168,7 +181,7 @@ public partial class Player
         //all, because moving the camera up and down is exactly what reads as a cheap bounce.
         playerCamera.localPosition = new Vector3(
             cameraRestLocalPosition.x,
-            cameraEyeHeight + landingDipOffset,
+            cameraEyeHeight + landingDipOffset + stairSmoothOffset,
             cameraRestLocalPosition.z);
 
         playerCamera.localRotation = Quaternion.Euler(

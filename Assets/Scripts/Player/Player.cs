@@ -169,6 +169,14 @@ public partial class Player : NetworkBehaviour
     //     only sharp thing left in the camera is an actual landing.
     //Also deliberately SLOWER than the step rate - the sway runs over several steps instead of one, so it drifts
     //rather than ticks.
+    //STAIR SMOOTHING. CharacterController climbs a step by teleporting the whole capsule up in a single frame - that
+    //is what stepOffset IS - so every stair is an instant vertical jolt. The body has to pop (it's how the controller
+    //works and the collision is correct), so the CAMERA lags behind instead and catches up smoothly. Nobody notices
+    //their eyeline trailing a few centimetres; everybody notices a jolt per step.
+    [SerializeField] private float stairSmoothMaxDrop = 0.35f;        //furthest the camera is ever allowed to trail the body. clamped so a teleport can't sink it through the floor
+    [SerializeField] private float stairSmoothRecoverSpeed = 2.5f;    //metres per second it catches back up. too slow feels like sinking, too fast reintroduces the jolt
+    private float stairSmoothOffset;
+
     [SerializeField] private float movingPitchDegrees = 1.2f;         //steady forward lean while walking. eases in and out, never oscillates
     [SerializeField] private float sprintExtraPitchDegrees = 1.6f;    //leaning harder into a sprint, on top of the above
     [SerializeField] private float movementEaseSpeed = 3.5f;          //how fast the lean arrives when you set off and leaves when you stop
