@@ -146,6 +146,15 @@ public partial class Player
 
         InventoryItem dropped = inventory[slot];
 
+        //A jammer that's RUNNING goes down as the live device, so you can switch it on and leave it covering a
+        //corridor. Switched off it's just an object, and takes the ordinary pickup path below like everything else -
+        //which is what makes putting it down reversible rather than a commitment.
+        if (dropped.tool == ToolType.SignalJammer && IsJammerActive)
+        {
+            DropJammerToFloor();
+            return;
+        }
+
         //the item's OWN prefab where one is mapped, so a dropped crowbar is a crowbar on the floor rather than a
         //generic box wearing the word "crowbar". Falls back to worldItemPrefab for loot and unmapped tools.
         NetworkObject prefabToDrop = WorldPrefabFor(dropped.tool);

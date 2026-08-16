@@ -52,6 +52,16 @@ public class GuardPatrol : NetworkBehaviour
 
     private NavMeshAgent agent; //guard
     private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
+
+    //EDGE AVOIDANCE. NavMesh steers to the SHORTEST path, so on a staircase - especially a switchback - the cheapest
+    //line is right along the inside rail, and he hugged it the whole way up. That isn't a steering bug, the path is
+    //genuinely drawn there; the fix is to stop wanting the absolute shortest line.
+    //
+    //Done in code rather than with NavMeshModifierVolumes over each rail because area costs are a BAKE-time property -
+    //marking the edges is manual work per staircase, and this covers every edge in the house for free, walls included.
+    [SerializeField] private float edgeClearance = 0.55f;    //how far off a navmesh edge he tries to stay
+    [SerializeField] private float edgeAvoidSmoothing = 6f;  //how quickly the nudge eases in and out - instant would jitter
+    private Vector3 edgeAvoidOffset;
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
     private bool warnedAboutMissingCloset; //latch, so a level with no closet complains once instead of on every catch
 
@@ -529,7 +539,7 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
         }
-        transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
+        transform.position = StepAwayFromEdges(agent.nextPosition); //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
         FaceMovementDirection(); //and point him where he's actually going, not where the agent wishes it were going
     }
     public override void Despawned(NetworkRunner runner, bool hasState) //he's despawned on every scene change, so this is where his mood gets banked for the trip
@@ -568,6 +578,42 @@ public class GuardPatrol : NetworkBehaviour
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
         ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
+    }
+
+    //Nudge him off the nearest navmesh edge so he walks down the middle of a staircase or corridor instead of scraping
+    //the rail. FindClosestEdge gives the nearest boundary and its distance; anything inside edgeClearance gets pushed
+    //back, harder the closer he is.
+    //
+    //The result is ALWAYS re-sampled onto the navmesh before it's used. Without that, the push is just a vector added
+    //to a position and would happily shove him through a bannister or off a landing - which is worse than the problem
+    //it's fixing. If the nudged spot isn't valid, he keeps the agent's own position and hugs the rail for that tick.
+    private Vector3 StepAwayFromEdges(Vector3 agentPosition)
+    {
+        Vector3 wantedOffset = Vector3.zero;
+
+        if (NavMesh.FindClosestEdge(agentPosition, out NavMeshHit edge, NavMesh.AllAreas) && edge.distance < edgeClearance)
+        {
+            Vector3 awayFromEdge = agentPosition - edge.position;
+            awayFromEdge.y = 0f; //push sideways only - lifting him off a staircase is exactly the wrong correction
+            if (awayFromEdge.sqrMagnitude > 0.0001f)
+            {
+                float howCrowded = 1f - (edge.distance / edgeClearance);
+                wantedOffset = awayFromEdge.normalized * howCrowded * edgeClearance;
+            }
+        }
+
+        //eased, so stepping into a doorway doesn't snap him sideways the frame the nearest edge changes
+        edgeAvoidOffset = Vector3.Lerp(edgeAvoidOffset, wantedOffset, edgeAvoidSmoothing * Runner.DeltaTime);
+        if (edgeAvoidOffset.sqrMagnitude < 0.0001f)
+        {
+            return agentPosition;
+        }
+
+        if (NavMesh.SamplePosition(agentPosition + edgeAvoidOffset, out NavMeshHit nudged, edgeClearance, NavMesh.AllAreas))
+        {
+            return nudged.position;
+        }
+        return agentPosition;
     }
 
     //DEBUG ONLY - the F1 panel calls this. Deliberately skips the anger gate, the trap budget and the 2-in-3 dice
