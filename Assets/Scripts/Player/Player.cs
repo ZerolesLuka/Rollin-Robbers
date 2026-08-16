@@ -169,6 +169,8 @@ public partial class Player : NetworkBehaviour
     //     only sharp thing left in the camera is an actual landing.
     //Also deliberately SLOWER than the step rate - the sway runs over several steps instead of one, so it drifts
     //rather than ticks.
+    private float currentHorizontalSpeed; //this tick's ground speed, published by HandleMovement for PlayerGravity's slope stick
+
     //STAIR SMOOTHING. CharacterController climbs a step by teleporting the whole capsule up in a single frame - that
     //is what stepOffset IS - so every stair is an instant vertical jolt. The body has to pop (it's how the controller
     //works and the collision is correct), so the CAMERA lags behind instead and catches up smoothly. Nobody notices

@@ -742,6 +742,9 @@ MonoBehaviour:
     _data:
       Data: 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
   _WedgesCarried: 0
+  _JammerChargesLeft: 0
+  _JammerActiveSecondsLeft: 0
+  _JammerCooldownSecondsLeft: 0
   jammerDevicePrefab: {fileID: 6474395161324424336, guid: 4ccd410f7290cb6428ed8ad76388b8ca, type: 3}
   doorWedgePrefab: {fileID: 4597878529965677012, guid: ef6ff4cb6b772e04e8ab9c369e583871, type: 3}
   maxWedgesCarried: 3
@@ -766,12 +769,12 @@ MonoBehaviour:
   flashlightWalkSwayMultiplier: 3
   tangledSpeedMultiplier: 0.45
   _TangledSecondsLeft: 0
-  headBobVerticalAmount: 0.085
-  headBobHorizontalAmount: 0.055
-  headBobRollDegrees: 1.7
-  headBobPitchDegrees: 1.1
-  weakFootMultiplier: 0.78
-  sprintBobMultiplier: 1.55
+  cameraMotionScale: 1
+  stairSmoothMaxDrop: 0.35
+  stairSmoothRecoverSpeed: 2.5
+  movingPitchDegrees: 1.2
+  sprintExtraPitchDegrees: 1.6
+  movementEaseSpeed: 3.5
   lookLagAmount: 0.35
   lookLagMaxDegrees: 4
   lookLagRecoverSpeed: 9
@@ -788,6 +791,7 @@ MonoBehaviour:
   strafeTiltAmount: 1.4
   strafeTiltSpeed: 6
   worldItemPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
+  toolWorldPrefabs: []
   maxInventorySlots: 4
   pickupRange: 2
   dropForwardOffset: 1
@@ -833,7 +837,7 @@ CharacterController:
   m_Height: 2
   m_Radius: 0.5
   m_SlopeLimit: 45
-  m_StepOffset: 0.3
+  m_StepOffset: 0.7
   m_SkinWidth: 0.08
   m_MinMoveDistance: 0.001
   m_Center: {x: 0, y: 0, z: 0}
@@ -1518,7 +1522,7 @@ Transform:
   m_GameObject: {fileID: 9146868429791103059}
   serializedVersion: 2
   m_LocalRotation: {x: 0.12745959, y: 0.006578015, z: -0.0008005412, w: 0.99182165}
-  m_LocalPosition: {x: 92.48818, y: 4.4273343, z: 9.591328}
+  m_LocalPosition: {x: 55.234352, y: 4.4273343, z: 28.039995}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

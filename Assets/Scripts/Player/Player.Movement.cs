@@ -59,6 +59,7 @@ public partial class Player
             speed *= tangledSpeedMultiplier; //applied AFTER crouch/sprint so it hobbles you whatever you were doing
         }
 
+        currentHorizontalSpeed = speed; //PlayerGravity needs it: how hard we're pressed to the floor has to scale with this, or we ski off downslopes
         float moveDistance = speed * Runner.DeltaTime;
         if (jumpInput && !jumpHeldLastTick && characterController.isGrounded && !isCrouching) //rising edge only: must release + repress to jump again (no bunnyhop from holding space)
         {
@@ -169,7 +170,12 @@ public partial class Player
     {
         if (characterController.isGrounded && verticalVelocity < 0f) //planted on the ground
         {
-            verticalVelocity = -2f; //small downward stick keeps isGrounded reliable on steps/slopes, and stops the fall speed building to terminal velocity while just standing
+            //SCALES WITH SPEED. A flat -2 was enough standing still and nowhere near enough moving: a staircase ramp
+            //falls away at roughly 5m/s when you walk down it at 7, and at sprint it's over 7 - so being pushed down
+            //at 2 meant the floor dropped faster than we did. We skied off it, fell, and landed with a thump on every
+            //descent. Matching the stick to our own speed guarantees we're pulled down at least as fast as any slope
+            //we can walk down can drop, whatever angle it is.
+            verticalVelocity = -Mathf.Max(2f, currentHorizontalSpeed); //small downward stick keeps isGrounded reliable on steps/slopes, and stops the fall speed building to terminal velocity while just standing
             return;
         }
 
