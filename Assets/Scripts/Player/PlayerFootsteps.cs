@@ -9,12 +9,6 @@ public class PlayerFootsteps : NetworkBehaviour
     [SerializeField, Range(0f, 1f)] private float landingVolume = 0.6f; // how loud the thud SOUNDS - separate from how loud it is to the guard
     [SerializeField] private CharacterController characterController;
     [SerializeField] private float strideLength = 2f;   //distance walked per step
-
-    //The camera's head bob reads this so the visual dip lands on the SAME step as the sound. They used to run on
-    //separate clocks - footsteps on distance walked, bob on a speed-scaled timer - and drifted in and out of phase,
-    //so your eyes and ears disagreed about when your foot hit the floor. That disagreement is most of what makes a
-    //first-person camera feel fake.
-    public float StrideLength => strideLength;
     [SerializeField] private float maxStepDistance = 1f; //any per-tick move larger than this is a teleport, not a step - ignore it so we don't spam footsteps
 
     private Vector3 lastPosition; // To track the player's last position

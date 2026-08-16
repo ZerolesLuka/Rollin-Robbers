@@ -85,7 +85,9 @@ public partial class Player
 
             //and it twists as you absorb it, whichever way you happened to be leaning. landing perfectly square is
             //the single most robotic thing a first-person camera can do.
-            landingRoll = landingRollDegrees * landingHardness * ((strideStepIndex & 1) == 1 ? -1f : 1f);
+            //direction taken from which way you were leaning as you came down, so it's never the same twice in a row
+            //by accident
+            landingRoll = landingRollDegrees * landingHardness * (lastMoveInput.x >= 0f ? 1f : -1f);
         }
         wasGroundedForLanding = groundedNow;
 

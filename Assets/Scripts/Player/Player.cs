@@ -140,21 +140,27 @@ public partial class Player : NetworkBehaviour
     //transform field is how you get an effect that silently does nothing because the other one ran second.
     //MASTER SCALE for everything below - bob, landing dip, breathing, tilt, look lag, sprint FOV.
     //
-    //0.1 was arrived at by dragging the F1 debug slider while walking, which is the only way this is tunable. It is
+    //Back to 1 for the third version: 0.1 was compensating for amounts that were wrong in CHARACTER, not in size, and
+    //the numbers below are now honest absolute values. It is
     //deliberately NOT a player setting: the feel is authored, the same for everyone, and not something to negotiate
     //in a menu. The individual numbers below stay at readable magnitudes rather than being pre-multiplied, so they
     //can still be reasoned about relative to each other.
-    [SerializeField] private float cameraMotionScale = 0.1f;
+    [SerializeField] private float cameraMotionScale = 1f;
     public float CameraMotionScale { get => cameraMotionScale; set => cameraMotionScale = Mathf.Clamp01(value); } //F1 panel only
 
-    //Halved from the first pass - the original numbers were tuned blind and read as a shake rather than a walk.
-    //Tune with the F1 slider while WALKING, not by guessing here.
-    [SerializeField] private float headBobVerticalAmount = 0.04f;     //metres the view drops as weight lands
-    [SerializeField] private float headBobHorizontalAmount = 0.025f;  //metres of side-to-side per step
-    [SerializeField] private float headBobRollDegrees = 0.75f;        //the camera tilting as weight shifts foot to foot
-    [SerializeField] private float headBobPitchDegrees = 0.45f;       //nod on impact. positional bob alone reads as a camera on rails
-    [SerializeField] private float weakFootMultiplier = 0.9f;         //every other step is slightly lighter - subtle, or it reads as a limp
-    [SerializeField] private float sprintBobMultiplier = 1.3f;        //sprinting should be visibly rougher, not just wider FOV
+    //THIRD VERSION. The first two both read as a shake at every amplitude, including 4mm, which means the problem was
+    //never size - it was character. Two things were wrong at the concept level:
+    //  1. VERTICAL TRANSLATION IS THE CHEAP-FEELING PART. Hopping the camera up and down is what reads as bouncing.
+    //     Cameras that feel good are almost entirely ROTATIONAL - the view tips, it doesn't bounce. Vertical is now
+    //     nearly nothing, and horizontal translation is gone completely.
+    //  2. A SHARP IMPACT SPIKE EVERY FOOTFALL IS JARRING. Perfect for a landing, awful as a constant - at moveSpeed 7
+    //     that's 3.5 spikes a second, which reads as a fault rather than a gait. Walking is a smooth sine now; the
+    //     only sharp thing left in the camera is an actual landing.
+    //Also deliberately SLOWER than the step rate - the sway runs over several steps instead of one, so it drifts
+    //rather than ticks.
+    [SerializeField] private float movingPitchDegrees = 1.2f;         //steady forward lean while walking. eases in and out, never oscillates
+    [SerializeField] private float sprintExtraPitchDegrees = 1.6f;    //leaning harder into a sprint, on top of the above
+    [SerializeField] private float movementEaseSpeed = 3.5f;          //how fast the lean arrives when you set off and leaves when you stop
 
     //LOOK LAG - the view trails the mouse slightly on fast turns, then catches up. This is what sells "piloting a
     //body" rather than "being a camera". Deliberately kept small and clamped: it moves the VIEW, never where you're
@@ -183,9 +189,7 @@ public partial class Player : NetworkBehaviour
     private Vector3 cameraRestLocalPosition;  //the prefab's camera placement; bob is an offset from this, not a replacement
     private float cameraEyeHeight;            //eased crouch/stand height - the BASE the bob rides on
     private float baseFieldOfView;            //whatever the vcam shipped with, so sprint returns to the right number
-    private float strideDistance;             //metres walked into the current step. THE clock for head bob - shared with PlayerFootsteps so the dip lands on the sound
-    private Vector3 lastStridePosition;       //measured position change, NOT characterController.velocity - see UpdateStridePhase for why that lies
-    private int strideStepIndex;              //which foot - drives the roll direction and the weak-foot asymmetry
+    private Vector3 lastStridePosition;       //measured position change, NOT characterController.velocity - see UpdateMovementSpeedFactor for why that lies
     private float headBobSpeedFactor;         //smoothed 0-1 of how fast we're really moving
     private float landingDipOffset;           //current drop from a landing, in metres (negative = down)
     private float landingDipVelocity;
