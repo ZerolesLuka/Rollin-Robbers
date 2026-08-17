@@ -70,7 +70,22 @@ public partial class Player
 
         //landing: the tick we touch down after being airborne. a hard landing is LOUD - a big noise spike that carries to the guard, plus a thud
         bool groundedNow = characterController.isGrounded;
-        if (groundedNow && !wasGroundedForLanding && -verticalVelocity >= minLandingFallSpeed) //just hit the ground, and we were actually falling (not stepping off a tiny lip)
+
+        //track the top of the arc. re-armed to our own height the moment we leave the ground, then only ever raised -
+        //so a jump measures from its apex and a step off a ledge measures from the ledge.
+        if (!groundedNow)
+        {
+            if (!airborneLastTick)
+            {
+                fallPeakHeight = transform.position.y;
+            }
+            fallPeakHeight = Mathf.Max(fallPeakHeight, transform.position.y);
+        }
+        airborneLastTick = !groundedNow;
+
+        float fellDistance = fallPeakHeight - transform.position.y;
+
+        if (groundedNow && !wasGroundedForLanding && fellDistance >= minLandingFallDistance) //just hit the ground, and we actually fell far enough for it to be a landing
         {
             landingNoise = landNoiseAmount; //spike the guard-heard noise
             if (playerFootsteps != null)
@@ -82,7 +97,10 @@ public partial class Player
             //twitch and dropping off the landing is a proper buckle. Sprung back to level in UpdateLandingDip.
             //Set here rather than on the render frame because this is the only place that knows we JUST landed -
             //by the next Update, isGrounded is simply true and the impact is indistinguishable from standing.
-            float landingHardness = Mathf.Clamp01(-verticalVelocity / landingDipFullSpeed);
+            //0 at the shortest fall that counts, 1 at a proper drop - so a kerb is a twitch and coming off the landing
+            //is a buckle. Distance, not speed, for the same reason the check above uses it.
+            float landingHardness = Mathf.Clamp01(
+                (fellDistance - minLandingFallDistance) / Mathf.Max(0.01f, fullLandingFallDistance - minLandingFallDistance));
             landingDipOffset = -landingDipAmount * landingHardness; //negative = the head drops
             landingDipVelocity = 0f; //a second landing mid-recovery restarts the dip instead of fighting the old spring
 
@@ -92,6 +110,7 @@ public partial class Player
             //by accident
             landingRoll = landingRollDegrees * landingHardness * (lastMoveInput.x >= 0f ? 1f : -1f);
         }
+
         wasGroundedForLanding = groundedNow;
 
         //noise comes AFTER speed is finalized
@@ -170,12 +189,15 @@ public partial class Player
     {
         if (characterController.isGrounded && verticalVelocity < 0f) //planted on the ground
         {
-            //SCALES WITH SPEED. A flat -2 was enough standing still and nowhere near enough moving: a staircase ramp
-            //falls away at roughly 5m/s when you walk down it at 7, and at sprint it's over 7 - so being pushed down
-            //at 2 meant the floor dropped faster than we did. We skied off it, fell, and landed with a thump on every
-            //descent. Matching the stick to our own speed guarantees we're pulled down at least as fast as any slope
-            //we can walk down can drop, whatever angle it is.
-            verticalVelocity = -Mathf.Max(2f, currentHorizontalSpeed); //small downward stick keeps isGrounded reliable on steps/slopes, and stops the fall speed building to terminal velocity while just standing
+            //SCALES WITH SPEED, but only once we've been down here a tick.
+            //
+            //Why scaled: a staircase ramp falls away at ~5m/s walking and over 7 sprinting, so a flat -2 meant the
+            //floor dropped faster than we did and we skied off it on every descent.
+            //
+            //This is exactly why the landing check measures DISTANCE FALLEN and not this value: at a sprint the stick
+            //alone sits at -10.5, so anything comparing verticalVelocity to a threshold would read a flicker of
+            //isGrounded as a heavy impact. Don't reintroduce a speed-based landing test.
+            verticalVelocity = -Mathf.Max(2f, currentHorizontalSpeed);
             return;
         }
 

@@ -77,17 +77,26 @@ public partial class Player
         //Grounded-only and upward-only on purpose: falling and jumping are meant to be felt, and this must never
         //smooth them. Clamped so an oversized rise - a teleport, a rescue, a scene change - can't bury the camera in
         //the floor while it recovers.
-        if (characterController.isGrounded && delta.y > 0f && delta.y < stairSmoothMaxDrop)
-        {
-            stairSmoothOffset = Mathf.Max(stairSmoothOffset - delta.y, -stairSmoothMaxDrop);
-        }
-        stairSmoothOffset = Mathf.MoveTowards(stairSmoothOffset, 0f, stairSmoothRecoverSpeed * Time.deltaTime);
-
+        //NO STAIR SMOOTHING. It existed to hide the pop when CharacterController climbs a stepped collider - and the
+        //stairs use RAMP colliders now, so you never step up and there is no pop to hide.
+        //
+        //What it did instead was misfire on landings: touching down drives you into the floor (the ground stick is
+        //-10.5 at a sprint) and the controller resolves the penetration by pushing you back UP, which is
+        //indistinguishable from a step. It slammed the camera down by its full clamp on every jump. Two attempts to
+        //gate it failed because the push-up spans several grounded frames. Deleted rather than gated again: it was
+        //solving a problem the level geometry now solves properly.
         delta.y = 0f;
 
+        //NOT gated on isGrounded, deliberately. It used to be, and being airborne drove this to 0 - so every jump
+        //collapsed the movement lean and every landing brought it back. Sprinting that swing is 2.8 degrees
+        //(movingPitch + sprintExtraPitch), and since isGrounded flickers several times a second the pitch was being
+        //yanked up and down repeatedly. That was the shake, and it's why it only ever showed up while sprinting:
+        //walking the same swing is 1.2 degrees and reads as nothing.
+        //
+        //Jumping forward doesn't mean you stopped moving. The horizontal speed is the honest measure either way.
         float targetSpeedFactor = 0f;
         //a scene change or rescue teleport covers metres in one frame - that isn't running, so don't read it as such
-        if (moveSpeed > 0f && characterController.isGrounded && Time.deltaTime > 0f && delta.magnitude < 1f)
+        if (moveSpeed > 0f && Time.deltaTime > 0f && delta.magnitude < 1f)
         {
             targetSpeedFactor = Mathf.Clamp01((delta.magnitude / Time.deltaTime) / moveSpeed);
         }
@@ -181,7 +190,7 @@ public partial class Player
         //all, because moving the camera up and down is exactly what reads as a cheap bounce.
         playerCamera.localPosition = new Vector3(
             cameraRestLocalPosition.x,
-            cameraEyeHeight + landingDipOffset + stairSmoothOffset,
+            cameraEyeHeight + landingDipOffset,
             cameraRestLocalPosition.z);
 
         playerCamera.localRotation = Quaternion.Euler(

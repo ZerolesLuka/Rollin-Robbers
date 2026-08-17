@@ -45,7 +45,19 @@ public partial class Player : NetworkBehaviour
 
     [SerializeField] private float landNoiseAmount = 30f;      //how loud a hard landing is to the guard - way above walking (7) or sprinting (10.5), so a jump-land near him gives you away
     [SerializeField] private float landNoiseDecayRate = 60f;   //how fast that landing spike rings out, units per second
-    [SerializeField] private float minLandingFallSpeed = 4f;   //must be dropping at least this fast to count as a landing - stepping off a small lip stays quiet
+    //A landing is measured by HOW FAR YOU FELL, in metres, not how fast you were going.
+    //
+    //Speed can no longer answer this: the grounded stick writes to verticalVelocity and scales with your speed, so at
+    //a sprint it sits at -10.5 all on its own - well past any sane threshold. Every flicker of isGrounded then read as
+    //an impact and fired a full landing, which is what made sprinting and jumping shake the screen apart.
+    //
+    //Measured from the PEAK of the arc, not from where you left the ground. That distinction matters: a jump goes UP
+    //first and comes back to the same height, so measuring from the departure point makes every jump a zero-distance
+    //fall and silences it entirely.
+    [SerializeField] private float minLandingFallDistance = 0.5f;  //below this it's a stair, a kerb or a flicker - silent
+    [SerializeField] private float fullLandingFallDistance = 3.5f; //fall this far and the dip and the noise are at maximum
+    private float fallPeakHeight;  //highest point of the current arc
+    private bool airborneLastTick;
     [SerializeField] private float crackNoiseAmount = 14f;     //how loud cracking a safe is to the guard - above walking (7) and sprinting (10.5), so working a safe near him draws him in. that's the risk: you're pinned AND loud
     private float landingNoise;                                //current landing-noise spike; decays each tick and folds into NoiseLevel
     private bool wasGroundedForLanding;                        //grounded state last tick, to catch the airborne -> grounded moment
@@ -171,13 +183,13 @@ public partial class Player : NetworkBehaviour
     //rather than ticks.
     private float currentHorizontalSpeed; //this tick's ground speed, published by HandleMovement for PlayerGravity's slope stick
 
+
     //STAIR SMOOTHING. CharacterController climbs a step by teleporting the whole capsule up in a single frame - that
     //is what stepOffset IS - so every stair is an instant vertical jolt. The body has to pop (it's how the controller
     //works and the collision is correct), so the CAMERA lags behind instead and catches up smoothly. Nobody notices
     //their eyeline trailing a few centimetres; everybody notices a jolt per step.
-    [SerializeField] private float stairSmoothMaxDrop = 0.35f;        //furthest the camera is ever allowed to trail the body. clamped so a teleport can't sink it through the floor
-    [SerializeField] private float stairSmoothRecoverSpeed = 2.5f;    //metres per second it catches back up. too slow feels like sinking, too fast reintroduces the jolt
-    private float stairSmoothOffset;
+    //Stair smoothing removed - see Player.CameraFeel.cs. It hid step-up pops from stepped colliders; the stairs are
+    //ramps now, so there is nothing to hide, and all it did was misfire on landings.
 
     [SerializeField] private float movingPitchDegrees = 1.2f;         //steady forward lean while walking. eases in and out, never oscillates
     [SerializeField] private float sprintExtraPitchDegrees = 1.6f;    //leaning harder into a sprint, on top of the above
@@ -195,7 +207,7 @@ public partial class Player : NetworkBehaviour
 
     [SerializeField] private float landingDipAmount = 0.22f;          //how far the view drops on the hardest landing
     [SerializeField] private float landingRollDegrees = 2.4f;         //and it twists as you absorb it - landing square on is a robot
-    [SerializeField] private float landingDipFullSpeed = 14f;         //fall speed that earns the full dip; terminal is 20
+    //landingDipFullSpeed is gone - the dip is sized by fullLandingFallDistance now, in metres fallen
     [SerializeField] private float landingDipStiffness = 130f;        //how hard the view is pulled back to level
     [SerializeField] private float landingDipDamping = 16f;           //higher = fewer bounces on the way back up
     [SerializeField] private float breathSwayAmount = 0.35f;          //degrees of idle drift while rested
