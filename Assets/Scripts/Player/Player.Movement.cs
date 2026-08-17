@@ -23,7 +23,10 @@ public partial class Player
             TangledSecondsLeft = Mathf.Max(0f, TangledSecondsLeft - Runner.DeltaTime);
         }
 
-        bool isSprinting = sprinting && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
+        //You have to actually be MOVING to be sprinting. Without this, holding shift while stood still drained the
+        //whole bar and left you unable to run at the moment you needed to - and there was no feedback explaining why.
+        bool tryingToMove = inputVector.sqrMagnitude > 0.01f;
+        bool isSprinting = sprinting && tryingToMove && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
         isSprintingNow = isSprinting; //published for the render frame, which drives the sprint FOV push
         lastMoveInput = inputVector;  //likewise, for the strafe tilt - the tick is the only place the real input lands
         if (isSprinting)

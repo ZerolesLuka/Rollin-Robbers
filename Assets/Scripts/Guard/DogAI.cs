@@ -43,7 +43,7 @@ public class DogAI : NetworkBehaviour
 
     [SerializeField] private float patrolSpeed = 2f;
     [SerializeField] private float investigateSpeed = 3f;
-    [SerializeField] private float chaseSpeed = 7f; //faster than the guard - the dog is meant to be quick and scary, not a bigger overall threat
+    [SerializeField] private float chaseSpeed = 3.5f; //halved with everything else. faster than the guard - the dog is meant to be quick and scary, not a bigger overall threat
 
     private NavMeshAgent agent;
     private GuardVision vision;   //reusable sight component - same class GuardPatrol uses, own instance with dog-tuned values

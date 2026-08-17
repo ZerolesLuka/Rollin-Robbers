@@ -110,9 +110,11 @@ public class GuardPatrol : NetworkBehaviour
     private Vector3 lastFloorboardCreakPosition;
 
     [Header("Movement speeds")]
-    [SerializeField] private float relaxSpeed = 1.5f;   //strolling on patrol
-    [SerializeField] private float searchSpeed = 3.5f;  //investigating a noise
-    [SerializeField] private float chaseSpeed = 6.5f;   //player walks 7, so a sprintless player only just outruns him - THE main chase-feel lever
+    //All three halved alongside the player (2026-08-16). RATIOS are what make a chase feel the way it does, not
+    //absolute speeds - keeping them means every chase plays out exactly as it did before, over twice the time.
+    [SerializeField] private float relaxSpeed = 0.75f;   //strolling on patrol
+    [SerializeField] private float searchSpeed = 1.75f;  //investigating a noise
+    [SerializeField] private float chaseSpeed = 3.25f;   //player walks 3.5, so a sprintless player only just outruns him - THE main chase-feel lever
     [SerializeField] private float escortSpeed = 2.5f;  //walk pace while hauling someone to the closet
 
     private float angerMax = 100f;

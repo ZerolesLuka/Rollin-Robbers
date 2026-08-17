@@ -8,7 +8,7 @@ public class PlayerFootsteps : NetworkBehaviour
     [SerializeField] private AudioClip landingClip; // loud thud played when the player hits the ground after a jump/fall
     [SerializeField, Range(0f, 1f)] private float landingVolume = 0.6f; // how loud the thud SOUNDS - separate from how loud it is to the guard
     [SerializeField] private CharacterController characterController;
-    [SerializeField] private float strideLength = 2f;   //distance walked per step
+    [SerializeField] private float strideLength = 1f;   //distance walked per step. halved with the player's speed so the footstep cadence stays the same rhythm it always had
     [SerializeField] private float maxStepDistance = 1f; //any per-tick move larger than this is a teleport, not a step - ignore it so we don't spam footsteps
 
     private Vector3 lastPosition; // To track the player's last position

@@ -25,7 +25,12 @@ public partial class Player : NetworkBehaviour
     public Camera ViewCamera { get; private set; } //the rendering camera for this player - world-space UI needs it to raycast clicks
     public static readonly List<Player> ActivePlayers = new List<Player>(); //everyone currently in the session, AIs read this instead of scanning the scene once and going stale
     [Networked] public float NoiseLevel { get; private set; }
-    [SerializeField] private float moveSpeed = 7f;
+    //HALVED from 7 (2026-08-16). 7 m/s is faster than most people can SPRINT, and the house is built to real-house
+    //scale - so the house wasn't small, you were crossing it at five times human speed. Everything that has to stay in
+    //proportion was halved with it: the guard's three speeds, the dog's, and the footstep stride. Movement noise was
+    //DOUBLED at its source to compensate, since noise is speed x multiplier and halving speed would otherwise have
+    //made the guard deaf. Chases play out identically; the house just takes twice as long to cross.
+    [SerializeField] private float moveSpeed = 3.5f;
     [SerializeField] private Transform playerCamera; //simple camera ref
     //sensitivity is NOT a field here any more. it belongs to the machine, not to a spawned player object - it has to
     //survive scene loads and be there next launch, which a prefab field isn't. see GameSettings.
@@ -36,8 +41,11 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
     [SerializeField] private float voiceNoiseScale = 16f; //higher = more sensitive guard
-    [SerializeField] private float maxStamina = 3f;        //seconds of sprint you get
-    [SerializeField] private float staminaRegenRate = 1f;  //stamina back per second when not sprinting
+    //Doubled with the speed halving. Sprint is an ESCAPE tool, so what matters is the ground it buys you, not the
+    //seconds - 3s at the old speed covered about 31m, and 3s at the new one would only cover 16m. 6s keeps the escape
+    //the same size. Regen doubled to match so recovery takes the same wall-clock time it always did.
+    [SerializeField] private float maxStamina = 6f;        //seconds of sprint you get
+    [SerializeField] private float staminaRegenRate = 2f;  //stamina back per second when not sprinting
     [SerializeField] private float jumpHeight = 1.5f; //jump
 
     [SerializeField] private float fallGravityMultiplier = 2.2f;
