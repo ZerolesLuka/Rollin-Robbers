@@ -71,7 +71,9 @@ public partial class Player : NetworkBehaviour
     private bool wasGroundedForLanding;                        //grounded state last tick, to catch the airborne -> grounded moment
     private PlayerFootsteps playerFootsteps;                   //cached so a landing can fire the thud through the footstep audio pipeline
 
-    public float staminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
+    //Guarded: maxStamina is a serialized field, and at 0 this handed the HUD a NaN - which then propagates through
+    //every layout number it touches, so the bar silently vanishes instead of failing in a way you'd recognise.
+    public float staminaNormalized => maxStamina > 0f ? stamina / maxStamina : 0f; //0..1 for the HUD to read
 
     private float stamina;                                 //current
     private bool exhausted;                                //hit empty -> must recover before sprinting again
@@ -190,6 +192,7 @@ public partial class Player : NetworkBehaviour
     //Also deliberately SLOWER than the step rate - the sway runs over several steps instead of one, so it drifts
     //rather than ticks.
     private float currentHorizontalSpeed; //this tick's ground speed, published by HandleMovement for PlayerGravity's slope stick
+    private int landingsWithoutLean;      //alternates the landing twist when you come down running dead straight
 
 
     //STAIR SMOOTHING. CharacterController climbs a step by teleporting the whole capsule up in a single frame - that
@@ -793,6 +796,15 @@ public partial class Player : NetworkBehaviour
         //toolKind rides along so a DROPPED TOOL is still a tool when someone picks it back up. Without it a crowbar
         //left on the floor came back as a worthless nameless trinket, which is a silent way to destroy 600 credits.
         ToolType tool = (ToolType)toolKind;
+
+        //Same duplicate rule the SHOP enforces. GrantTool refuses to sell you a second of a tool you already own
+        //because the effects don't stack, but this path skipped that check entirely - so dropping a jammer and
+        //picking it back up while still holding one gave you two, and the second did nothing but eat a bag slot.
+        if (tool != ToolType.None && HasTool(tool) && !ToolTable.Stacks(tool))
+        {
+            return;
+        }
+
         inventory.Add(tool == ToolType.None
             ? new InventoryItem(itemName.ToString(), value)
             : new InventoryItem(tool));
