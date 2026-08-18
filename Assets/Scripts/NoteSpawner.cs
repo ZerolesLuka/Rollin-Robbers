@@ -43,6 +43,16 @@ public class NoteSpawner : MonoBehaviour
         }
 
         Safe targetSafe = Safe.AllSafes[Random.Range(0, Safe.AllSafes.Count)]; //one note per house for now; with several safes it picks whose code to leak
+        //A NoteSpawner with no child markers used to throw here: Random.Range(0, 0) returns 0 and GetChild(0) on a
+        //childless transform is an exception. Say what's wrong instead - this is a level-authoring mistake and the
+        //message has to name it, or you get a stack trace pointing at a random number generator.
+        if (transform.childCount == 0)
+        {
+            Debug.LogError($"[NoteSpawner] '{name}' has no child markers, so there is nowhere to put a code note. " +
+                           "Add empty children wherever a note should be able to appear.", this);
+            yield break;
+        }
+
         Transform marker = transform.GetChild(Random.Range(0, transform.childCount));
         Vector3 markerPosition = marker.position;
         Quaternion markerRotation = marker.rotation;
