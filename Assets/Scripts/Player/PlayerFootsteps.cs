@@ -44,6 +44,14 @@ public class PlayerFootsteps : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)] //basically means source comes from my input authority of the local, rpc targets all means it will play for everyone
     private void RPC_PlayFootstep()
     {
+        //An empty footstepClips array threw here on EVERY step - Random.Range(0, 0) is 0 and indexing an empty array
+        //is an exception - so an unconfigured player filled the console with stack traces while walking. Silence is
+        //the right failure: SetupValidator is what should be telling you the clips are missing, not the audio code.
+        if (footstepClips == null || footstepClips.Length == 0)
+        {
+            return;
+        }
+
         AudioClip clip = footstepClips[Random.Range(0, footstepClips.Length)]; // Randomly select a footstep clip
         audioSource.pitch = Random.Range(0.9f, 1.1f); // Slightly randomize the pitch for variety
         audioSource.PlayOneShot(clip); // Play the selected footstep clip
