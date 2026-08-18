@@ -109,9 +109,20 @@ public partial class Player
 
             //and it twists as you absorb it, whichever way you happened to be leaning. landing perfectly square is
             //the single most robotic thing a first-person camera can do.
-            //direction taken from which way you were leaning as you came down, so it's never the same twice in a row
-            //by accident
-            landingRoll = landingRollDegrees * landingHardness * (lastMoveInput.x >= 0f ? 1f : -1f);
+            //Direction from your lean where you HAVE one, and alternating otherwise. Running straight forward means
+            //lastMoveInput.x is exactly 0, so a simple >= 0 test picked +1 every single time and every forward landing
+            //twisted identically - which is the robotic sameness this roll exists to avoid.
+            float landingLean;
+            if (Mathf.Abs(lastMoveInput.x) > 0.01f)
+            {
+                landingLean = Mathf.Sign(lastMoveInput.x);
+            }
+            else
+            {
+                landingsWithoutLean++;
+                landingLean = (landingsWithoutLean & 1) == 0 ? 1f : -1f;
+            }
+            landingRoll = landingRollDegrees * landingHardness * landingLean;
         }
 
         wasGroundedForLanding = groundedNow;
