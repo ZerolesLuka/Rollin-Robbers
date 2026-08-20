@@ -102,6 +102,7 @@ public partial class Player
             if (!airborneLastTick)
             {
                 fallPeakHeight = transform.position.y;
+                fallTakeoffHeight = transform.position.y; //where the ground was when we left it
             }
             fallPeakHeight = Mathf.Max(fallPeakHeight, transform.position.y);
         }
@@ -121,10 +122,18 @@ public partial class Player
             //twitch and dropping off the landing is a proper buckle. Sprung back to level in UpdateLandingDip.
             //Set here rather than on the render frame because this is the only place that knows we JUST landed -
             //by the next Update, isGrounded is simply true and the impact is indistinguishable from standing.
-            //0 at the shortest fall that counts, 1 at a proper drop - so a kerb is a twitch and coming off the landing
-            //is a buckle. Distance, not speed, for the same reason the check above uses it.
+            //THE CAMERA USES A DIFFERENT MEASUREMENT TO THE SOUND, deliberately.
+            //
+            //The sound counts the whole arc from the apex, because you really did drop that far and it really should
+            //thud. But your BODY only absorbs how far you ended up BELOW where you took off - jump straight up on flat
+            //ground and you land exactly where you started, having absorbed nothing.
+            //
+            //Measured from the peak, a plain jump is a 1.5m fall (jumpHeight), which put every single jump at a third
+            //of maximum impact and dropped the view 7cm. Measured from takeoff it's zero, and only stepping off
+            //something actually shakes you.
+            float droppedBelowTakeoff = Mathf.Max(0f, fallTakeoffHeight - transform.position.y);
             float landingHardness = Mathf.Clamp01(
-                (fellDistance - minLandingFallDistance) / Mathf.Max(0.01f, fullLandingFallDistance - minLandingFallDistance));
+                (droppedBelowTakeoff - minLandingFallDistance) / Mathf.Max(0.01f, fullLandingFallDistance - minLandingFallDistance));
             landingDipOffset = -landingDipAmount * landingHardness; //negative = the head drops
             landingDipVelocity = 0f; //a second landing mid-recovery restarts the dip instead of fighting the old spring
 

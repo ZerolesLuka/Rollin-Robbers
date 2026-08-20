@@ -64,7 +64,8 @@ public partial class Player : NetworkBehaviour
     //fall and silences it entirely.
     [SerializeField] private float minLandingFallDistance = 0.5f;  //below this it's a stair, a kerb or a flicker - silent
     [SerializeField] private float fullLandingFallDistance = 3.5f; //fall this far and the dip and the noise are at maximum
-    private float fallPeakHeight;  //highest point of the current arc
+    private float fallPeakHeight;     //highest point of the current arc - drives the SOUND and the guard-heard noise
+    private float fallTakeoffHeight;  //where we left the ground - drives the CAMERA dip
     private bool airborneLastTick;
     [SerializeField] private float crackNoiseAmount = 14f;     //how loud cracking a safe is to the guard - above walking (7) and sprinting (10.5), so working a safe near him draws him in. that's the risk: you're pinned AND loud
     private float landingNoise;                                //current landing-noise spike; decays each tick and folds into NoiseLevel
