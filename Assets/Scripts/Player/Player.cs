@@ -191,6 +191,16 @@ public partial class Player : NetworkBehaviour
     //     only sharp thing left in the camera is an actual landing.
     //Also deliberately SLOWER than the step rate - the sway runs over several steps instead of one, so it drifts
     //rather than ticks.
+    //MOVEMENT SMOOTHING. Raw input went straight into the move vector, so a tap of D was instantly full speed
+    //sideways and letting go was an instant stop - which is what made straying left and right feel so twitchy.
+    //
+    //The INPUT is smoothed, not the resulting world direction. Smoothing the world vector would leave it pointing
+    //where you used to face for a moment after you turn, so walking forward while turning would curve you off course.
+    //Smoothing the 2D input keeps turning instant and only softens changes of KEY.
+    [SerializeField] private float moveAcceleration = 7f;  //how fast you reach full input. higher = snappier
+    [SerializeField] private float moveDeceleration = 10f; //how fast you come to rest. deliberately quicker than accel, or stopping feels like ice
+    private Vector2 smoothedMoveInput;
+
     private float currentHorizontalSpeed; //this tick's ground speed, published by HandleMovement for PlayerGravity's slope stick
     private int landingsWithoutLean;      //alternates the landing twist when you come down running dead straight
 

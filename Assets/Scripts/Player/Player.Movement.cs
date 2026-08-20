@@ -13,7 +13,12 @@ public partial class Player
 {
     private void HandleMovement(Vector2 inputVector, bool sprinting, bool jumpInput)
     {
-        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
+        //ramp toward the input rather than snapping to it. MoveTowards, not Lerp, so the rate is a real units-per-second
+        //number you can reason about instead of an exponential that never quite arrives.
+        float smoothingRate = inputVector.sqrMagnitude > smoothedMoveInput.sqrMagnitude ? moveAcceleration : moveDeceleration;
+        smoothedMoveInput = Vector2.MoveTowards(smoothedMoveInput, inputVector, smoothingRate * Runner.DeltaTime);
+
+        Vector3 moveDir = transform.right * smoothedMoveInput.x + transform.forward * smoothedMoveInput.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
         TickJammer(); //active/cooldown timers, on the tick so the duration is the same length for everyone
 
@@ -28,7 +33,7 @@ public partial class Player
         bool tryingToMove = inputVector.sqrMagnitude > 0.01f;
         bool isSprinting = sprinting && tryingToMove && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
         isSprintingNow = isSprinting; //published for the render frame, which drives the sprint FOV push
-        lastMoveInput = inputVector;  //likewise, for the strafe tilt - the tick is the only place the real input lands
+        lastMoveInput = smoothedMoveInput; //the SMOOTHED value, so the camera's strafe tilt eases with the movement instead of snapping ahead of it
         if (isSprinting)
         {
             stamina -= Runner.DeltaTime; //sprinting burns stamina
