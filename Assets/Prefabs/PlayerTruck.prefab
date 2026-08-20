@@ -3073,6 +3073,16 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 6556187895491366982, guid: 22659212538d64441aa7af56c6a17ce0, type: 3}
   m_PrefabInstance: {fileID: 8023000486693949116}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &8018218857064646396 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4789464740169792, guid: 22659212538d64441aa7af56c6a17ce0, type: 3}
+  m_PrefabInstance: {fileID: 8023000486693949116}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &8018423244082764668 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4579579081790912, guid: 22659212538d64441aa7af56c6a17ce0, type: 3}
+  m_PrefabInstance: {fileID: 8023000486693949116}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &8018602795206030708 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4680266011933640, guid: 22659212538d64441aa7af56c6a17ce0, type: 3}
@@ -3098,6 +3108,11 @@ MonoBehaviour:
   driverSeat: {fileID: 8023372676935362960}
   interactRange: 2
   backBarrier: {fileID: 3867235595111063290}
+  backDoorLeft: {fileID: 8018218857064646396}
+  backDoorRight: {fileID: 8018423244082764668}
+  leftDoorOpenYAngle: -114
+  rightDoorOpenYAngle: -114
+  doorSwingSpeed: 3
 --- !u!1 &8021640604164937340 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1684238629083328, guid: 22659212538d64441aa7af56c6a17ce0, type: 3}
