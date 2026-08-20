@@ -70,6 +70,13 @@ public class RunManager : NetworkBehaviour
             State = RunState.InProgress; //only the authority may write networked state. a joining client used to run this too, which is an unauthorized write Fusion just discards
             Host = Runner.LocalPlayer; //we spawned this, so we're the room's creator - remember it for everyone
             FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
+
+            //START SEALED. A NetworkBool defaults to FALSE, so the van's back was open from the moment the session
+            //began and only ever closed once a run had ENDED - which meant on a fresh session you could walk straight
+            //out of the van without picking a destination, and the barrier only appeared after your first completed
+            //run. Seeding it true makes the crew choose on the laptop before they can leave, which is the whole
+            //reason the barrier exists. RPC_Route clears it the moment a destination is picked.
+            VanBackClosed = true;
         }
     }
 
