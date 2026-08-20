@@ -18,7 +18,11 @@ public partial class Player
         float smoothingRate = inputVector.sqrMagnitude > smoothedMoveInput.sqrMagnitude ? moveAcceleration : moveDeceleration;
         smoothedMoveInput = Vector2.MoveTowards(smoothedMoveInput, inputVector, smoothingRate * Runner.DeltaTime);
 
-        Vector3 moveDir = transform.right * smoothedMoveInput.x + transform.forward * smoothedMoveInput.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
+        //clamped so a diagonal isn't faster than a straight line - W+D is (1,1), which is 1.41 long, and without this
+        //the fastest way across a room is at 45 degrees. Harmless if the input asset already normalises it.
+        Vector2 movement = Vector2.ClampMagnitude(smoothedMoveInput, 1f);
+
+        Vector3 moveDir = transform.right * movement.x + transform.forward * movement.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
         TickJammer(); //active/cooldown timers, on the tick so the duration is the same length for everyone
 
@@ -31,7 +35,12 @@ public partial class Player
         //You have to actually be MOVING to be sprinting. Without this, holding shift while stood still drained the
         //whole bar and left you unable to run at the moment you needed to - and there was no feedback explaining why.
         bool tryingToMove = inputVector.sqrMagnitude > 0.01f;
-        bool isSprinting = sprinting && tryingToMove && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
+
+        //SPRINT IS FORWARD ONLY. Backpedalling or sidestepping at full running speed is the thing that makes a lot of
+        //first-person movement feel weightless - you can flee while never taking your eyes off what's chasing you,
+        //which costs nothing. Requiring you to face where you're going makes running away an actual commitment.
+        bool sprintingForward = inputVector.y > 0.5f;
+        bool isSprinting = sprinting && tryingToMove && sprintingForward && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
         isSprintingNow = isSprinting; //published for the render frame, which drives the sprint FOV push
         lastMoveInput = smoothedMoveInput; //the SMOOTHED value, so the camera's strafe tilt eases with the movement instead of snapping ahead of it
         if (isSprinting)
@@ -61,6 +70,13 @@ public partial class Player
         {
             speed = moveSpeed * sprintSpeedMultiplier;
         }
+
+        //DIRECTION. Blended off how forward you're heading rather than switched between three cases, so a diagonal
+        //sits between its two neighbours instead of snapping to one of them as you turn.
+        float directionMultiplier = movement.y >= 0f
+            ? Mathf.Lerp(strafeSpeedMultiplier, 1f, movement.y)                    //pure strafe -> forward
+            : Mathf.Lerp(strafeSpeedMultiplier, backwardSpeedMultiplier, -movement.y); //pure strafe -> backpedal
+        speed *= directionMultiplier;
 
         if (IsTangled)
         {

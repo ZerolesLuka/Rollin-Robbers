@@ -201,6 +201,15 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float moveDeceleration = 10f; //how fast you come to rest. deliberately quicker than accel, or stopping feels like ice
     private Vector2 smoothedMoveInput;
 
+    //DIRECTIONAL SPEED. Every direction used to move at exactly the same rate, which is why no combination of WASD
+    //felt any different from any other - mechanically they were identical, and only the view told you otherwise.
+    //A body doesn't work like that: you're quickest going forward, slower sidestepping, and slowest backing away.
+    //
+    //It also matters for stealth specifically. Backing out of a room while watching a doorway SHOULD be the slow,
+    //exposed option - that's a decision. At equal speed it's free.
+    [SerializeField] private float strafeSpeedMultiplier = 0.78f;
+    [SerializeField] private float backwardSpeedMultiplier = 0.6f;
+
     private float currentHorizontalSpeed; //this tick's ground speed, published by HandleMovement for PlayerGravity's slope stick
     private int landingsWithoutLean;      //alternates the landing twist when you come down running dead straight
 
