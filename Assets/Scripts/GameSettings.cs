@@ -10,10 +10,10 @@ using UnityEngine;
 // and the change is audible under your finger. There's no Apply button to forget to press.
 public static class GameSettings
 {
-    private const string SensitivityKey = "rr_sensitivity";
-    private const string InvertYKey     = "rr_invert_y";
-    private const string MasterVolKey   = "rr_master_volume";
-    private const string VoiceVolKey    = "rr_voice_volume";
+    private const string SensitivityKey  = "rr_sensitivity";
+    private const string InvertYKey      = "rr_invert_y";
+    private const string MasterVolKey    = "rr_master_volume";
+    private const string VoiceVolKey     = "rr_voice_volume";
 
     //the values a fresh install starts on. sensitivity matches what the Player prefab used to carry, so nobody's
     //existing feel changes the day this lands.
@@ -77,6 +77,10 @@ public static class GameSettings
             PlayerPrefs.SetFloat(VoiceVolKey, voiceVolume);
         }
     }
+
+    //NOTE: camera motion is deliberately NOT a setting. The amount of head bob, sway and tilt is authored on the
+    //Player prefab (cameraMotionScale) and is the same for every player - it's part of the game's feel, not a
+    //preference. It was a slider briefly; that was removed on purpose, so don't add it back.
 
     //Effective look sensitivity for the vertical axis, sign included - so nothing else has to remember the invert flag.
     public static float LookSensitivityY => MouseSensitivity * (InvertLookY ? -1f : 1f);

@@ -5,7 +5,7 @@ using UnityEngine.AI;
 
 public class GuardPatrol : NetworkBehaviour
 {
-    public enum GuardState { Asleep, Relaxed, Suspicious, Searching, Chasing, Caught, Escorting }
+    public enum GuardState { Asleep, Relaxed, Suspicious, Searching, Chasing, Caught, Escorting, Planting }
     //
     public static GuardPatrol Instance; //the master's guard, so sensors (toys, cameras, ...) can ping it without needing a scene reference
     [Networked] public GuardState State { get; private set; } //the guard's current state
@@ -60,6 +60,16 @@ public class GuardPatrol : NetworkBehaviour
 
     private NavMeshAgent agent; //guard
     private float reachDistance = 0.5f; //technical nav constant - how close counts as "arrived" at a waypoint. hidden from the tuning panel (say the word to bring it back)
+
+    //EDGE AVOIDANCE. NavMesh steers to the SHORTEST path, so on a staircase - especially a switchback - the cheapest
+    //line is right along the inside rail, and he hugged it the whole way up. That isn't a steering bug, the path is
+    //genuinely drawn there; the fix is to stop wanting the absolute shortest line.
+    //
+    //Done in code rather than with NavMeshModifierVolumes over each rail because area costs are a BAKE-time property -
+    //marking the edges is manual work per staircase, and this covers every edge in the house for free, walls included.
+    [SerializeField] private float edgeClearance = 0.55f;    //how far off a navmesh edge he tries to stay
+    [SerializeField] private float edgeAvoidSmoothing = 6f;  //how quickly the nudge eases in and out - instant would jitter
+    private Vector3 edgeAvoidOffset;
     private Transform closetSpot; //closet is a scene object, handed over by the spawner at spawn (a prefab can't hold a scene ref - same reason as waypoints)
     private bool warnedAboutMissingCloset; //latch, so a level with no closet complains once instead of on every catch
 
@@ -108,9 +118,11 @@ public class GuardPatrol : NetworkBehaviour
     private Vector3 lastFloorboardCreakPosition;
 
     [Header("Movement speeds")]
-    [SerializeField] private float relaxSpeed = 1.5f;   //strolling on patrol
-    [SerializeField] private float searchSpeed = 3.5f;  //investigating a noise
-    [SerializeField] private float chaseSpeed = 6.5f;   //player walks 7, so a sprintless player only just outruns him - THE main chase-feel lever
+    //All three halved alongside the player (2026-08-16). RATIOS are what make a chase feel the way it does, not
+    //absolute speeds - keeping them means every chase plays out exactly as it did before, over twice the time.
+    [SerializeField] private float relaxSpeed = 0.75f;   //strolling on patrol
+    [SerializeField] private float searchSpeed = 1.75f;  //investigating a noise
+    [SerializeField] private float chaseSpeed = 3.25f;   //player walks 3.5, so a sprintless player only just outruns him - THE main chase-feel lever
     [SerializeField] private float escortSpeed = 2.5f;  //walk pace while hauling someone to the closet
 
     private float angerMax = 100f;
@@ -132,10 +144,18 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField, Range(0f, 1f)] private float baitChance = 0.3f; //how often he plants bait INSTEAD of setting a trap. keep it a minority - bait only works while players still trust loot on sight
     [SerializeField] private float angerToSetTraps = 25f;      //he has to be rattled first. one quiet noise early on shouldn't start him wiring the place
     [SerializeField] private int maxTrapsPerRun = 5;           //everything he's carrying. also stops a long run turning the house into a minefield
-    [SerializeField] private float trapPointSearchRange = 12f; //how far from where he lost you he'll walk a wire to. TrapPoints are placed by hand in the scene - see TrapPoint.cs
+    [SerializeField] private float trapPointSearchRange = 12f; //how far from where he lost you he'll walk a wire to. Spans are placed by hand in the scene - see TripwireSpan.cs
     [SerializeField] private float trapScatterRadius = 4f;     //how far from that spot a floor trap can end up. he's guessing, not tracking - this is the guess
     [SerializeField] private float minTrapSpacing = 3f;        //don't stack a second trap on ground he's already covered
     private int trapsSetThisRun;                               //runtime count, not a tuning value
+
+    //PLANTING. He walks to one anchor, then the other, then the wire exists - rather than the old behaviour of the
+    //trap simply appearing at range the instant he gave up. Players can watch him string it and learn the spot, which
+    //is the whole reason it's worth the seconds it costs him.
+    [SerializeField] private float anchorPauseTime = 0.8f;     //beat spent at each end. stands in for a stringing animation for now
+    private TripwireSpan plantSpan;                            //the span he's committed to
+    private bool plantAtFarEnd;                                //false = walking to the near anchor, true = the far one
+    private float plantPauseTimer;
     [Networked] public float Anger { get; private set; }          //how riled up he is; host-owned, readable for a future HUD
 
 
@@ -462,13 +482,74 @@ public class GuardPatrol : NetworkBehaviour
                 if (Anger >= angerEliminateThreshold || !canDragThemOff) //furious enough to throw them out for the run
                 {
                     chaseTarget.RPC_GetCaught();
-                    if (RunManager.Instance != null) RunManager.Instance.OnPlayerCaught(chaseTarget.Object.InputAuthority); //tell the run tracker this specific player is out
+                    if (RunManager.Instance != null)
+                    {
+                        RunManager.Instance.OnPlayerCaught(chaseTarget.Object.InputAuthority); //tell the run tracker this specific player is out
+                    }
+
+                    //Catching the last player ends the run, and that tears this guard down while we are still inside
+                    //this tick - the same queued-despawn window IsLive exists for, except here the object dies BETWEEN
+                    //the switch on State above and this line, so a guard at the top of the method would already have
+                    //passed. State is dead by now, so changing it throws every time the final player is caught. Bail
+                    //instead: a guard that is being despawned has no state worth setting, and returning also skips the
+                    //agent/facing work at the bottom, which has nothing left to drive.
+                    if (!IsLive) return;
+
                     ChangeState(GuardState.Relaxed);
                 }
                 else //just annoyed - drag them off to the closet instead of eliminating
                 {
                     escortTarget = chaseTarget;
                     ChangeState(GuardState.Escorting);
+                }
+                break;
+            case GuardState.Planting:
+                //A LIVE PLAYER ALWAYS OUTRANKS ADMIN. Vision is checked per-state in this FSM rather than globally, so
+                //without this he'd stand there tying a knot while someone walked past his face. Checked BEFORE the
+                //walking, so spotting someone costs him the wire immediately rather than after one more step.
+                Player spottedWhilePlanting = null;
+                foreach (Player player in Player.ActivePlayers)
+                {
+                    if (player.IsEliminated) continue; //don't hunt players who are already out
+                    if (vision.CanSee(player.transform)) //CanSee already skips hidden players - see GuardVision
+                    {
+                        spottedWhilePlanting = player;
+                        break; //unlike Searching we don't need the LOUDEST, just any reason to drop the wire and go
+                    }
+                }
+                if (spottedWhilePlanting != null)
+                {
+                    chaseTarget = spottedWhilePlanting;
+                    plantSpan = null; //abandoned, and NOT refunded - trapsSetThisRun only counts wires he actually strung
+                    ChangeState(GuardState.Chasing);
+                    break;
+                }
+
+                if (plantSpan == null || !plantSpan.HasFarEnd) //span was destroyed by a scene change, or was never valid
+                {
+                    ChangeState(GuardState.Relaxed);
+                    break;
+                }
+
+                Vector3 anchorTarget = plantAtFarEnd ? plantSpan.AnchorB : plantSpan.AnchorA;
+                agent.SetDestination(anchorTarget);
+
+                if (!agent.pathPending && agent.remainingDistance <= reachDistance)
+                {
+                    plantPauseTimer += Runner.DeltaTime; //a beat at each end, standing in for a stringing animation
+                    if (plantPauseTimer >= anchorPauseTime)
+                    {
+                        plantPauseTimer = 0f;
+                        if (!plantAtFarEnd)
+                        {
+                            plantAtFarEnd = true; //first end done, walk the wire across to the second
+                        }
+                        else
+                        {
+                            FinishPlanting();
+                            ChangeState(GuardState.Relaxed);
+                        }
+                    }
                 }
                 break;
             case GuardState.Escorting:
@@ -485,7 +566,7 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 break;
         }
-        transform.position = agent.nextPosition; //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
+        transform.position = StepAwayFromEdges(agent.nextPosition); //apply the agent's steering ON the tick - same clock as the player, no NetworkTransform tug-of-war
         FaceMovementDirection(); //and point him where he's actually going, not where the agent wishes it were going
     }
     public override void Despawned(NetworkRunner runner, bool hasState) //he's despawned on every scene change, so this is where his mood gets banked for the trip
@@ -524,6 +605,71 @@ public class GuardPatrol : NetworkBehaviour
         if (State == GuardState.Chasing || State == GuardState.Caught || State == GuardState.Escorting) return; //never override an active chase/capture
         lastKnownPosition = spot; //a newer alert just overwrites this, so a later toy overrides an earlier one
         ChangeState(GuardState.Searching); //walks there, sweeps, chases if he spots someone, gives up to Relaxed if nothing
+    }
+
+    //Nudge him off the nearest navmesh edge so he walks down the middle of a staircase or corridor instead of scraping
+    //the rail. FindClosestEdge gives the nearest boundary and its distance; anything inside edgeClearance gets pushed
+    //back, harder the closer he is.
+    //
+    //The result is ALWAYS re-sampled onto the navmesh before it's used. Without that, the push is just a vector added
+    //to a position and would happily shove him through a bannister or off a landing - which is worse than the problem
+    //it's fixing. If the nudged spot isn't valid, he keeps the agent's own position and hugs the rail for that tick.
+    private Vector3 StepAwayFromEdges(Vector3 agentPosition)
+    {
+        Vector3 wantedOffset = Vector3.zero;
+
+        if (NavMesh.FindClosestEdge(agentPosition, out NavMeshHit edge, NavMesh.AllAreas) && edge.distance < edgeClearance)
+        {
+            Vector3 awayFromEdge = agentPosition - edge.position;
+            awayFromEdge.y = 0f; //push sideways only - lifting him off a staircase is exactly the wrong correction
+            if (awayFromEdge.sqrMagnitude > 0.0001f)
+            {
+                float howCrowded = 1f - (edge.distance / edgeClearance);
+                wantedOffset = awayFromEdge.normalized * howCrowded * edgeClearance;
+            }
+        }
+
+        //eased, so stepping into a doorway doesn't snap him sideways the frame the nearest edge changes
+        edgeAvoidOffset = Vector3.Lerp(edgeAvoidOffset, wantedOffset, edgeAvoidSmoothing * Runner.DeltaTime);
+        if (edgeAvoidOffset.sqrMagnitude < 0.0001f)
+        {
+            return agentPosition;
+        }
+
+        if (NavMesh.SamplePosition(agentPosition + edgeAvoidOffset, out NavMeshHit nudged, edgeClearance, NavMesh.AllAreas))
+        {
+            return nudged.position;
+        }
+        return agentPosition;
+    }
+
+    //DEBUG ONLY - the F1 panel calls this. Deliberately skips the anger gate, the trap budget and the 2-in-3 dice
+    //roll: reproducing the real path means getting seen, breaking line of sight and waiting out a whole failed search
+    //to watch five seconds of behaviour, and nobody tunes anything under those conditions. Searches the whole house
+    //rather than trapPointSearchRange so it finds your one test span wherever you happen to be standing.
+    public void DebugPlantWireNear(Vector3 spot)
+    {
+        if (!IsLive) return;
+        if (!HasStateAuthority)
+        {
+            Debug.LogWarning("[Guard] Only the host drives the guard, so this button does nothing on a client.", this);
+            return;
+        }
+
+        TripwireSpan span = TripwireSpan.FindNearestFree(spot, 200f);
+        if (span == null)
+        {
+            //say WHY rather than doing nothing - the three causes are indistinguishable from the outside, and a dead
+            //debug button is worse than no debug button because you start doubting the feature instead of the setup
+            Debug.LogWarning("[Guard] No usable TripwireSpan found. Either none are placed, the nearest is already " +
+                             "wired, or its line is blocked. Press play and read SetupValidator - it names broken spans.", this);
+            return;
+        }
+
+        plantSpan = span;
+        plantAtFarEnd = false;
+        plantPauseTimer = 0f;
+        ChangeState(GuardState.Planting);
     }
 
     public void RegisterFloorboardCreak(Vector3 spot) //floorboards don't alert on a single creak - it takes several in a row before he bothers to come look
@@ -612,6 +758,12 @@ public class GuardPatrol : NetworkBehaviour
                 }
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
+            case GuardState.Planting:
+                agent.speed = searchSpeed; //still working, not strolling - he wants this done before you come back
+                plantPauseTimer = 0f;
+                //no PlayStateSound: there's no bark recorded for this yet, and PlayStateSound on a missing clip would
+                //just be silence with extra steps. add a line here when a "setting a trap" bark exists.
+                break;
             case GuardState.Caught:
                 PlayStateSound(newState); //bark whenever he changes state
                 break;
@@ -679,15 +831,20 @@ public class GuardPatrol : NetworkBehaviour
             return;
         }
 
-        //the nearest TrapPoint the level author marked - a doorway, the top of the stairs, a hallway pinch. he takes
+        //the nearest span the level author marked - a doorway, the top of the stairs, a hallway pinch. he takes
         //whichever is closest to where he lost you, so he's covering the way he reckons you went.
-        TrapPoint wireSpot = TrapPoint.FindNearestFree(seenPosition, trapPointSearchRange);
+        TripwireSpan wireSpot = TripwireSpan.FindNearestFree(seenPosition, trapPointSearchRange);
 
         //a marked spot gets the wire about two times in three - the rest of the time he does something less
         //predictable, because a guard who ALWAYS wires the same doorways is one you can route around forever.
         if (wireSpot != null && tripwirePrefab != null && Random.value < 0.66f)
         {
-            SpawnTrapAt(tripwirePrefab, wireSpot.transform.position);
+            //he doesn't conjure it from across the house any more - he goes and strings it. The wire is only spawned
+            //once he's stood at the far anchor, in FinishPlanting.
+            plantSpan = wireSpot;
+            plantAtFarEnd = false;
+            plantPauseTimer = 0f;
+            ChangeState(GuardState.Planting);
             return;
         }
 
@@ -697,7 +854,13 @@ public class GuardPatrol : NetworkBehaviour
         if (floorTrap == null)
         {
             //nothing else assigned - fall back to the wire so a half-configured guard still does something
-            if (wireSpot != null && tripwirePrefab != null) SpawnTrapAt(tripwirePrefab, wireSpot.transform.position);
+            if (wireSpot != null && tripwirePrefab != null)
+            {
+                plantSpan = wireSpot;
+                plantAtFarEnd = false;
+                plantPauseTimer = 0f;
+                ChangeState(GuardState.Planting);
+            }
             return;
         }
 
@@ -757,6 +920,35 @@ public class GuardPatrol : NetworkBehaviour
         return bearTrapPrefab != null ? bearTrapPrefab : alarmPrefab;
     }
 
+    //He's stood at the second anchor - the wire exists from here on. Spawned at the MIDPOINT so the object (and its
+    //3D snap sound) sits in the middle of the doorway, with both ends carried as networked data so detection can do
+    //point-to-segment rather than pretending a wire is a dot.
+    private void FinishPlanting()
+    {
+        if (plantSpan == null || tripwirePrefab == null)
+        {
+            return;
+        }
+
+        Vector3 endA = plantSpan.AnchorA;
+        Vector3 endB = plantSpan.AnchorB;
+        Vector3 midpoint = plantSpan.Midpoint;
+        plantSpan = null; //done with it either way, so a failed spawn can't leave him committed to a span forever
+
+        trapsSetThisRun++;
+        Runner.Spawn(tripwirePrefab, midpoint, Quaternion.identity, PlayerRef.None, (spawnRunner, spawnedObject) =>
+        {
+            GuardTrap trap = spawnedObject.GetComponent<GuardTrap>();
+            if (trap != null)
+            {
+                trap.SpawnPoint = midpoint;  //networked-position safeguard - a deferred spawn drops the position argument and dumps it at world origin
+                trap.UseSpawnPoint = true;
+                trap.WireEndA = endA;
+                trap.WireEndB = endB;
+            }
+        });
+    }
+
     private void SpawnTrapAt(NetworkObject prefab, Vector3 position)
     {
         trapsSetThisRun++;
@@ -802,14 +994,14 @@ public class GuardPatrol : NetworkBehaviour
             return;
         }
 
-        shutDoor.SetOpen(true);                                                  //open it here immediately so we stop re-detecting it next tick
+        shutDoor.SetOpenAwayFrom(transform.position);                            //open it here immediately so we stop re-detecting it next tick, and away from us so it isn't swinging through his own body
         //this was the ONLY unguarded RunManager.Instance in the file - the identical call in the wedge-breaking
         //branch above checks it. Both are shouted about rather than skipped quietly: we've already swung the door on
         //THIS machine, so losing the RPC leaves a door that is open for the guard and shut for every player, and a
         //silent desync is far worse to debug than a line in the console saying exactly which one went missing.
         if (RunManager.Instance != null)
         {
-            RunManager.Instance.RPC_SetDoorOpen(shutDoor.transform.position, true); //and tell every other client to swing their copy
+            RunManager.Instance.RPC_ShoveDoorOpen(shutDoor.transform.position, transform.position); //and tell every other client to swing their copy - our position rides along so they all pick the SAME swing direction
         }
         else
         {

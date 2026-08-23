@@ -25,7 +25,12 @@ public partial class Player : NetworkBehaviour
     public Camera ViewCamera { get; private set; } //the rendering camera for this player - world-space UI needs it to raycast clicks
     public static readonly List<Player> ActivePlayers = new List<Player>(); //everyone currently in the session, AIs read this instead of scanning the scene once and going stale
     [Networked] public float NoiseLevel { get; private set; }
-    [SerializeField] private float moveSpeed = 7f;
+    //HALVED from 7 (2026-08-16). 7 m/s is faster than most people can SPRINT, and the house is built to real-house
+    //scale - so the house wasn't small, you were crossing it at five times human speed. Everything that has to stay in
+    //proportion was halved with it: the guard's three speeds, the dog's, and the footstep stride. Movement noise was
+    //DOUBLED at its source to compensate, since noise is speed x multiplier and halving speed would otherwise have
+    //made the guard deaf. Chases play out identically; the house just takes twice as long to cross.
+    [SerializeField] private float moveSpeed = 3.5f;
     [SerializeField] private Transform playerCamera; //simple camera ref
     //sensitivity is NOT a field here any more. it belongs to the machine, not to a spawned player object - it has to
     //survive scene loads and be there next launch, which a prefab field isn't. see GameSettings.
@@ -36,8 +41,11 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
     [SerializeField] private float voiceNoiseScale = 16f; //higher = more sensitive guard
-    [SerializeField] private float maxStamina = 3f;        //seconds of sprint you get
-    [SerializeField] private float staminaRegenRate = 1f;  //stamina back per second when not sprinting
+    //Doubled with the speed halving. Sprint is an ESCAPE tool, so what matters is the ground it buys you, not the
+    //seconds - 3s at the old speed covered about 31m, and 3s at the new one would only cover 16m. 6s keeps the escape
+    //the same size. Regen doubled to match so recovery takes the same wall-clock time it always did.
+    [SerializeField] private float maxStamina = 6f;        //seconds of sprint you get
+    [SerializeField] private float staminaRegenRate = 2f;  //stamina back per second when not sprinting
     [SerializeField] private float jumpHeight = 1.5f; //jump
 
     [SerializeField] private float fallGravityMultiplier = 2.2f;
@@ -45,13 +53,28 @@ public partial class Player : NetworkBehaviour
 
     [SerializeField] private float landNoiseAmount = 30f;      //how loud a hard landing is to the guard - way above walking (7) or sprinting (10.5), so a jump-land near him gives you away
     [SerializeField] private float landNoiseDecayRate = 60f;   //how fast that landing spike rings out, units per second
-    [SerializeField] private float minLandingFallSpeed = 4f;   //must be dropping at least this fast to count as a landing - stepping off a small lip stays quiet
+    //A landing is measured by HOW FAR YOU FELL, in metres, not how fast you were going.
+    //
+    //Speed can no longer answer this: the grounded stick writes to verticalVelocity and scales with your speed, so at
+    //a sprint it sits at -10.5 all on its own - well past any sane threshold. Every flicker of isGrounded then read as
+    //an impact and fired a full landing, which is what made sprinting and jumping shake the screen apart.
+    //
+    //Measured from the PEAK of the arc, not from where you left the ground. That distinction matters: a jump goes UP
+    //first and comes back to the same height, so measuring from the departure point makes every jump a zero-distance
+    //fall and silences it entirely.
+    [SerializeField] private float minLandingFallDistance = 0.5f;  //below this it's a stair, a kerb or a flicker - silent
+    [SerializeField] private float fullLandingFallDistance = 3.5f; //fall this far and the dip and the noise are at maximum
+    private float fallPeakHeight;     //highest point of the current arc - drives the SOUND and the guard-heard noise
+    private float fallTakeoffHeight;  //where we left the ground - drives the CAMERA dip
+    private bool airborneLastTick;
     [SerializeField] private float crackNoiseAmount = 14f;     //how loud cracking a safe is to the guard - above walking (7) and sprinting (10.5), so working a safe near him draws him in. that's the risk: you're pinned AND loud
     private float landingNoise;                                //current landing-noise spike; decays each tick and folds into NoiseLevel
     private bool wasGroundedForLanding;                        //grounded state last tick, to catch the airborne -> grounded moment
     private PlayerFootsteps playerFootsteps;                   //cached so a landing can fire the thud through the footstep audio pipeline
 
-    public float staminaNormalized => stamina / maxStamina; //0..1 for the HUD to read
+    //Guarded: maxStamina is a serialized field, and at 0 this handed the HUD a NaN - which then propagates through
+    //every layout number it touches, so the bar silently vanishes instead of failing in a way you'd recognise.
+    public float staminaNormalized => maxStamina > 0f ? stamina / maxStamina : 0f; //0..1 for the HUD to read
 
     private float stamina;                                 //current
     private bool exhausted;                                //hit empty -> must recover before sprinting again
@@ -78,6 +101,17 @@ public partial class Player : NetworkBehaviour
     [Networked] public NetworkString<_16> DisplayName { get; private set; } //who this is, for nameplates. written once by the owner in Spawned; the source lives in PlayerIdentity so Steam can take over later
 
     [Networked] public int WedgesCarried { get; private set; } //door wedges in your pockets. networked so teammates' prompts and the HUD can see what you're holding
+    //SIGNAL JAMMER, carried. Right-click while it's in your bag to burn a charge and blind cameras around YOU for a
+    //few seconds; put it down with Q and it covers a fixed spot instead so you can walk away from it.
+    //
+    //All three are [Networked] because the jamming has to be true for everyone - a camera is evaluated on the master,
+    //not on the machine of whoever pressed the button.
+    [Networked] public int JammerChargesLeft { get; set; }
+    [Networked] public float JammerActiveSecondsLeft { get; set; }
+    [Networked] public float JammerCooldownSecondsLeft { get; set; }
+    public bool IsJammerActive => JammerActiveSecondsLeft > 0f;
+    private bool jammerHeldLastFrame; //rising-edge detect so holding right-click doesn't burn every charge at once
+
     [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you press Q with a Signal Jammer in your kit. leave empty and it simply can't be deployed
     [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
     [SerializeField] private int maxWedgesCarried = 3;
@@ -87,15 +121,154 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
     private float safeInteractHoldTime;                         //how long E has been held at a safe this press
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
+    //PROPS THAT APPEAR IN YOUR HAND. Park them all as CHILDREN of the player model roughly where a hand would be,
+    //leave every one DISABLED in the prefab, and UpdateHeldItemVisual switches on whichever matches what you're
+    //holding. Any slot left empty just means that item shows nothing - the feature degrades one item at a time
+    //rather than falling over.
+    //ONE list, one row per thing you can hold. The row whose tool is None is ORDINARY LOOT, and it doubles as the
+    //fallback for any tool nobody has modelled yet - so a crowbar with no model of its own still puts something in
+    //your hand rather than nothing.
+    [SerializeField] private HeldProp[] heldProps;
+
+    [System.Serializable]
+    public struct HeldProp
+    {
+        public ToolType tool;   //None = ordinary loot / fallback
+        public GameObject prop; //a child of the player model, left DISABLED in the prefab
+    }
+
+    //WHICH item is in our hand, replicated so every client's copy of us holds the same thing. -1 means empty-handed.
+    //CarriedCount alone was only ever enough to answer "is he carrying something"; a crowbar and a vase need to look
+    //different in someone else's view, and SelectedSlot is deliberately local-only.
+    [Networked] public int HeldKind { get; private set; }
+
+    private void PublishHeldKind()
+    {
+        int slot = ResolveDropSlot();
+        HeldKind = slot < 0 ? -1 : (int)inventory[slot].tool; //ToolType.None is 0, which is the ordinary-loot case
+    }
     private bool wasHiding;
 
     [Networked] public bool IsFlashlightOn { get; private set; } //replicated so teammates see your beam, same idea as IsHiding driving playerVisuals
     [Networked] private float lookPitch { get; set; } //owner writes its up/down look angle here so remote clients can aim its flashlight beam vertically (their camera pitch isn't otherwise networked)
     [SerializeField] private Light flashlight; //spotlight child; assign in inspector
-    [SerializeField] private float flashlightFollowSpeed = 8f; //how fast the beam catches up to where you're looking - lower = more lag/sway off the camera
+    //A SPRING, not a smooth-follow. The beam used to ease toward where you were looking, which never overshoots and
+    //so reads as "smoothed" rather than "held". A real torch has weight - it swings past where you stopped and settles
+    //back, and that settle is the whole tell. Stiffness is how hard it's pulled toward your aim, damping is how fast
+    //the wobble dies: low damping = a loose wrist, high damping = a clamp.
+    [SerializeField] private float flashlightSpringStiffness = 90f;
+    [SerializeField] private float flashlightSpringDamping = 9f;
     [SerializeField] private float flashlightSwayAmount = 1.5f; //idle handheld tremor, in degrees - keeps the beam alive when you're still
     [SerializeField] private float flashlightSwayFrequency = 1.1f; //how fast that tremor drifts
     [SerializeField] private float flashlightWalkSwayMultiplier = 3f; //how much bigger the sway gets while walking - the bob that sells "handheld"
+    //TRIPWIRE TANGLE. A hobble with a timer, not a hold - the bear trap is the one that stops you dead and needs a
+    //teammate. Networked so everyone sees you stumbling, and so the timer survives the host being someone else.
+    [SerializeField] private float tangledSpeedMultiplier = 0.45f; //slow enough to be frightening, fast enough to still make a run for it
+    [Networked] public float TangledSecondsLeft { get; set; }
+    public bool IsTangled => TangledSecondsLeft > 0f;
+
+    //CAMERA FEEL - head bob, landing dip, breathing, strafe tilt, sprint FOV. See Player.CameraFeel.cs.
+    //
+    //Every one of these produces an OFFSET that is added to the crouch eye-height and the look pitch. Nothing here
+    //writes the camera transform; ApplyCameraFeel sums the lot and writes it once. Two systems writing the same
+    //transform field is how you get an effect that silently does nothing because the other one ran second.
+    //MASTER SCALE for everything below - bob, landing dip, breathing, tilt, look lag, sprint FOV.
+    //
+    //Back to 1 for the third version: 0.1 was compensating for amounts that were wrong in CHARACTER, not in size, and
+    //the numbers below are now honest absolute values. It is
+    //deliberately NOT a player setting: the feel is authored, the same for everyone, and not something to negotiate
+    //in a menu. The individual numbers below stay at readable magnitudes rather than being pre-multiplied, so they
+    //can still be reasoned about relative to each other.
+    [SerializeField] private float cameraMotionScale = 1f;
+    public float CameraMotionScale { get => cameraMotionScale; set => cameraMotionScale = Mathf.Clamp01(value); } //F1 panel only
+
+    //THIRD VERSION. The first two both read as a shake at every amplitude, including 4mm, which means the problem was
+    //never size - it was character. Two things were wrong at the concept level:
+    //  1. VERTICAL TRANSLATION IS THE CHEAP-FEELING PART. Hopping the camera up and down is what reads as bouncing.
+    //     Cameras that feel good are almost entirely ROTATIONAL - the view tips, it doesn't bounce. Vertical is now
+    //     nearly nothing, and horizontal translation is gone completely.
+    //  2. A SHARP IMPACT SPIKE EVERY FOOTFALL IS JARRING. Perfect for a landing, awful as a constant - at moveSpeed 7
+    //     that's 3.5 spikes a second, which reads as a fault rather than a gait. Walking is a smooth sine now; the
+    //     only sharp thing left in the camera is an actual landing.
+    //Also deliberately SLOWER than the step rate - the sway runs over several steps instead of one, so it drifts
+    //rather than ticks.
+    //MOVEMENT SMOOTHING. Raw input went straight into the move vector, so a tap of D was instantly full speed
+    //sideways and letting go was an instant stop - which is what made straying left and right feel so twitchy.
+    //
+    //The INPUT is smoothed, not the resulting world direction. Smoothing the world vector would leave it pointing
+    //where you used to face for a moment after you turn, so walking forward while turning would curve you off course.
+    //Smoothing the 2D input keeps turning instant and only softens changes of KEY.
+    [SerializeField] private float moveAcceleration = 7f;  //how fast you reach full input. higher = snappier
+    [SerializeField] private float moveDeceleration = 10f; //how fast you come to rest. deliberately quicker than accel, or stopping feels like ice
+    private Vector2 smoothedMoveInput;
+
+    //DIRECTIONAL SPEED. Every direction used to move at exactly the same rate, which is why no combination of WASD
+    //felt any different from any other - mechanically they were identical, and only the view told you otherwise.
+    //A body doesn't work like that: you're quickest going forward, slower sidestepping, and slowest backing away.
+    //
+    //It also matters for stealth specifically. Backing out of a room while watching a doorway SHOULD be the slow,
+    //exposed option - that's a decision. At equal speed it's free.
+    [SerializeField] private float strafeSpeedMultiplier = 0.78f;
+    [SerializeField] private float backwardSpeedMultiplier = 0.6f;
+
+    private float currentHorizontalSpeed; //this tick's ground speed, published by HandleMovement for PlayerGravity's slope stick
+    private int landingsWithoutLean;      //alternates the landing twist when you come down running dead straight
+
+
+    //STAIR SMOOTHING. CharacterController climbs a step by teleporting the whole capsule up in a single frame - that
+    //is what stepOffset IS - so every stair is an instant vertical jolt. The body has to pop (it's how the controller
+    //works and the collision is correct), so the CAMERA lags behind instead and catches up smoothly. Nobody notices
+    //their eyeline trailing a few centimetres; everybody notices a jolt per step.
+    //Stair smoothing removed - see Player.CameraFeel.cs. It hid step-up pops from stepped colliders; the stairs are
+    //ramps now, so there is nothing to hide, and all it did was misfire on landings.
+
+    [SerializeField] private float movingPitchDegrees = 1.2f;         //steady forward lean while walking. eases in and out, never oscillates
+    [SerializeField] private float sprintExtraPitchDegrees = 1.6f;    //leaning harder into a sprint, on top of the above
+    [SerializeField] private float movementEaseSpeed = 3.5f;          //how fast the lean arrives when you set off and leaves when you stop
+
+    //LOOK LAG - the view trails the mouse slightly on fast turns, then catches up. This is what sells "piloting a
+    //body" rather than "being a camera". Deliberately kept small and clamped: it moves the VIEW, never where you're
+    //actually aiming, so it can't make interacting with things feel broken.
+    //Deliberately NOT a spring. A spring rings, and a view that rings after every mouse movement is an earthquake -
+    //which is exactly what the first version did, because it clamped the position but let velocity keep building, so
+    //it buzzed between the two clamps every frame. This is a plain trail-and-recover: it cannot oscillate.
+    [SerializeField] private float lookLagAmount = 0.35f;             //fraction of this frame's turn the view lags behind by
+    [SerializeField] private float lookLagMaxDegrees = 4f;            //hard clamp, so a fast 180 doesn't fling the view
+    [SerializeField] private float lookLagRecoverSpeed = 9f;          //how fast it catches back up. higher = tighter
+
+    [SerializeField] private float landingDipAmount = 0.22f;          //how far the view drops on the hardest landing
+    [SerializeField] private float landingRollDegrees = 2.4f;         //and it twists as you absorb it - landing square on is a robot
+    //landingDipFullSpeed is gone - the dip is sized by fullLandingFallDistance now, in metres fallen
+    [SerializeField] private float landingDipStiffness = 130f;        //how hard the view is pulled back to level
+    [SerializeField] private float landingDipDamping = 16f;           //higher = fewer bounces on the way back up
+    [SerializeField] private float breathSwayAmount = 0.35f;          //degrees of idle drift while rested
+    [SerializeField] private float breathSwayFrequency = 0.6f;        //how fast that drift wanders
+    [SerializeField] private float exhaustedBreathMultiplier = 4.5f;  //how much heavier the breathing gets fully gassed
+    [SerializeField] private float sprintFieldOfViewBoost = 8f;       //degrees of extra FOV while sprinting
+    [SerializeField] private float fieldOfViewLerpSpeed = 6f;
+    [SerializeField] private float strafeTiltAmount = 1.4f;           //degrees of roll at full sideways input
+    [SerializeField] private float strafeTiltSpeed = 6f;
+
+    private CinemachineVirtualCamera playerVirtualCamera; //FOV lives on the VCAM's lens, never on the Camera - see UpdateSprintFieldOfView
+    private Vector3 cameraRestLocalPosition;  //the prefab's camera placement; bob is an offset from this, not a replacement
+    private float cameraEyeHeight;            //eased crouch/stand height - the BASE the bob rides on
+    private float baseFieldOfView;            //whatever the vcam shipped with, so sprint returns to the right number
+    private Vector3 lastStridePosition;       //measured position change, NOT characterController.velocity - see UpdateMovementSpeedFactor for why that lies
+    private float headBobSpeedFactor;         //smoothed 0-1 of how fast we're really moving
+    private float landingDipOffset;           //current drop from a landing, in metres (negative = down)
+    private float landingDipVelocity;
+    private float landingRoll;                //the twist that comes with a landing, decays with the dip
+    private float lookLagYaw;                 //visual-only trail behind the mouse
+    private float lookLagPitch;
+    private Vector2 lookDegreesTurnedThisFrame; //published by HandleLook - the ACTUAL degrees turned, not raw mouse pixels
+    private float strafeTilt;                 //current roll in degrees, eased
+    private bool isSprintingNow;              //published out of HandleMovement so the render frame can drive FOV
+    private Vector2 lastMoveInput;            //likewise, for the strafe tilt
+
+    private float flashlightAimPitch;      //where the beam actually points, as opposed to where you're looking
+    private float flashlightAimYaw;
+    private float flashlightPitchVelocity; //the spring's momentum - this is what produces the overshoot
+    private float flashlightYawVelocity;
     private bool flashlightHeldLastTick; //rising-edge detect so one press = one toggle
     private Vector3 flashlightLastPosition; //to gauge how fast this player is moving, for the walk bob
     private bool hasRiddenVanForRunEnd; //one-shot so the run-end van teleport only fires once
@@ -121,7 +294,31 @@ public partial class Player : NetworkBehaviour
     //belong in MenuOwnsCursor, but its digits absolutely should not also reach anything else reading the number row.
     public bool KeyboardIsCaptured => MenuOwnsCursor || isEnteringSafeCode || IsPaused;
 
-    [SerializeField] private NetworkObject worldItemPrefab; //spawned when you drop - the generic pickup item, named on spawn
+    [SerializeField] private NetworkObject worldItemPrefab; //FALLBACK for dropped loot - the generic pickup, named on spawn
+
+    //A dropped crowbar should look like a crowbar on the floor, not like a generic box wearing its name. Map each
+    //tool to its own world prefab here and the drop uses it; anything unmapped falls back to worldItemPrefab, so this
+    //can be filled in one tool at a time rather than all at once.
+    //
+    //EVERY prefab listed here must still carry a WorldItem component - that's what makes it pick-up-able, and what
+    //carries the name, value and tool kind back into the bag. The mesh changes; the plumbing doesn't.
+    [System.Serializable]
+    private struct ToolWorldPrefab
+    {
+        public ToolType tool;
+        public NetworkObject prefab;
+    }
+    [SerializeField] private ToolWorldPrefab[] toolWorldPrefabs;
+
+    private NetworkObject WorldPrefabFor(ToolType tool)
+    {
+        if (tool == ToolType.None || toolWorldPrefabs == null) return worldItemPrefab;
+        foreach (ToolWorldPrefab entry in toolWorldPrefabs)
+        {
+            if (entry.tool == tool && entry.prefab != null) return entry.prefab;
+        }
+        return worldItemPrefab;
+    }
     [SerializeField] private int maxInventorySlots = 4;
     [SerializeField] private float pickupRange = 2f;
     [SerializeField] private float dropForwardOffset = 1f; //drop slightly in front so the item doesn't spawn inside you
@@ -136,7 +333,9 @@ public partial class Player : NetworkBehaviour
     //Tools take LOOT slots. Every one you bring is a vase you can't carry home, which is what turns a loadout into a
     //decision - and it's why the Duffel Bag reads as buying back the room your other tool cost. Clamped at 1 so a
     //full kit can never leave you unable to pick anything up at all.
-    public int MaxInventorySlots => Mathf.Max(1, maxInventorySlots + ToolInventoryBonus - ToolsCarried);
+    //No "- ToolsCarried" any more. Tools sit in the bag as real items, so they take a slot by BEING there - subtracting
+    //them as well charged you twice for the same tool.
+    public int MaxInventorySlots => Mathf.Max(1, maxInventorySlots + ToolInventoryBonus);
     public int CarriedValue //total worth of what this player is holding - the HUD reads it, selling banks it
     {
         get
@@ -186,6 +385,14 @@ public partial class Player : NetworkBehaviour
             DisplayName = PlayerIdentity.ResolveName(Object.InputAuthority.PlayerId); //only the owner names itself; it replicates to everyone else's nameplate
             mainCam.enabled = true; //this our camera
             playerCamera = virtualCam.transform; //set the player camera to the virtual cam's transform, which is used for looking up and down
+
+            //camera-feel baselines, captured from whatever the prefab shipped with rather than hard-coded, so moving
+            //the camera in the prefab doesn't quietly break the bob's rest position or send sprint FOV to a wrong number
+            playerVirtualCamera = virtualCam;
+            cameraRestLocalPosition = playerCamera.localPosition;
+            lastStridePosition = transform.position; //seed it, or the first frame counts our whole spawn offset as one enormous step
+            cameraEyeHeight = standCamHeight; //start stood up; HandleCrouchCamera eases this from here on
+            baseFieldOfView = virtualCam.m_Lens.FieldOfView;
             playerInputActions = new PlayerInputActions(); //our input actions
             playerInputActions.Player.Enable(); //our input actions enabled
             Cursor.lockState = CursorLockMode.Locked; //our cursor locked
@@ -225,9 +432,11 @@ public partial class Player : NetworkBehaviour
         }
 
         UpdateFlashlight(); //runs on ALL clients so everyone sees this player's beam, driven by the networked IsFlashlightOn + lookPitch
+        UpdateHeldItemVisual(); //likewise - your crew needs to SEE you're carrying something, so it's driven by the networked CarriedCount
 
         if (!HasInputAuthority) return; //stop here if not our instance of player
 
+        RememberVanPosition(); //keep noting where we're stood inside the van, so a scene change can put us back there
         UpdateKeeperProximity(); //same for the fence's desk
         UpdateShopProximity(); //walked away from the counter, or got dragged off it - close the shop rather than leaving it open on a frozen screen
         UpdatePause();     //Escape brings the menu up. it does NOT stop the game for anyone, including us
@@ -235,21 +444,25 @@ public partial class Player : NetworkBehaviour
 
         //the menu being up, or us watching someone else, both mean our own look and reach are off. the SIMULATION
         //carries on regardless - our body is still stood there and can still be caught while we read the menu.
-        if (IsPaused || spectatorActive || IsShopping || IsTalkingToKeeper)
+        //DebugPanel is in here for the same reason as the shop counters: its cursor is free, so without this the mouse
+        //aimed at its buttons ALSO spun the camera, and the panel was unusable.
+        if (IsPaused || spectatorActive || IsShopping || IsTalkingToKeeper || DebugPanel.IsOpen)
         {
             InteractPrompt = "";
             InteractAnchor = null;
             return;
         }
 
-        UpdateDeployKey();  //Q sets down a Signal Jammer, read straight off the keyboard like the safe keypad so it needs no new binding
+        UpdateDoorDrag();   //hold left mouse on a door, drawer or cupboard and push it open by hand
+        UpdateJammerInput(); //right-click burns a charge while the jammer is the SELECTED item. no deploy key - G drops it like anything else
         UpdateLootWheel(); //hold MMB to pick which item G drops
         UpdateSafeKeypad(); //read typed digits while the safe keypad is up - local only until the 4th digit is sent
         UpdateComputerClaim(); //enter the computer once the networked lock is granted (or drop our request if someone else got it)
         UpdateInteractPrompt(); //what E would do from where we're standing - the HUD reads InteractPrompt. runs before the computer bail-out because it has to clear itself when we sit down
         if (isUsingComputer) return; //parked at the computer - don't let the mouse spin the body/look while the cursor's free
-        HandleLook(); //our player only
+        HandleLook(); //our player only - updates xRotation, does NOT touch the camera transform
         HandleCrouchCamera(); //ease the crouch eye-height on the render frame so it's smooth at any FPS
+        UpdateCameraFeel(); //bob, landing dip, breathing, tilt, sprint FOV - and the single write of the camera transform. MUST be last
     }
 
     private void UpdateVoiceMuffle() //Photon spawns a Speaker(Clone) under this player at runtime to play its voice; we find it and low-pass its audio while the player is locked up (taped mouth)
@@ -474,6 +687,7 @@ public partial class Player : NetworkBehaviour
         if (HasStateAuthority)
         {
             lookPitch = xRotation; //publish our up/down look angle so remote clients can aim our flashlight beam (their copy never runs HandleLook)
+            PublishHeldKind();     //and WHICH item is in our hand, so everyone else's copy of us holds the right prop
         }
 
         PlayerGravity();
@@ -509,25 +723,65 @@ public partial class Player : NetworkBehaviour
         AddWedge();
     }
 
-    private void AddWedge() //the actual increment, so local grants (a WedgeKit refilling) don't have to route through an RPC to reach it
+    //A WEDGE IS AN ITEM NOW, not a counter. It goes in the bag beside the loot and the tools, so it shows in your
+    //slots, shows in your hand, can be scrolled to and can be dropped - none of which a bare int could do. Kept local
+    //so a WedgeKit refilling doesn't have to route through an RPC to reach it.
+    private void AddWedge()
     {
-        if (WedgesCarried < maxWedgesCarried) WedgesCarried++;
+        if (!CanCarryAnotherWedge) return;
+        inventory.Add(new InventoryItem(ToolType.DoorWedge));
+        PublishCarriedCount(); //recomputes WedgesCarried from the bag, along with CarriedCount and ToolMask
     }
 
-    public bool CanCarryAnotherWedge => WedgesCarried < maxWedgesCarried;
+    //Two limits, and they mean different things. maxWedgesCarried stops you being a walking wedge dispenser; bag room
+    //is the real cost, because every wedge you bring is a slot you can't fill with something worth money.
+    public bool CanCarryAnotherWedge => WedgesCarried < maxWedgesCarried && inventory.Count < MaxInventorySlots;
 
-    public void PlaceWedgeIn(Door door) //kick one under this door, on the side we're stood on
+    //Kick one under this door, on the side we're stood on. Returns whether it ACTUALLY went down - the caller needs
+    //to know, because if this fails G has to carry on and do its other job rather than silently eating the press.
+    public bool PlaceWedgeIn(Door door)
     {
-        if (WedgesCarried <= 0 || doorWedgePrefab == null || door == null) return;
-        if (door.IsWedged) return; //one is enough, and two would just fight over who owns the door
+        if (WedgesCarried <= 0 || door == null) return false;
+        if (door.IsWedged) return false; //one is enough, and two would just fight over who owns the door
 
-        WedgesCarried--;
+        if (doorWedgePrefab == null)
+        {
+            //loud, because this one is a SETUP mistake rather than a gameplay outcome, and it is otherwise completely
+            //invisible - you press G at a door holding two wedges and simply nothing happens, forever.
+            Debug.LogError("[Player] doorWedgePrefab is not assigned, so wedges can never be placed. Run Tools/Rollin' Robbers/Build Placeholder Prefabs.", this);
+            return false;
+        }
+
+        //spend one out of the bag. removing the ITEM is what decrements WedgesCarried - the count is derived now
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            if (inventory[i].tool != ToolType.DoorWedge) continue;
+            inventory.RemoveAt(i);
+            PublishCarriedCount();
+            break;
+        }
 
         //remember WHICH SIDE we were on. that's the whole mechanic: only somebody stood on this side can pull it back
         //out, so wedging a door decides who ends up shut in with what.
         int side = door.SideOf(transform.position);
         Vector3 doorPosition = door.transform.position;
-        Vector3 wedgePosition = doorPosition + door.ThroughDoorway * (0.35f * side); //sat at the foot of the door, on our side of it
+        //PLACE IT AT OUR OWN FEET, not by measuring out from the door. Deriving it from the door pivot kept burying it
+        //INSIDE the leaf: the pivot is at the hinge, its height depends entirely on how each prefab was authored, and
+        //once a door has swung toward you the leaf is occupying exactly the spot the offset points at.
+        //
+        //Our feet can't be inside the door - we're standing there. And it's where you'd actually kick a wedge.
+        Vector3 wedgePosition = transform.position + transform.forward * 0.45f;
+
+        //then drop it to whatever floor is really beneath, so it isn't hovering at the player's centre height
+        Vector3 rayStart = wedgePosition + Vector3.up * 1f;
+        if (Physics.Raycast(rayStart, Vector3.down, out RaycastHit floorHit, 3f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            wedgePosition = floorHit.point + Vector3.up * 0.02f; //a hair above the surface so it isn't z-fighting with the floor
+        }
+        else
+        {
+            wedgePosition.y = transform.position.y - (characterController != null ? characterController.height * 0.5f : 1f); //no floor found: fall back to our own feet
+        }
 
         //PlayerRef.None, not us: a wedge owned by the player who placed it would go with them when they disconnect,
         //silently un-jamming a door someone was counting on. the master holds it, like the traps and the loot.
@@ -543,6 +797,7 @@ public partial class Player : NetworkBehaviour
                 wedge.UseSpawnPoint = true;
             }
         });
+        return true;
     }
 
     public void SetCrackingSafe(int safeId) //publish which safe we're holding on (or Safe.NoSafe). the safe reads this to advance its meter
@@ -557,10 +812,25 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
-    public void RPC_GrantPickup(NetworkString<_32> itemName, int value)
+    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind)
     {
         if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
-        inventory.Add(new InventoryItem(itemName.ToString(), value));
+
+        //toolKind rides along so a DROPPED TOOL is still a tool when someone picks it back up. Without it a crowbar
+        //left on the floor came back as a worthless nameless trinket, which is a silent way to destroy 600 credits.
+        ToolType tool = (ToolType)toolKind;
+
+        //Same duplicate rule the SHOP enforces. GrantTool refuses to sell you a second of a tool you already own
+        //because the effects don't stack, but this path skipped that check entirely - so dropping a jammer and
+        //picking it back up while still holding one gave you two, and the second did nothing but eat a bag slot.
+        if (tool != ToolType.None && HasTool(tool) && !ToolTable.Stacks(tool))
+        {
+            return;
+        }
+
+        inventory.Add(tool == ToolType.None
+            ? new InventoryItem(itemName.ToString(), value)
+            : new InventoryItem(tool));
         PublishCarriedCount();
     }
 
@@ -609,6 +879,17 @@ public partial class Player : NetworkBehaviour
         characterController.enabled = true;
         IsLockedUp = true;
         suffocateTimer = suffocateDuration; //start the air clock the moment the closet closes
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //same routing as the bear trap: the victim's own machine owns their movement in Shared Mode, so the slow has to be applied there
+    public void RPC_TangledInTripwire(float seconds)
+    {
+        if (IsEliminated || IsLockedUp || IsBearTrapped) return; //already stopped by something stronger - a slow on top of a hold is meaningless
+
+        //REFRESHED, not stacked. Walking back through a second wire restarts the clock rather than adding to it, so a
+        //cluster of wires can't quietly total up to a thirty-second immobilisation, which is the bear trap's job and
+        //isn't fun even when the bear trap does it.
+        TangledSecondsLeft = Mathf.Max(TangledSecondsLeft, seconds);
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //fired by the trap; runs on the victim's own machine, which owns their movement in Shared Mode

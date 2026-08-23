@@ -87,3 +87,7 @@ CHECKLIST.md
 # (re-importing the same pack gives identical GUIDs, so scene references don't break)
 /Assets/Synty/
 /Assets/Synty.meta
+
+# Screenshots taken with F10 in-game - marketing output, not project source, and a
+# 1920x1080 PNG every time you press a key adds up fast in a repo's history
+/Screenshots/

@@ -18,6 +18,7 @@ public class SettingsMenu : MonoBehaviour
     [SerializeField] private Toggle invertYToggle;
     [SerializeField] private Slider masterVolumeSlider;
     [SerializeField] private Slider voiceVolumeSlider;
+    //no camera motion slider on purpose - the feel is authored on the Player prefab, identical for everyone
 
     [Header("Optional readouts next to the sliders")]
     [SerializeField] private Text sensitivityValueText;
@@ -46,7 +47,6 @@ public class SettingsMenu : MonoBehaviour
         if (invertYToggle != null) invertYToggle.isOn = GameSettings.InvertLookY;
         if (masterVolumeSlider != null) masterVolumeSlider.value = GameSettings.MasterVolume;
         if (voiceVolumeSlider != null) voiceVolumeSlider.value = GameSettings.VoiceVolume;
-
         applyingSavedValues = false;
         RefreshLabels();
     }

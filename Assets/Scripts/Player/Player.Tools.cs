@@ -15,20 +15,41 @@ using UnityEngine.InputSystem;
 // wrong. Add a third by adding a field and extending HasTool/GrantTool; nothing else looks at the slots directly.
 public partial class Player
 {
-    [Networked] public ToolType ToolSlotA { get; private set; }
-    [Networked] public ToolType ToolSlotB { get; private set; }
+    //WHICH TOOLS WE'RE CARRYING, as a bitmask, republished whenever the bag changes.
+    //
+    //The tools themselves now live as ordinary items in `inventory` - but that list is LOCAL, and plenty of things ask
+    //about our tools from another machine: Safe checks the cracking player's crowbar on the authority, RunManager vets
+    //purchases on the master. Reading the list from over there answers "no tools" with total confidence. So the list
+    //is the truth and this is the replica, exactly like CarriedCount.
+    [Networked] public int ToolMask { get; private set; }
 
     public bool HasTool(ToolType tool)
     {
         if (tool == ToolType.None) return false;
-        return ToolSlotA == tool || ToolSlotB == tool;
+        return (ToolMask & (1 << (int)tool)) != 0;
     }
 
-    public bool HasFreeToolSlot => ToolSlotA == ToolType.None || ToolSlotB == ToolType.None;
+    //Kept so the shop UI and debug panel keep working. Derived from the bag now rather than being storage of their
+    //own - "slot A" just means the first tool you happen to be carrying.
+    public ToolType ToolSlotA => ToolInSlot(0);
+    public ToolType ToolSlotB => ToolInSlot(1);
 
-    //A tool eats a loot slot, so buying one while the bag is already full would leave you carrying MORE than your own
-    //capacity - fill up on loot, then buy two tools, and you'd walk into the house with a full bag AND a full kit.
-    //The Duffel Bag is exempt from its own check because it hands back more room than it takes.
+    public ToolType ToolInSlot(int index)
+    {
+        int seen = 0;
+        foreach (InventoryItem item in inventory)
+        {
+            if (!item.IsTool) continue;
+            if (seen == index) return item.tool;
+            seen++;
+        }
+        return ToolType.None;
+    }
+
+    public bool HasFreeToolSlot => CarriedCount < MaxInventorySlots; //no separate kit any more - a tool needs a bag slot like everything else
+
+    //A tool takes a REAL slot now, so this is just "is there room in the bag". The Duffel Bag is exempt from its own
+    //check because it hands back more room than it occupies, so buying it with a full bag is always a net win.
     public bool HasRoomForTool(ToolType tool)
     {
         if (tool == ToolType.DuffelBag) return true;
@@ -36,21 +57,25 @@ public partial class Player
         //CarriedCount, not inventory.Count. RunManager calls this on the MASTER to vet a purchase, and over there a
         //remote player's local list is permanently empty - so reading the list always answered "bag's empty, sure",
         //and the check only ever worked for whoever happened to be hosting.
-        return CarriedCount < MaxInventorySlots; //room to lose one slot without going over
+        return CarriedCount < MaxInventorySlots;
     }
-
-    public ToolType ToolInSlot(int index) => index == 0 ? ToolSlotA : ToolSlotB;
 
     //Called on the buyer's own machine once RunManager has confirmed the shared wallet could afford it. Returns false
     //if there was nowhere to put it, so the money can be handed back rather than vanishing.
     public bool GrantTool(ToolType tool)
     {
         if (tool == ToolType.None) return false;
-        if (HasTool(tool)) return false; //no point owning two of the same thing - the effects don't stack
+        if (HasTool(tool) && !ToolTable.Stacks(tool)) return false; //no point owning two of the same tool - the effects don't stack. wedges are the exception, being a consumable
+        if (inventory.Count >= MaxInventorySlots) return false; //bag's full. drop something first - and now that CAN be a tool
 
-        if (ToolSlotA == ToolType.None) { ToolSlotA = tool; return true; }
-        if (ToolSlotB == ToolType.None) { ToolSlotB = tool; return true; }
-        return false; //both slots full - drop something first
+        if (tool == ToolType.SignalJammer)
+        {
+            JammerChargesLeft = ToolTable.JammerCharges; //a fresh unit comes with a full set. buying a second one is blocked above, so this can't top up a spent one
+        }
+
+        inventory.Add(new InventoryItem(tool));
+        PublishCarriedCount(); //also republishes ToolMask, which is what makes the effects live for everyone else
+        return true;
     }
 
     //RpcSources.All, NOT StateAuthority - see RPC_GrantWedge. RunManager sends this from the MASTER, which is not the
@@ -76,21 +101,41 @@ public partial class Player
         return RunManager.Instance.Money >= ToolTable.CostOf(tool);
     }
 
-    public void DropTool(int slotIndex) //make room without buying over the top of something you wanted
+    //Ditch a tool from the shop UI. G does the same thing out in the world, because a tool is just an item now.
+    public void DropTool(int slotIndex)
     {
-        if (slotIndex == 0) ToolSlotA = ToolType.None;
-        else ToolSlotB = ToolType.None;
+        RemoveToolFromBag(ToolInSlot(slotIndex));
     }
 
-    private void LoseTools() //caught. the kit goes with the loot - see the economy decision this implements
+    //Take a tool out of the bag WITHOUT dropping anything into the world - used when a tool is spent rather than
+    //discarded, like the jammer being deployed.
+    private void RemoveToolFromBag(ToolType tool)
     {
-        ToolSlotA = ToolType.None;
-        ToolSlotB = ToolType.None;
+        if (tool == ToolType.None) return;
+
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            if (inventory[i].tool != tool) continue;
+            inventory.RemoveAt(i);
+            PublishCarriedCount();
+            return;
+        }
+    }
+
+    //Caught. Nothing to do here any more - the kit lives in the bag, and the bag is already emptied on capture, so
+    //"lose your tools too" now falls out of the existing rule instead of being a second thing to remember.
+    private void LoseTools()
+    {
     }
 
     //EFFECTS. Each of these is read by a system that already existed, so a tool never needs its own update loop.
 
-    public float MovementNoiseMultiplier => HasTool(ToolType.PaddedBoots) ? ToolTable.PaddedBootsNoiseMultiplier : 1f;
+    //Base is 2, not 1, since the player's speed was halved (2026-08-16). Noise is speed x this, so without doubling
+    //the multiplier every footstep would have got half as loud and the guard would have gone quietly deaf - and every
+    //hearing threshold tuned against the old numbers would have been wrong. Padded Boots still multiplies on top, so
+    //the tool's discount is unchanged.
+    private const float BaseMovementNoiseMultiplier = 2f;
+    public float MovementNoiseMultiplier => BaseMovementNoiseMultiplier * (HasTool(ToolType.PaddedBoots) ? ToolTable.PaddedBootsNoiseMultiplier : 1f);
 
     public float SafeCrackMultiplier => HasTool(ToolType.Crowbar) ? ToolTable.CrowbarCrackMultiplier : 1f;
 
@@ -106,60 +151,50 @@ public partial class Player
         get
         {
             int count = 0;
-            if (ToolSlotA != ToolType.None) count++;
-            if (ToolSlotB != ToolType.None) count++;
+            foreach (InventoryItem item in inventory)
+            {
+                if (item.IsTool) count++;
+            }
             return count;
         }
     }
 
-    //Q, read straight off the keyboard the way the safe keypad already reads digits, so this needs no new action in
-    //the input asset (which would mean regenerating the C# wrapper before anything compiled).
-    private void UpdateDeployKey()
-    {
-        if (Keyboard.current == null) return;
-        //anything that has taken your hands or your control also takes this. hiding matters most: your body is inside
-        //a wardrobe, so the device would appear through the door as if you'd posted it out.
-        if (KeyboardIsCaptured) return; //used to miss both shop counters, so Q dropped a live jammer while you stood haggling in the pawn shop
-        if (IsEliminated || IsHiding || IsLockedUp || IsBearTrapped || isBeingDragged) return;
-        if (!Keyboard.current.qKey.wasPressedThisFrame) return;
-        TryDeployJammer();
-    }
+    //NO DEPLOY KEY. Q used to spend the jammer and place it; it's an ordinary carried item now - scroll to it, right
+    //click to switch it on, G to put it down like anything else in the bag. One less binding to teach.
 
-    //Deploying spends the tool and frees its slot.
-    public void TryDeployJammer()
+    //Put a jammer on the floor, carrying over whatever it has left. Called by the normal G drop, so dropping it
+    //mid-burst leaves the bubble sitting where it landed and dropping it cold leaves an inert unit someone can pick
+    //up later.
+    public void DropJammerToFloor()
     {
         if (jammerDevicePrefab == null || !HasTool(ToolType.SignalJammer)) return;
 
         Vector3 dropAt = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
+        float secondsStillRunning = JammerActiveSecondsLeft;
 
-        //spend it FIRST. spawning is deferred, so waiting for the callback to clear the slot leaves a window where
-        //holding Q would place a second one off a single tool.
-        if (ToolSlotA == ToolType.SignalJammer) ToolSlotA = ToolType.None;
-        else if (ToolSlotB == ToolType.SignalJammer) ToolSlotB = ToolType.None;
+        //spend it FIRST. spawning is deferred, so waiting for the callback to remove it leaves a window where a second
+        //press would place a second unit off one tool.
+        RemoveToolFromBag(ToolType.SignalJammer);
+        JammerActiveSecondsLeft = 0f;      //the bubble goes with the object, not with us
+        JammerCooldownSecondsLeft = 0f;    //and so does the recharge - we aren't holding it any more
 
         Runner.Spawn(jammerDevicePrefab, dropAt, Quaternion.identity, PlayerRef.None, (runner, spawnedObject) =>
         {
             JammerDevice device = spawnedObject.GetComponent<JammerDevice>();
             if (device == null) return;
-            device.SecondsLeft = ToolTable.JammerSeconds;
+            device.SecondsLeft = secondsStillRunning; //0 if it was off - an inert box on the floor, which is allowed
             device.SpawnPoint = dropAt;   //networked-position safeguard - a deferred spawn drops the position argument
             device.UseSpawnPoint = true;
         });
     }
 
-    //Cameras ask this. It reads DEPLOYED devices, not who's carrying what - a jammer in your pocket does nothing,
-    //which is the whole point of making it a thing you place.
+    //Cameras ask this. Reads BOTH deployed units and players carrying a switched-on one.
     public static bool IsPositionJammed(Vector3 position) => JammerDevice.CoversPosition(position);
 
-    //Hand out the wedges a WedgeKit promises. Called when a fresh run starts rather than when the tool is bought, so
-    //the kit refills every heist instead of being a one-off purchase of two wedges.
+    //Nothing refills any more. Wedges are bought individually and spent individually, so what you carry into a house
+    //is exactly what you paid for - no tool quietly topping you up between runs. Kept as an empty hook because the
+    //run-start path calls it, and a future consumable will want somewhere to go.
     public void RefillToolConsumables()
     {
-        if (!HasTool(ToolType.WedgeKit)) return;
-        for (int i = 0; i < ToolTable.WedgeKitWedges; i++)
-        {
-            if (!CanCarryAnotherWedge) break;
-            AddWedge(); //direct, not the RPC - we're already on the machine that owns this player
-        }
     }
 }

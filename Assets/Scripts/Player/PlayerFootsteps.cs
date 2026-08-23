@@ -8,7 +8,7 @@ public class PlayerFootsteps : NetworkBehaviour
     [SerializeField] private AudioClip landingClip; // loud thud played when the player hits the ground after a jump/fall
     [SerializeField, Range(0f, 1f)] private float landingVolume = 0.6f; // how loud the thud SOUNDS - separate from how loud it is to the guard
     [SerializeField] private CharacterController characterController;
-    [SerializeField] private float strideLength = 2f;   //distance walked per step
+    [SerializeField] private float strideLength = 1f;   //distance walked per step. halved with the player's speed so the footstep cadence stays the same rhythm it always had
     [SerializeField] private float maxStepDistance = 1f; //any per-tick move larger than this is a teleport, not a step - ignore it so we don't spam footsteps
 
     private Vector3 lastPosition; // To track the player's last position
@@ -44,6 +44,14 @@ public class PlayerFootsteps : NetworkBehaviour
     [Rpc(RpcSources.InputAuthority, RpcTargets.All)] //basically means source comes from my input authority of the local, rpc targets all means it will play for everyone
     private void RPC_PlayFootstep()
     {
+        //An empty footstepClips array threw here on EVERY step - Random.Range(0, 0) is 0 and indexing an empty array
+        //is an exception - so an unconfigured player filled the console with stack traces while walking. Silence is
+        //the right failure: SetupValidator is what should be telling you the clips are missing, not the audio code.
+        if (footstepClips == null || footstepClips.Length == 0)
+        {
+            return;
+        }
+
         AudioClip clip = footstepClips[Random.Range(0, footstepClips.Length)]; // Randomly select a footstep clip
         audioSource.pitch = Random.Range(0.9f, 1.1f); // Slightly randomize the pitch for variety
         audioSource.PlayOneShot(clip); // Play the selected footstep clip

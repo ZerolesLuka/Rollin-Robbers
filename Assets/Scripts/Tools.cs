@@ -9,15 +9,21 @@ using UnityEngine;
 //
 // Deliberately NOT ScriptableObjects. Those would mean an asset per tool to create and wire before any of this runs,
 // and the table below is the same data with none of that. Add a tool by adding an enum entry and a row.
+//NUMBERED EXPLICITLY. These values are serialized - in the Player prefab's held-prop rows, in the networked ToolMask,
+//in every dropped WorldItem's ToolKind - so they can never be allowed to shift. 5 is a hole where WedgeKit used to be
+//and it stays a hole; renumbering to close it would silently turn every saved SignalJammer into something else.
 public enum ToolType
 {
     None = 0,
-    PaddedBoots, //quieter on your feet
-    Crowbar,     //force a safe faster
-    WireCutters, //disarm the guard's traps without announcing it
-    DuffelBag,   //carry more loot
-    WedgeKit,    //start the run with door wedges
-    SignalJammer,//blinds cameras near you, but hums
+    PaddedBoots = 1, //quieter on your feet
+    Crowbar = 2,     //force a safe faster
+    WireCutters = 3, //disarm the guard's traps without announcing it
+    DuffelBag = 4,   //carry more loot
+    //5 was WedgeKit - removed. It bought you two wedges per run while itself occupying a bag slot, so once wedges
+    //became real items you paid for the same thing twice and walked into the house with three of four slots full.
+    //Wedges are sold directly now, which is what a consumable should be.
+    SignalJammer = 6,//blinds cameras near you, but hums
+    DoorWedge = 7,   //a single wedge. bought by the handful, spent one per door, and the only tool that STACKS
 }
 
 public struct ToolDefinition
@@ -30,7 +36,16 @@ public struct ToolDefinition
 
 public static class ToolTable
 {
-    public const int SlotCount = 2; //TWO on purpose. the interesting part of a loadout is what you LEAVE behind, and three slots is enough to bring one of everything
+    //NO SlotCount any more. It was 2 and it only ever drove the shop's display loop, while the real limit was the
+    //bag's MaxInventorySlots (4, or 6 with the Duffel Bag) - so a third tool was carryable but invisible and
+    //undroppable in the shop UI. One source of truth now: the bag. The loadout tension that constant was protecting
+    //survives anyway, because tools share slots with loot - four tools means nothing left to steal with.
+
+    //SIGNAL JAMMER. Charges rather than a battery: it's re-usable, but every activation is spent, so switching it on
+    //stays a decision. The cooldown stops it being held on permanently by re-triggering the instant it lapses.
+    public const int JammerCharges = 3;
+    public const float JammerActiveSeconds = 15f;
+    public const float JammerCooldownSeconds = 25f;
 
     //Balance lives here and nowhere else, so tuning is one file rather than a hunt through five systems.
     public const float PaddedBootsNoiseMultiplier = 0.8f;
@@ -39,7 +54,10 @@ public static class ToolTable
     //which quietly deleted the crouch decision for 450. 0.8 gives 5.6: still clearly quieter, still heard.
     public const float CrowbarCrackMultiplier = 0.6f;    //fraction of the normal time to force a safe
     public const int DuffelBagExtraSlots = 2;
-    public const int WedgeKitWedges = 2;
+
+    //THE ONLY STACKING ENTRY. Every other tool is a thing you either own or don't, and owning two does nothing -
+    //which is why GrantTool refuses duplicates. A wedge is a consumable, so that rule has to bend for exactly this.
+    public static bool Stacks(ToolType type) => type == ToolType.DoorWedge;
 
     //The jammer is PLACED, not merely owned. Deploying spends it: the device sits where you dropped it, blinds every
     //camera inside JammerRadius, and dies when the battery does. Nobody gets it back.
@@ -48,7 +66,8 @@ public static class ToolTable
     //appear once in a house, so you could carry it a full run and never see it do anything. Placing it makes every
     //part legible: you chose the spot, it's sat there, and you know exactly when it stops.
     public const float JammerRadius = 7f;
-    public const float JammerSeconds = 45f;
+    //JammerSeconds (the old 45s battery) is gone - the unit isn't consumed on placement any more, so there's no
+    //single lifetime to give it. JammerActiveSeconds above is how long one charge runs for.
 
     private static readonly ToolDefinition[] all = new ToolDefinition[]
     {
@@ -56,7 +75,7 @@ public static class ToolTable
         new ToolDefinition { type = ToolType.Crowbar,     name = "Crowbar",      cost = 600,  description = "Forcing a safe takes noticeably less time. Still just as loud." },
         new ToolDefinition { type = ToolType.WireCutters, name = "Wire Cutters", cost = 500,  description = "Disarm his traps quietly. Without them it can be done, but he'll hear it." },
         new ToolDefinition { type = ToolType.DuffelBag,   name = "Duffel Bag",   cost = 750,  description = "Two more slots for loot. Nothing else." },
-        new ToolDefinition { type = ToolType.WedgeKit,    name = "Wedge Kit",    cost = 300,  description = "Start each run carrying two door wedges." },
+        new ToolDefinition { type = ToolType.DoorWedge,   name = "Door Wedge",   cost = 150,  description = "Jams one door shut from the side you kicked it in. Buy as many as you'll carry - each one takes a slot." },
         new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 550,  description = "Press Q to set it down. Blinds every camera around it for about a minute, then the battery dies and it's gone." },
     };
 

@@ -16,7 +16,8 @@ public class RunManager : NetworkBehaviour
     [Networked] public int GatheredLootValue { get; private set; } // what the team has picked up so far - replicates to all clients
     [Networked] public int HouseLootTotal { get; private set; } // total worth of loot ItemSpawner placed in the house this run - the success screen grades the haul against it, and the guard measures theft against it
     [Networked] public int BestClearPercent { get; private set; } // best % of a house the crew has ever cleared in one run - persists across runs as a bragging-rights stat
-    [Networked] public float RunTime { get; private set; } // seconds the current heist has been running - counts up while InProgress, frozen once the run ends
+    [Networked] public float RunTime { get; private set; } // seconds the current heist has been running - counts up while InProgress AND the crew is at the job, frozen once the run ends or they drive off somewhere that isn't one
+    [Networked] public NetworkBool AtTheJob { get; private set; } // are we actually on a heist right now? set by RPC_Route: taking a house turns it on, driving to the pawn shop turns it off. without this the clock kept ticking while you stood haggling, because routing to the shop deliberately leaves the run state alone
     [Networked] public Vector3 LastStolenPosition { get; private set; } // where the most recent item was lifted from - the guard investigates this exact spot when he notices things missing
     [Networked] public int EntrySpawnPointId { get; private set; } // which PlayerSpawnN to teleport to after a scene load - set by whichever door triggers the transition
     [SerializeField] private int outdoorSceneBuildIndex = 0; // the scene the van lives in - everyone gets pulled here when the run ends, even players still indoors
@@ -69,6 +70,13 @@ public class RunManager : NetworkBehaviour
             State = RunState.InProgress; //only the authority may write networked state. a joining client used to run this too, which is an unauthorized write Fusion just discards
             Host = Runner.LocalPlayer; //we spawned this, so we're the room's creator - remember it for everyone
             FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
+
+            //START SEALED. A NetworkBool defaults to FALSE, so the van's back was open from the moment the session
+            //began and only ever closed once a run had ENDED - which meant on a fresh session you could walk straight
+            //out of the van without picking a destination, and the barrier only appeared after your first completed
+            //run. Seeding it true makes the crew choose on the laptop before they can leave, which is the whole
+            //reason the barrier exists. RPC_Route clears it the moment a destination is picked.
+            VanBackClosed = true;
         }
     }
 
@@ -165,6 +173,7 @@ public class RunManager : NetworkBehaviour
     public void RPC_Route(int buildIndex, int spawnPointId, bool startNewRun) //van computer buttons - route the crew to the house or the pawn shop
     {
         EntrySpawnPointId = spawnPointId;
+        AtTheJob = startNewRun; //taking a house starts the clock; driving to the pawn shop stops it. the run STATE deliberately stays InProgress across a shop trip (so the van ride doesn't re-trigger), which is exactly why the clock needed its own flag rather than reading State
         VanBackClosed = false; //picked a destination - the van's back opens onto whatever scene we're routing to. this runs BEFORE the scene load, and the flag survives it (RunManager is DontDestroyOnLoad + networked), so the destination van starts open
         //despawn BEFORE any reset. the guard saves his mood into this RunManager as he despawns, so resetting first
         //would just get overwritten by the guard he was a second ago and he'd walk into the new house still furious.
@@ -173,6 +182,16 @@ public class RunManager : NetworkBehaviour
         {
             ResetForNewRun(); //House button - back to InProgress so the run-over van ride doesn't instantly re-trigger
         }
+
+        //ALREADY PARKED THERE? Then don't drive. The van sits in the Outdoor scene and so does the house it's robbing,
+        //so choosing 14 Maple Street isn't a journey - it's the crew agreeing on a job. Reloading the scene you're
+        //standing in would cost a black frame, respawn everyone, and throw away the walk up to the house, which is the
+        //tense part. Picking it just drops the barrier and starts the run; Indoor loads when someone opens a door.
+        if (buildIndex == SceneManager.GetActiveScene().buildIndex)
+        {
+            return;
+        }
+
         LoadSceneForEveryone(buildIndex);
     }
 
@@ -192,6 +211,54 @@ public class RunManager : NetworkBehaviour
         {
             ComputerUser = PlayerRef.None;
         }
+    }
+
+    //A DOOR BEING PUSHED BY HAND, streamed while the drag lasts. Sent every tick by whoever is holding it, so
+    //everyone else watches it creep rather than seeing it snap when they let go - which is the entire reason for
+    //dragging doors instead of toggling them.
+    //
+    //Cheap despite the rate: one small RPC per tick per door actually being handled, and a player can only hold one
+    //door at a time. Same position-matching as the bool version, so it needs no NetworkObjects either.
+    //THE GUARD SHOVING A DOOR. Carries the opener's position so every client works out the same swing direction from
+    //the same two vectors - computing it locally from the guard's replicated transform would mostly agree, but two
+    //clients disagreeing about which way a door swung is a desync nobody would ever think to look for.
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_ShoveDoorOpen(Vector3 doorPosition, Vector3 openerPosition)
+    {
+        SwingingHinge hinge = FindHingeAt(doorPosition);
+        if (hinge != null)
+        {
+            hinge.SetOpenAwayFrom(openerPosition);
+        }
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.All)]
+    public void RPC_SetHingeAmount(Vector3 hingePosition, float amount)
+    {
+        SwingingHinge hinge = FindHingeAt(hingePosition);
+        if (hinge != null)
+        {
+            hinge.SetOpenAmount(amount);
+        }
+    }
+
+    //Identify an openable by WHERE IT IS. Static scene geometry sits at identical coordinates on every client, so
+    //"nearest hinge to this point" resolves to the same object for everyone with nothing to number or wire per door.
+    private static SwingingHinge FindHingeAt(Vector3 position)
+    {
+        const float maxMatchDistance = 1f; //the match must be essentially exact. without a cap, "nearest" would happily grab something on the far side of the house - or one lingering in the static list from the scene we just left
+        SwingingHinge nearest = null;
+        float nearestDistance = maxMatchDistance;
+        foreach (SwingingHinge hinge in SwingingHinge.AllHinges)
+        {
+            float distance = Vector3.Distance(hinge.transform.position, position);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = hinge;
+            }
+        }
+        return nearest;
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]
@@ -364,7 +431,7 @@ public class RunManager : NetworkBehaviour
     switch(State)
      {
         case RunState.InProgress:
-            if (HasStateAuthority)
+            if (HasStateAuthority && AtTheJob)
             {
                 RunTime += Runner.DeltaTime; //clock the length of the active heist; the HUD shows it live
             }

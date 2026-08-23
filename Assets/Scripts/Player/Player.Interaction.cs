@@ -175,36 +175,29 @@ public partial class Player
             }
         }
 
-        //ANY openable, not just doors. searching SwingingHinge instead of Door means a cupboard, a drawer or a
-        //jewellery box is interactive with that one component on it - no Door script bolted on to props that aren't
-        //doors. house doors still turn up here because every door owns a hinge.
+        //E NO LONGER OPENS ANYTHING. Doors, cupboards and drawers are pushed by hand now (Player.DoorDrag), which is
+        //what frees E up here - it used to mean both "operate this" and "go through this", and on a front threshold,
+        //where an ExitDoor and a hinge sit on top of each other, those two fought over every press.
+        //
+        //A WEDGE is still an E job though: prying one out is a deliberate act, not a push, and the door won't move
+        //until it's gone - so it has to outrank going through the doorway.
         SwingingHinge nearestSwingDoor = SwingingHinge.FindNearest(transform.position);
-        float nearestSwingDistance = nearestSwingDoor != null
-            ? Vector3.Distance(transform.position, nearestSwingDoor.transform.position)
-            : float.MaxValue;
-
-        if (nearestExit != null || nearestSwingDoor != null)
+        if (nearestSwingDoor != null)
         {
-            //a tie goes to the swinging door on purpose - it's harmless and reversible, whereas an ExitDoor yanks
-            //the whole crew into another scene. accidentally opening a door beats accidentally ending the burgle.
-            bool useSwingDoor = nearestSwingDoor != null && (nearestExit == null || nearestSwingDistance <= nearestExitDistance);
-            if (useSwingDoor)
+            //only from the side it was kicked in from - from the far side all you can do is look at it
+            Door houseDoor = nearestSwingDoor.GetComponent<Door>();
+            DoorWedge jammedWedge = houseDoor != null ? houseDoor.Wedge : null;
+            if (jammedWedge != null)
             {
-                //a wedge under this door outranks opening it, because the door isn't going to budge until it's out.
-                //only from the side it was kicked in from though - from the far side all you can do is look at it.
-                Door houseDoor = nearestSwingDoor.GetComponent<Door>();
-                DoorWedge jammedWedge = houseDoor != null ? houseDoor.Wedge : null;
-                if (jammedWedge != null)
-                {
-                    target = jammedWedge;
-                    return jammedWedge.CanBeRemovedFrom(transform.position) && CanCarryAnotherWedge
-                        ? InteractKind.PullWedge
-                        : InteractKind.WedgeStuck;
-                }
-
-                target = nearestSwingDoor;
-                return InteractKind.SwingDoor;
+                target = jammedWedge;
+                return jammedWedge.CanBeRemovedFrom(transform.position) && CanCarryAnotherWedge
+                    ? InteractKind.PullWedge
+                    : InteractKind.WedgeStuck;
             }
+        }
+
+        if (nearestExit != null)
+        {
             target = nearestExit;
             return InteractKind.ExitDoor;
         }

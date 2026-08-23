@@ -39,9 +39,32 @@ public class GuardTrap : NetworkBehaviour
     [SerializeField, Range(0f, 1f)] private float volume = 0.85f;
     [SerializeField] private float soundMaxDistance = 25f;
 
+    [Header("Tripwire visual - assign on the wire prefab only")]
+    //Dragged in rather than found by name: a transform.Find("PostA") breaks silently the day someone renames a child,
+    //and the failure looks like a physics bug rather than a typo. Left empty on floor traps, which have nothing to lay
+    //out - LayOutWire simply returns.
+    [SerializeField] private Transform wirePostA;
+    [SerializeField] private Transform wirePostB;
+    [SerializeField] private Transform wireBar;        //the bit that stretches. its local +Z is treated as its length
+    [SerializeField] private float barLengthAtScaleOne = 1f; //how long the bar mesh is with scale 1. a default Unity Cube is exactly 1
+
+    [Header("Tripwire tangle")]
+    [SerializeField] private float tangleSeconds = 3.5f;        //how long a wire hobbles you. deliberately NOT a full stop - see RPC_TangledInTripwire on Player
+    [SerializeField] private float wireTriggerRadius = 0.75f;   //how close to the LINE, measured HORIZONTALLY, counts as walking into it
+    [SerializeField] private float wireHeightTolerance = 1.6f;  //how far above/below the wire still counts. generous on purpose - see PlayerIsOnTheTrap
+
     [Networked] public Vector3 SpawnPoint { get; set; }      //same deferred-spawn safeguard as Safe/SafeNote/WorldItem - a deferred spawn silently drops the position argument
     [Networked] public NetworkBool UseSpawnPoint { get; set; }
     [Networked] private NetworkBool sprung { get; set; }     //stops a second player setting it off in the tick before it despawns
+
+    //A wire is a LINE, not a dot. Both ends are networked because detection runs on the authority against replicated
+    //positions, and every client needs them to draw the thing in the right place. Zero-length means "not a span" and
+    //the trap falls back to the plain radius check, so a wire prefab dropped by anything other than the span-planting
+    //path still behaves like it always did rather than becoming untriggerable.
+    [Networked] public Vector3 WireEndA { get; set; }
+    [Networked] public Vector3 WireEndB { get; set; }
+
+    private bool IsStrungWire => kind == TrapKind.Tripwire && (WireEndB - WireEndA).sqrMagnitude > 0.0625f; //0.25m apart or it's a dot
 
     private float armTimer;
     private AudioSource trapAudio;
@@ -69,6 +92,10 @@ public class GuardTrap : NetworkBehaviour
         {
             StartCoroutine(PlaceOnceSpawnPointArrives());
         }
+        else
+        {
+            LayOutWire(); //nothing to wait for - whatever the ends are now is what they'll be
+        }
     }
 
     public override void Despawned(NetworkRunner runner, bool hasState)
@@ -87,6 +114,33 @@ public class GuardTrap : NetworkBehaviour
             yield return null;
         }
         transform.position = SpawnPoint;
+        LayOutWire(); //WireEndA/B ride the same replication as SpawnPoint, so by here they've landed too
+    }
+
+    //Move the posts onto the two anchors and stretch the bar between them, so the mesh matches the line detection is
+    //already using. Runs on EVERY client, because this is purely cosmetic - the authority's maths reads WireEndA/B
+    //directly and doesn't care where the mesh ended up.
+    //
+    //The posts are MOVED but never scaled, and only the bar is stretched. Scaling the whole prefab to cover the gap
+    //would fatten the posts as the doorway got wider, which is the obvious approach and looks wrong immediately.
+    private void LayOutWire()
+    {
+        if (!IsStrungWire) return;  //floor trap, or a wire spawned without endpoints - leave the mesh exactly as authored
+        if (wirePostA == null || wirePostB == null || wireBar == null) return; //prefab isn't wired up; the trap still FUNCTIONS, it just looks like whatever it looks like
+
+        wirePostA.position = WireEndA;
+        wirePostB.position = WireEndB;
+
+        Vector3 alongWire = WireEndB - WireEndA;
+        float span = alongWire.magnitude;
+        if (span < 0.01f || barLengthAtScaleOne <= 0f) return; //degenerate span or a mis-set mesh length - stretching by this would divide by ~zero
+
+        wireBar.position = (WireEndA + WireEndB) * 0.5f;
+        wireBar.rotation = Quaternion.LookRotation(alongWire / span, Vector3.up); //local +Z now runs along the wire, which is the axis we scale
+
+        Vector3 barScale = wireBar.localScale;
+        barScale.z = span / barLengthAtScaleOne;
+        wireBar.localScale = barScale;
     }
 
     public override void FixedUpdateNetwork()
@@ -108,7 +162,7 @@ public class GuardTrap : NetworkBehaviour
             {
                 continue; //out of play, or tucked inside a wardrobe with their feet off the floor
             }
-            if (Vector3.Distance(transform.position, player.transform.position) > triggerRadius)
+            if (!PlayerIsOnTheTrap(player.transform.position))
             {
                 continue;
             }
@@ -116,6 +170,45 @@ public class GuardTrap : NetworkBehaviour
             Spring(player);
             return;
         }
+    }
+
+    //Did this player just walk into the trap?
+    //
+    //Deliberately maths against replicated positions rather than a collider, for the same reason the rest of this
+    //class does: trigger events never fire for remote players, because they're moved by NetworkTransform rather than
+    //CharacterController.Move. A collider stretched along the wire works perfectly solo and then ignores everyone else.
+    //
+    //THE HEIGHT TRAP, which cost a whole debugging session: a full 3D distance from the wire to the player's
+    //transform.position never fires. That origin sits at the player's FEET while their body is two metres tall, and
+    //the wire sits at whatever height the level author put the anchors. Comparing those two points directly measures
+    //a gap that has nothing to do with whether anyone walked through anything. So: HORIZONTAL distance answers "did
+    //they cross the line", and a generous vertical band answers "were they on this floor at all".
+    private bool PlayerIsOnTheTrap(Vector3 playerPosition)
+    {
+        if (!IsStrungWire)
+        {
+            return Vector3.Distance(transform.position, playerPosition) <= triggerRadius;
+        }
+
+        Vector3 flatWire = WireEndB - WireEndA;
+        flatWire.y = 0f;
+        Vector3 flatToPlayer = playerPosition - WireEndA;
+        flatToPlayer.y = 0f;
+
+        //closest point along the span, clamped to the ends so walking PAST a wire doesn't trip it
+        float alongWire = flatWire.sqrMagnitude > 0.0001f
+            ? Mathf.Clamp01(Vector3.Dot(flatToPlayer, flatWire) / flatWire.sqrMagnitude)
+            : 0f;
+        float horizontalDistance = Vector3.Distance(flatToPlayer, flatWire * alongWire);
+        if (horizontalDistance > wireTriggerRadius)
+        {
+            return false;
+        }
+
+        //same floor check. wide enough that it doesn't care whether the player's origin is their feet or their middle,
+        //tight enough that someone directly above or below on another storey doesn't trip it.
+        float wireHeightHere = Mathf.Lerp(WireEndA.y, WireEndB.y, alongWire);
+        return Mathf.Abs(playerPosition.y - wireHeightHere) <= wireHeightTolerance;
     }
 
     private void Spring(Player victim)
@@ -142,6 +235,15 @@ public class GuardTrap : NetworkBehaviour
         if (kind == TrapKind.BearTrap)
         {
             victim.RPC_CaughtInBearTrap(); //pinned where they stand, loud about it, and stuck until a teammate arrives
+        }
+        else if (kind == TrapKind.Tripwire)
+        {
+            //A HOBBLE, NOT A HOLD. The bear trap already owns "you are stuck and need your crew" - if the wire also
+            //froze you the two would be the same trap with different meshes, and the bear trap would stop being the
+            //scary one. More importantly, standing still while a guard walks at you isn't tension, it's watching
+            //yourself lose: the player has nothing left to do. Slowed, you can still stagger for the stairs and
+            //sometimes make it, so when you don't you lost it rather than had it taken.
+            victim.RPC_TangledInTripwire(tangleSeconds);
         }
 
         StartCoroutine(DespawnAfterSound());

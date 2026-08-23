@@ -13,9 +13,36 @@ public partial class Player
 {
     private void HandleMovement(Vector2 inputVector, bool sprinting, bool jumpInput)
     {
-        Vector3 moveDir = transform.right * inputVector.x + transform.forward * inputVector.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
+        //ramp toward the input rather than snapping to it. MoveTowards, not Lerp, so the rate is a real units-per-second
+        //number you can reason about instead of an exponential that never quite arrives.
+        float smoothingRate = inputVector.sqrMagnitude > smoothedMoveInput.sqrMagnitude ? moveAcceleration : moveDeceleration;
+        smoothedMoveInput = Vector2.MoveTowards(smoothedMoveInput, inputVector, smoothingRate * Runner.DeltaTime);
 
-        bool isSprinting = sprinting && !isCrouching && !exhausted && stamina > 0f;
+        //clamped so a diagonal isn't faster than a straight line - W+D is (1,1), which is 1.41 long, and without this
+        //the fastest way across a room is at 45 degrees. Harmless if the input asset already normalises it.
+        Vector2 movement = Vector2.ClampMagnitude(smoothedMoveInput, 1f);
+
+        Vector3 moveDir = transform.right * movement.x + transform.forward * movement.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
+
+        TickJammer(); //active/cooldown timers, on the tick so the duration is the same length for everyone
+
+        //tangled in a wire: no sprinting out of it, and the timer runs on the tick so it's the same length for everyone
+        if (TangledSecondsLeft > 0f)
+        {
+            TangledSecondsLeft = Mathf.Max(0f, TangledSecondsLeft - Runner.DeltaTime);
+        }
+
+        //You have to actually be MOVING to be sprinting. Without this, holding shift while stood still drained the
+        //whole bar and left you unable to run at the moment you needed to - and there was no feedback explaining why.
+        bool tryingToMove = inputVector.sqrMagnitude > 0.01f;
+
+        //SPRINT IS FORWARD ONLY. Backpedalling or sidestepping at full running speed is the thing that makes a lot of
+        //first-person movement feel weightless - you can flee while never taking your eyes off what's chasing you,
+        //which costs nothing. Requiring you to face where you're going makes running away an actual commitment.
+        bool sprintingForward = inputVector.y > 0.5f;
+        bool isSprinting = sprinting && tryingToMove && sprintingForward && !isCrouching && !exhausted && stamina > 0f && !IsTangled;
+        isSprintingNow = isSprinting; //published for the render frame, which drives the sprint FOV push
+        lastMoveInput = smoothedMoveInput; //the SMOOTHED value, so the camera's strafe tilt eases with the movement instead of snapping ahead of it
         if (isSprinting)
         {
             stamina -= Runner.DeltaTime; //sprinting burns stamina
@@ -44,6 +71,19 @@ public partial class Player
             speed = moveSpeed * sprintSpeedMultiplier;
         }
 
+        //DIRECTION. Blended off how forward you're heading rather than switched between three cases, so a diagonal
+        //sits between its two neighbours instead of snapping to one of them as you turn.
+        float directionMultiplier = movement.y >= 0f
+            ? Mathf.Lerp(strafeSpeedMultiplier, 1f, movement.y)                    //pure strafe -> forward
+            : Mathf.Lerp(strafeSpeedMultiplier, backwardSpeedMultiplier, -movement.y); //pure strafe -> backpedal
+        speed *= directionMultiplier;
+
+        if (IsTangled)
+        {
+            speed *= tangledSpeedMultiplier; //applied AFTER crouch/sprint so it hobbles you whatever you were doing
+        }
+
+        currentHorizontalSpeed = speed; //PlayerGravity needs it: how hard we're pressed to the floor has to scale with this, or we ski off downslopes
         float moveDistance = speed * Runner.DeltaTime;
         if (jumpInput && !jumpHeldLastTick && characterController.isGrounded && !isCrouching) //rising edge only: must release + repress to jump again (no bunnyhop from holding space)
         {
@@ -54,14 +94,67 @@ public partial class Player
 
         //landing: the tick we touch down after being airborne. a hard landing is LOUD - a big noise spike that carries to the guard, plus a thud
         bool groundedNow = characterController.isGrounded;
-        if (groundedNow && !wasGroundedForLanding && -verticalVelocity >= minLandingFallSpeed) //just hit the ground, and we were actually falling (not stepping off a tiny lip)
+
+        //track the top of the arc. re-armed to our own height the moment we leave the ground, then only ever raised -
+        //so a jump measures from its apex and a step off a ledge measures from the ledge.
+        if (!groundedNow)
+        {
+            if (!airborneLastTick)
+            {
+                fallPeakHeight = transform.position.y;
+                fallTakeoffHeight = transform.position.y; //where the ground was when we left it
+            }
+            fallPeakHeight = Mathf.Max(fallPeakHeight, transform.position.y);
+        }
+        airborneLastTick = !groundedNow;
+
+        float fellDistance = fallPeakHeight - transform.position.y;
+
+        if (groundedNow && !wasGroundedForLanding && fellDistance >= minLandingFallDistance) //just hit the ground, and we actually fell far enough for it to be a landing
         {
             landingNoise = landNoiseAmount; //spike the guard-heard noise
             if (playerFootsteps != null)
             {
                 playerFootsteps.PlayLanding(); //thud on every client
             }
+
+            //and the view takes the hit. Sized by how fast we were actually falling, so stepping off a kerb is a
+            //twitch and dropping off the landing is a proper buckle. Sprung back to level in UpdateLandingDip.
+            //Set here rather than on the render frame because this is the only place that knows we JUST landed -
+            //by the next Update, isGrounded is simply true and the impact is indistinguishable from standing.
+            //THE CAMERA USES A DIFFERENT MEASUREMENT TO THE SOUND, deliberately.
+            //
+            //The sound counts the whole arc from the apex, because you really did drop that far and it really should
+            //thud. But your BODY only absorbs how far you ended up BELOW where you took off - jump straight up on flat
+            //ground and you land exactly where you started, having absorbed nothing.
+            //
+            //Measured from the peak, a plain jump is a 1.5m fall (jumpHeight), which put every single jump at a third
+            //of maximum impact and dropped the view 7cm. Measured from takeoff it's zero, and only stepping off
+            //something actually shakes you.
+            float droppedBelowTakeoff = Mathf.Max(0f, fallTakeoffHeight - transform.position.y);
+            float landingHardness = Mathf.Clamp01(
+                (droppedBelowTakeoff - minLandingFallDistance) / Mathf.Max(0.01f, fullLandingFallDistance - minLandingFallDistance));
+            landingDipOffset = -landingDipAmount * landingHardness; //negative = the head drops
+            landingDipVelocity = 0f; //a second landing mid-recovery restarts the dip instead of fighting the old spring
+
+            //and it twists as you absorb it, whichever way you happened to be leaning. landing perfectly square is
+            //the single most robotic thing a first-person camera can do.
+            //Direction from your lean where you HAVE one, and alternating otherwise. Running straight forward means
+            //lastMoveInput.x is exactly 0, so a simple >= 0 test picked +1 every single time and every forward landing
+            //twisted identically - which is the robotic sameness this roll exists to avoid.
+            float landingLean;
+            if (Mathf.Abs(lastMoveInput.x) > 0.01f)
+            {
+                landingLean = Mathf.Sign(lastMoveInput.x);
+            }
+            else
+            {
+                landingsWithoutLean++;
+                landingLean = (landingsWithoutLean & 1) == 0 ? 1f : -1f;
+            }
+            landingRoll = landingRollDegrees * landingHardness * landingLean;
         }
+
         wasGroundedForLanding = groundedNow;
 
         //noise comes AFTER speed is finalized
@@ -101,20 +194,35 @@ public partial class Player
 
     private void HandleCrouchCamera() //eases the crouch eye-height on the RENDER frame (local only) so it's smooth at any FPS, not stepped at the 32Hz network tick
     {
+        //This only moves the NUMBER. It used to write playerCamera.localPosition directly, but head bob and the
+        //landing dip need to ride on top of this height, and two systems writing the same field means the one that
+        //runs second wins while the other silently does nothing. ApplyCameraFeel does the single write now.
         float targetCamY = isCrouching ? crouchCamHeight : standCamHeight;
-        Vector3 camPos = playerCamera.localPosition;
-        camPos.y = Mathf.Lerp(camPos.y, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
-        playerCamera.localPosition = camPos;
+        cameraEyeHeight = Mathf.Lerp(cameraEyeHeight, targetCamY, crouchSpeed * Time.deltaTime); //same easing, but on Time.deltaTime so it matches the render rate
     }
 
     private void HandleLook()
     {
+        //A HAND ON A DOOR IS NOT A HEAD TURNING. While you're pushing something open the mouse is moving the door, so
+        //letting it also swing the camera would spin you on the spot every time you opened anything.
+        if (IsDraggingDoor)
+        {
+            return;
+        }
+
         Vector2 lookInput = playerInputActions.Player.Look.ReadValue<Vector2>();
 
-        // Vertical camera pitch
+        //Published in DEGREES ACTUALLY TURNED, not raw mouse pixels. Feeding the lag raw input made its kicks scale
+        //with whatever the mouse reported rather than with how far the view really moved, which is how the first
+        //version ended up violently shaking.
+        lookDegreesTurnedThisFrame = new Vector2(
+            lookInput.x * GameSettings.MouseSensitivity,
+            lookInput.y * GameSettings.LookSensitivityY);
+
+        // Vertical camera pitch. Only the ANGLE is updated here - breathing sway and strafe tilt are added on top of it
+        // in ApplyCameraFeel, which is the one place the camera's rotation is written.
         xRotation -= lookInput.y * GameSettings.LookSensitivityY; //LookSensitivityY carries the invert flag as its sign, so nothing here has to know about it
         xRotation = Mathf.Clamp(xRotation, -90f, 90f); //clamp to prevent flipping over
-        playerCamera.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
 
         // Horizontal player body
         yRotation += lookInput.x * GameSettings.MouseSensitivity; //horizontal never inverts - that setting is only ever about the Y axis
@@ -125,7 +233,15 @@ public partial class Player
     {
         if (characterController.isGrounded && verticalVelocity < 0f) //planted on the ground
         {
-            verticalVelocity = -2f; //small downward stick keeps isGrounded reliable on steps/slopes, and stops the fall speed building to terminal velocity while just standing
+            //SCALES WITH SPEED, but only once we've been down here a tick.
+            //
+            //Why scaled: a staircase ramp falls away at ~5m/s walking and over 7 sprinting, so a flat -2 meant the
+            //floor dropped faster than we did and we skied off it on every descent.
+            //
+            //This is exactly why the landing check measures DISTANCE FALLEN and not this value: at a sprint the stick
+            //alone sits at -10.5, so anything comparing verticalVelocity to a threshold would read a flicker of
+            //isGrounded as a heavy impact. Don't reintroduce a speed-based landing test.
+            verticalVelocity = -Mathf.Max(2f, currentHorizontalSpeed);
             return;
         }
 

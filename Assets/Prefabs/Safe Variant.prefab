@@ -86,6 +86,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 6030806382311869920}
   m_SourcePrefab: {fileID: 100100000, guid: 920f22e60f1d8834b942a420720a6e82, type: 3}
+--- !u!4 &2939325150774319976 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4964907315280916, guid: 920f22e60f1d8834b942a420720a6e82, type: 3}
+  m_PrefabInstance: {fileID: 2944007427757500284}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &2943360156913838052 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1087827261243544, guid: 920f22e60f1d8834b942a420720a6e82, type: 3}
@@ -103,21 +108,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71d12ffe523bf7f43a4bf219cdb14304, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SwingingHinge
+  interactRange: 2
+  axis: 1
+  slidesOpen: 0
   openAngle: -90
-  swingSpeed: 300
-  angleVariation: 8
-  speedVariation: 0.25
-  minSwayAngle: 1.5
-  maxSwayAngle: 4
-  minSwayFrequency: 0.8
-  maxSwayFrequency: 1.6
-  swayDamping: 1.8
+  slideDistance: 0.4
+  openSpeed: 3
   openClips: []
   closeClips: []
-  volume: 0.7
-  minPitch: 0.92
-  maxPitch: 1.08
-  soundMaxDistance: 18
 --- !u!1 &2945187100278021164 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1230595887381328, guid: 920f22e60f1d8834b942a420720a6e82, type: 3}
@@ -157,6 +155,13 @@ MonoBehaviour:
   crackSeconds: 5
   crackRange: 2.2
   doorHinge: {fileID: 6030806382311869920}
+  worldItemPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
+  lootAnchor: {fileID: 2939325150774319976}
+  lootName: Jewellery
+  lootValueMin: 1500
+  lootValueMax: 4000
+  lootItemCount: 3
+  lootScatter: 0.12
   _SafeId: 0
   _Code: 0
   _CrackProgress: 0

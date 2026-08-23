@@ -47,17 +47,33 @@ public class SwingingHinge : MonoBehaviour
 
     private Quaternion closedRotation;
     private Vector3 closedPosition;
-    private bool isOpen;
     private AudioSource hingeAudio;
 
-    private float openProgress;      // 0 = shut, 1 = fully open. drives both modes, so one speed covers degrees and metres alike
+    private float openProgress;      // 0 = shut, 1 = fully open. WHERE IT IS. drives both modes, so one speed covers degrees and metres alike
+    private float targetProgress;    // WHERE IT'S HEADING. scripted opens (the guard shoving a door) ease toward this; a player dragging sets both at once so it tracks the hand exactly
     private float mySpeed;
+    private float swingDirection = 1f; //+1 opens the way the prefab was authored, -1 mirrors it. set per open so a door always swings away from whoever opened it
     private float thisOpenFraction = 1f; // re-rolled each time it opens, so it doesn't land in exactly the same spot twice
     private int openCount;           // feeds the per-open roll. bumped in SetOpen, which every client runs off the same RPC
     private int positionSeed;
 
-    public bool IsOpen => isOpen;
+    //DERIVED, not stored. A door can now rest at any angle, so "is it open" became a judgement rather than a fact -
+    //but Door, GuardPatrol's search, Safe and the wedge all still just want a yes or no, and none of them need to
+    //learn that it turned into a float. Ajar counts as open: a door cracked 20% is one the guard can see through.
+    private const float OpenThreshold = 0.12f;
+    public bool IsOpen => openProgress > OpenThreshold;
+
+    public float OpenAmount => openProgress; //0 shut, 1 fully open. what the drag reads and writes
+
+    //CAN SOMEBODY ACTUALLY WALK THROUGH THIS? A different question from IsOpen, and conflating the two is a bug.
+    //IsOpen means "not shut" - true at 13%, which is enough to see through and nowhere near enough to pass. The guard
+    //asks THIS before deciding whether to shove a door wider, because a door left ajar by a player is still in his way.
+    private const float PassableThreshold = 0.7f;
+    public bool IsWideEnoughToPass => openProgress >= PassableThreshold;
     public float InteractRange => interactRange;
+    public bool SlidesOpen => slidesOpen;    //the drag needs to know whether it's turning something or pulling it
+    public float TravelDegrees => openAngle; //how far a full open goes, so drag sensitivity can scale with it
+    public float TravelDistance => slideDistance;
 
     //CAN A PLAYER JUST PRESS E ON THIS? True for cupboards, drawers and doors. The safe sets it false on its own door
     //in Spawned, because that door is owned by the crack/keypad system - leaving it true meant walking up to a safe
@@ -151,26 +167,106 @@ public class SwingingHinge : MonoBehaviour
     private void Update()
     {
         //one 0-to-1 progress value drives both modes, which is why a single speed field can cover degrees and metres
-        //without caring which. ease toward it every frame - a clean movement, not a snap. any collider rides along,
-        //so as it opens the gap physically clears and closing blocks it again.
-        float target = isOpen ? 1f : 0f;
-        openProgress = Mathf.MoveTowards(openProgress, target, mySpeed * Time.deltaTime);
+        //without caring which. ease toward the target every frame - a clean movement, not a snap. any collider rides
+        //along, so as it opens the gap physically clears and closing blocks it again.
+        //
+        //Only SCRIPTED opens ease. A player dragging writes both values together (SetOpenAmount), so the door tracks
+        //their hand exactly instead of lagging a fixed speed behind it - which would feel like pushing treacle.
+        openProgress = Mathf.MoveTowards(openProgress, targetProgress, mySpeed * Time.deltaTime);
+        ApplyPose(openProgress);
+    }
 
+    //Put the transform where a given open amount says it should be. Pulled out of Update so the same maths can be run
+    //speculatively - see OpeningMovesAwayFrom, which nudges the door, measures, and puts it straight back.
+    private void ApplyPose(float amount)
+    {
         if (slidesOpen)
         {
-            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * openProgress);
+            transform.localPosition = closedPosition + AxisVector() * (slideDistance * thisOpenFraction * swingDirection * amount);
         }
         else
         {
-            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * openProgress, AxisVector());
+            transform.localRotation = closedRotation * Quaternion.AngleAxis(openAngle * thisOpenFraction * swingDirection * amount, AxisVector());
         }
+    }
+
+    //OPEN IT AWAY FROM WHOEVER'S PUSHING. A real door swings one way and you pull it from the other side - but the
+    //guard is a NavMeshAgent walking a straight line, so a door opening into his face just clips through him. Letting
+    //the leaf pick its side means he always shoves it out of his path, from either approach.
+    //
+    //Only ever chosen while the door is essentially SHUT. Flipping the direction of a door that's already part-open
+    //would snap it through the frame to a mirrored angle.
+    public void SetOpenAwayFrom(Vector3 openerPosition)
+    {
+        if (openProgress <= OpenThreshold)
+        {
+            if (OpeningMovesAwayFrom(openerPosition) < 0f)
+            {
+                swingDirection = -swingDirection;
+            }
+        }
+        SetOpen(true);
+    }
+
+    //A point ON the moving part, out away from the pivot - the renderer's centre. The pivot itself is useless for
+    //this: it sits on the hinge and barely moves however far the door swings.
+    private Vector3 ProbeWorldPoint()
+    {
+        Renderer renderer = GetComponentInChildren<Renderer>();
+        return renderer != null ? renderer.bounds.center : transform.position + transform.right * 0.5f;
+    }
+
+    //DOES OPENING THIS CARRY IT AWAY FROM THAT POINT, OR TOWARD IT? +1 for away, -1 for toward.
+    //
+    //Measured rather than inferred. Nudge the thing a fraction, see which way its far edge actually went relative to
+    //where you're standing, put it back. That's the real question the drag needs answered, and asking it directly
+    //means no guessing a mesh's facing from its hinge axis and no per-prefab override to forget to tick.
+    public float OpeningMovesAwayFrom(Vector3 fromPosition)
+    {
+        float saved = openProgress;
+        float step = saved > 0.9f ? -0.05f : 0.05f; //step toward whichever end we aren't already pinned against
+
+        Vector3 before = ProbeWorldPoint();
+        ApplyPose(Mathf.Clamp01(saved + step));
+        Vector3 after = ProbeWorldPoint();
+        ApplyPose(saved); //straight back, within the same frame - nothing renders in between
+
+        bool movedAway = Vector3.Distance(after, fromPosition) >= Vector3.Distance(before, fromPosition);
+        return movedAway == (step > 0f) ? 1f : -1f; //if we stepped CLOSED to measure, the answer is inverted
+    }
+
+    //PUT IT EXACTLY HERE, no easing. This is what a dragging hand and the network both call - the door has to sit
+    //precisely where it's told, because "where it's told" IS the player's hand position or a teammate's replicated
+    //copy of it. Easing toward it would make a dragged door lag behind the mouse and a remote door lag behind reality.
+    public void SetOpenAmount(float amount)
+    {
+        amount = Mathf.Clamp01(amount);
+
+        //creak as it comes off the frame, once, rather than every frame it's in motion
+        if (openProgress <= OpenThreshold && amount > OpenThreshold)
+        {
+            PlaySound(true);
+        }
+        else if (openProgress > OpenThreshold && amount <= OpenThreshold)
+        {
+            PlaySound(false); //and thud as it shuts
+        }
+
+        thisOpenFraction = 1f; //a hand-dragged door goes exactly where the hand puts it - the per-open roll is for SCRIPTED opens, so the guard's shove isn't identical every time
+        openProgress = amount;
+        targetProgress = amount;
     }
 
     public void SetOpen(bool open)
     {
-        if (isOpen == open)
+        //Compared against where it's HEADING, not against IsOpen. IsOpen is true from 13% onward, so a door a player
+        //had nudged ajar answered "already open" and the guard's shove did nothing at all - he'd stand there while a
+        //15% gap stayed a 15% gap. Asking about the target still stops a caller re-asserting the same thing every
+        //tick and machine-gunning the creak, which is what this guard is actually for.
+        float wantedTarget = open ? 1f : 0f;
+        if (Mathf.Approximately(targetProgress, wantedTarget))
         {
-            return; //already in that state - bail before the sound, so a caller re-asserting "open" every tick can't machine-gun the creak
+            return;
         }
 
         if (open)
@@ -183,7 +279,7 @@ public class SwingingHinge : MonoBehaviour
             thisOpenFraction = RollBetween(openRandom, MinOpenFraction, 1f);
         }
 
-        isOpen = open; //explicit state, not a toggle - two callers on the same tick can't flip it twice and cancel out
+        targetProgress = open ? 1f : 0f; //explicit state, not a toggle - two callers on the same tick can't flip it twice and cancel out. Update eases openProgress toward this, which is what makes a shoved door SWING rather than teleport
         PlaySound(open);
     }
 
