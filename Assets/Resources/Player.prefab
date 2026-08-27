@@ -720,8 +720,8 @@ MonoBehaviour:
   crouchSpeedMultiplier: 0.5
   sprintSpeedMultiplier: 1.5
   voiceNoiseScale: 24
-  maxStamina: 3
-  staminaRegenRate: 1
+  maxStamina: 6
+  staminaRegenRate: 2
   jumpHeight: 1.5
   fallGravityMultiplier: 2.2
   lowJumpGravityMultiplier: 1.6

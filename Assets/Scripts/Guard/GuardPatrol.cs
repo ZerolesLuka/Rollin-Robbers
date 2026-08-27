@@ -29,7 +29,7 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
-    [SerializeField] private float wakeUpHoldTime = 1.5f;       //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
+    [SerializeField] private float wakeUpHoldTime = 3f;         //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
     private float wakeUpHoldTimer;                              //counts down while he's climbing to his feet
     [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
     [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe

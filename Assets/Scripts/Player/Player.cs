@@ -40,7 +40,7 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
-    [SerializeField] private float voiceNoiseScale = 16f; //higher = more sensitive guard
+    [SerializeField] private float voiceNoiseScale = 24f; //higher = more sensitive guard
     //Doubled with the speed halving. Sprint is an ESCAPE tool, so what matters is the ground it buys you, not the
     //seconds - 3s at the old speed covered about 31m, and 3s at the new one would only cover 16m. 6s keeps the escape
     //the same size. Regen doubled to match so recovery takes the same wall-clock time it always did.
@@ -157,7 +157,7 @@ public partial class Player : NetworkBehaviour
     //back, and that settle is the whole tell. Stiffness is how hard it's pulled toward your aim, damping is how fast
     //the wobble dies: low damping = a loose wrist, high damping = a clamp.
     [SerializeField] private float flashlightSpringStiffness = 90f;
-    [SerializeField] private float flashlightSpringDamping = 9f;
+    [SerializeField] private float flashlightSpringDamping = 13f;
     [SerializeField] private float flashlightSwayAmount = 1.5f; //idle handheld tremor, in degrees - keeps the beam alive when you're still
     [SerializeField] private float flashlightSwayFrequency = 1.1f; //how fast that tremor drifts
     [SerializeField] private float flashlightWalkSwayMultiplier = 3f; //how much bigger the sway gets while walking - the bob that sells "handheld"
@@ -351,7 +351,7 @@ public partial class Player : NetworkBehaviour
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
     [SerializeField] private int dragTrailLag = 12; //how many ticks back on the guard's path the player trails (bigger = further behind)
     [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
-    [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
+    [SerializeField] private float suffocateDuration = 20f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
     public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
 

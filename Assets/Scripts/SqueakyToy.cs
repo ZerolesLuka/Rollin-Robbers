@@ -7,7 +7,7 @@ using UnityEngine;
 // the already-replicated player positions - so everyone hears it, spatially, with no RPC. Reusable.
 public class SqueakyToy : MonoBehaviour
 {
-    [SerializeField] private float triggerRange = 4f;  //how close a player must get to set it off
+    [SerializeField] private float triggerRange = 3f;  //how close a player must get to set it off
     [SerializeField] private float cooldown = 2.5f;    //seconds before it can trigger again
     [SerializeField] private AudioSource squeakSource; //the squeak (set Spatial Blend to 3D so it's directional)
 

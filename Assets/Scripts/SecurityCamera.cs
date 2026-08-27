@@ -8,10 +8,10 @@ using UnityEngine;
 public class SecurityCamera : MonoBehaviour
 {
     [SerializeField] private float fovAngle = 60f;
-    [SerializeField] private float sightRange = 12f;
+    [SerializeField] private float sightRange = 15f;
     [SerializeField] private float dwellTime = 1.5f;
     [SerializeField] private LayerMask obstacleMask;
-    [SerializeField] private float patrolArcDegrees = 90f;
+    [SerializeField] private float patrolArcDegrees = 60f;
     [SerializeField] private float patrolSpeed = 25f;
     [SerializeField] private float trackSpeed = 80f;
     [SerializeField] private float alertCooldown = 8f;

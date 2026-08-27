@@ -16,7 +16,7 @@ public class Safe : NetworkBehaviour
 
     public static readonly List<Safe> AllSafes = new List<Safe>();
 
-    [SerializeField] private float crackSeconds = 8f;  // how long a single cracker takes to open it. two crackers don't stack - it's presence, not headcount
+    [SerializeField] private float crackSeconds = 5f;  // how long a single cracker takes to open it. two crackers don't stack - it's presence, not headcount
     [SerializeField] private float crackRange = 2.2f;  // how close a player must stay to keep the meter moving
     [SerializeField] private SwingingHinge doorHinge;  // the safe's door. leave EMPTY and it finds a SwingingHinge on any child by itself - just add that component to the door mesh. only assign this by hand if the safe has more than one hinged part
 
