@@ -112,9 +112,9 @@ MonoBehaviour:
   alertConfirmTime: 1.5
   maximumSearchSweepPoints: 3
   turnSpeed: 540
-  relaxSpeed: 1.5
-  searchSpeed: 3.5
-  chaseSpeed: 6.5
+  relaxSpeed: 0.75
+  searchSpeed: 1.75
+  chaseSpeed: 3.25
   escortSpeed: 2.5
   angerEliminateThreshold: 60
   tripwirePrefab: {fileID: 152258593786380468, guid: 10637365c3aff594bb3d6a4d6c9aece2, type: 3}

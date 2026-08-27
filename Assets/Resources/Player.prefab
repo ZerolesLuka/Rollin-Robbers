@@ -709,7 +709,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
   _NoiseLevel: 0
-  moveSpeed: 7
+  moveSpeed: 3.5
   playerCamera: {fileID: 1528983954450414190}
   characterController: {fileID: 3332511634651341915}
   standCamHeight: 0.559
@@ -996,7 +996,7 @@ MonoBehaviour:
   landingClip: {fileID: 8300000, guid: f68cbe2b0f8074e42a6628fa2c33dd20, type: 3}
   landingVolume: 1
   characterController: {fileID: 3332511634651341915}
-  strideLength: 2
+  strideLength: 1
   maxStepDistance: 1
 --- !u!114 &7836639216215506259
 MonoBehaviour:
