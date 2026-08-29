@@ -30,6 +30,10 @@ public class HUD : MonoBehaviour
     [SerializeField] private Image crackFillImage;   //set Image Type to Filled - fillAmount is driven from the safe's networked CrackProgress
     [SerializeField] private Text crackText;         //optional percentage readout
 
+    [Header("Leaving through an exit door - shown only while this player is holding one open")]
+    [SerializeField] private GameObject exitHoldPanel; //parent of the ring; toggled on/off. optional
+    [SerializeField] private Image exitHoldFillImage;  //set Image Type to Filled and Fill Method to Radial 360 - this is the ring
+
     [SerializeField] private GameObject caughtPanel;    //shown when the whole team gets caught
     [SerializeField] private CanvasGroup caughtCanvasGroup; //on the same panel - drives the fade
     [SerializeField] private Image caughtBackground;    //the panel's background image - flashes red then settles dark
@@ -172,6 +176,18 @@ public class HUD : MonoBehaviour
         if (crackPanel != null && crackPanel.activeSelf != showCrackMeter)
         {
             crackPanel.SetActive(showCrackMeter);
+        }
+
+        //the exit-door ring. read straight off the local player rather than off a door, because the hold is ours alone
+        //- it isn't networked and no teammate is meant to see it.
+        bool showExitHold = localPlayerLive && Player.LocalPlayer.ExitDoorHoldProgress > 0f;
+        if (showExitHold && exitHoldFillImage != null)
+        {
+            exitHoldFillImage.fillAmount = Player.LocalPlayer.ExitDoorHoldProgress;
+        }
+        if (exitHoldPanel != null && exitHoldPanel.activeSelf != showExitHold)
+        {
+            exitHoldPanel.SetActive(showExitHold);
         }
 
         bool caught = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid

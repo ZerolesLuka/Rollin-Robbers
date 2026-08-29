@@ -60,6 +60,49 @@ public partial class Player
         SetCrackingSafe(actuallyCracking ? nearbySafe.SafeId : Safe.NoSafe);
     }
 
+    private void HandleExitDoorHold(bool interactHeld, Vector2 movementInput)
+    {
+        //Driven off the SAME scan the prompt uses, so the ring can never fill on a door the label isn't offering. It
+        //inherits the priority order for free too: a teammate needing a rescue on the threshold outranks the door, and
+        //while that's true the hold simply never starts.
+        InteractKind kind = FindInteraction(out Component target);
+
+        //MOVING CANCELS, and it RESETS rather than pausing. Both halves are the mechanic. A bar you can chip away at
+        //in three goes is no commitment - you'd hold, sidestep as he closed, and tap out the rest at your leisure.
+        //Losing the whole thing is what makes standing in a doorway a decision instead of a formality.
+        bool holdingTheDoor = interactHeld && kind == InteractKind.ExitDoor && movementInput.sqrMagnitude <= 0.01f;
+        if (!holdingTheDoor)
+        {
+            exitDoorHoldSeconds = 0f;
+            ExitDoorHoldProgress = 0f;
+            return;
+        }
+
+        ExitDoor exitDoor = (ExitDoor)target;
+        exitDoorHoldSeconds += Runner.DeltaTime;
+
+        //guarded: a door authored at 0 is the way back IN, and dividing by it would hand the HUD a NaN that then
+        //spreads through fillAmount. At 0 the comparison below passes on the first tick, so one path covers both.
+        ExitDoorHoldProgress = exitDoor.holdSeconds > 0f
+            ? Mathf.Clamp01(exitDoorHoldSeconds / exitDoor.holdSeconds)
+            : 1f;
+
+        if (exitDoorHoldSeconds >= exitDoor.holdSeconds)
+        {
+            LeaveThrough(exitDoor);
+        }
+    }
+
+    private void LeaveThrough(ExitDoor exitDoor)
+    {
+        //cleared BEFORE the call, not after. Today this reloads the scene for everyone and we never see another tick,
+        //so it makes no difference - but the merged-scene plan turns this into a teleport we DO come back from, and a
+        //timer left full would fire again the instant we landed and bounce us straight back out.
+        exitDoorHoldSeconds = 0f;
+        ExitDoorHoldProgress = 0f;
+        RunManager.Instance.RPC_LoadScene(exitDoor.targetSceneBuildIndex, exitDoor.spawnPointId);
+    }
+
     private bool IsLootWithinReach() //loot we could take if our hands were empty. only used to explain a full bag, never to act
     {
         foreach (WorldItem item in WorldItem.AllItems)
@@ -331,8 +374,8 @@ public partial class Player
                 break;
 
             case InteractKind.ExitDoor:
-                ExitDoor exitDoor = (ExitDoor)target;
-                RunManager.Instance.RPC_LoadScene(exitDoor.targetSceneBuildIndex, exitDoor.spawnPointId);
+                //nothing on the press any more - HandleExitDoorHold owns leaving, and it needs the key HELD. The case
+                //stays so the press is still consumed here rather than falling through to something behind the door.
                 break;
 
             case InteractKind.Computer:
@@ -468,7 +511,8 @@ public partial class Player
                 return (labelHinge != null && labelHinge.IsOpen) ? "E  Close the door" : "E  Open the door";
 
             case InteractKind.ExitDoor:
-                return "E  Go through";
+                //"hold" spelled out, because a tap now does nothing and silently doing nothing reads as a broken door
+                return ((ExitDoor)target).holdSeconds > 0f ? "E  Hold to slip out" : "E  Go through";
 
             case InteractKind.Van:
                 return "E  Drive off (ends the run)"; //spelled out: this one is irreversible and ends everyone's heist

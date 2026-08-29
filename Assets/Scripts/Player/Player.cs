@@ -119,6 +119,12 @@ public partial class Player : NetworkBehaviour
 
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
+
+    //LEAVING THROUGH AN EXIT DOOR, held rather than tapped. Deliberately LOCAL and not [Networked]: once indoor and
+    //outdoor are one scene the crew comes and goes on their own errands, so your progress through a door is nobody
+    //else's business. Replicating it would buy no gameplay and cost a float per player per tick.
+    private float exitDoorHoldSeconds;                       //counts up on our own machine; reset by anything that interrupts
+    public float ExitDoorHoldProgress { get; private set; }  //0..1 for the HUD ring. 0 whenever we aren't actively holding a door
     private float safeInteractHoldTime;                         //how long E has been held at a safe this press
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     //PROPS THAT APPEAR IN YOUR HAND. Park them all as CHILDREN of the player model roughly where a hand would be,
@@ -694,6 +700,7 @@ public partial class Player : NetworkBehaviour
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
             HandleInteract(networkInputData.interactInput); //E to free a trapped teammate (tap)
             HandleCracking(networkInputData.interactInput); //E HELD next to a safe cracks it (hold) - separate from the tap above
+            HandleExitDoorHold(networkInputData.interactInput, networkInputData.movementInput); //E HELD at an exit door leaves through it. takes the movement input too, because stepping away has to cancel it
             HandleFlashlight(networkInputData.flashlightInput); //F to toggle the flashlight
             HandleDrop(networkInputData.dropInput); //G to drop an item on the floor
         }
