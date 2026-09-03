@@ -709,7 +709,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
   _NoiseLevel: 0
-  moveSpeed: 3.5
+  moveSpeed: 6.5
   playerCamera: {fileID: 1528983954450414190}
   characterController: {fileID: 3332511634651341915}
   standCamHeight: 0.559
@@ -727,7 +727,8 @@ MonoBehaviour:
   lowJumpGravityMultiplier: 1.6
   landNoiseAmount: 30
   landNoiseDecayRate: 60
-  minLandingFallSpeed: 4
+  minLandingFallDistance: 0.5
+  fullLandingFallDistance: 3.5
   crackNoiseAmount: 14
   verticalVelocity: 0
   _IsEliminated: 0
@@ -755,7 +756,7 @@ MonoBehaviour:
   heldProps:
   - tool: 0
     prop: {fileID: 6257188763350753978}
-  - tool: 5
+  - tool: 7
     prop: {fileID: 4236311351347642664}
   - tool: 6
     prop: {fileID: 1116128342953111956}
@@ -770,8 +771,10 @@ MonoBehaviour:
   tangledSpeedMultiplier: 0.45
   _TangledSecondsLeft: 0
   cameraMotionScale: 1
-  stairSmoothMaxDrop: 0.35
-  stairSmoothRecoverSpeed: 2.5
+  moveAcceleration: 13
+  moveDeceleration: 18.5
+  strafeSpeedMultiplier: 0.78
+  backwardSpeedMultiplier: 0.6
   movingPitchDegrees: 1.2
   sprintExtraPitchDegrees: 1.6
   movementEaseSpeed: 3.5
@@ -780,7 +783,6 @@ MonoBehaviour:
   lookLagRecoverSpeed: 9
   landingDipAmount: 0.22
   landingRollDegrees: 2.4
-  landingDipFullSpeed: 14
   landingDipStiffness: 130
   landingDipDamping: 16
   breathSwayAmount: 0.35
