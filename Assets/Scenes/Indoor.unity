@@ -11346,7 +11346,7 @@ MonoBehaviour:
   guardPrefab: {fileID: 3837652101745290742, guid: 2bf81f3c129295546aad82e11f156588, type: 3}
   guardSpawn: {fileID: 2096217682}
   closetSpot: {fileID: 507233388}
-  dogPrefab: {fileID: 5647142314712709375, guid: 8e394e6e17792f04cb9484ae0a8e0720, type: 3}
+  dogPrefab: {fileID: 0}
   dogSpawn: {fileID: 2096217683}
   dogWaypoints:
   - {fileID: 0}
