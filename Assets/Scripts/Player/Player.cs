@@ -25,12 +25,12 @@ public partial class Player : NetworkBehaviour
     public Camera ViewCamera { get; private set; } //the rendering camera for this player - world-space UI needs it to raycast clicks
     public static readonly List<Player> ActivePlayers = new List<Player>(); //everyone currently in the session, AIs read this instead of scanning the scene once and going stale
     [Networked] public float NoiseLevel { get; private set; }
-    //HALVED from 7 (2026-08-16). 7 m/s is faster than most people can SPRINT, and the house is built to real-house
-    //scale - so the house wasn't small, you were crossing it at five times human speed. Everything that has to stay in
-    //proportion was halved with it: the guard's three speeds, the dog's, and the footstep stride. Movement noise was
-    //DOUBLED at its source to compensate, since noise is speed x multiplier and halving speed would otherwise have
-    //made the guard deaf. Chases play out identically; the house just takes twice as long to cross.
-    [SerializeField] private float moveSpeed = 3.5f;
+    //Authored for feel, then scaled by one tuning slider. Keep dependent systems reading the properties below instead
+    //of this raw field, or changing speed silently breaks cadence, input weight, and guard hearing again.
+    [SerializeField] private float moveSpeed = 6.5f;
+    [SerializeField, Range(0.5f, 1.6f)] private float movementSpeedMultiplier = 1f;
+    public float EffectiveMoveSpeed => moveSpeed * MovementSpeedMultiplier;
+    public float MovementSpeedMultiplier => Mathf.Max(0.01f, movementSpeedMultiplier);
     [SerializeField] private Transform playerCamera; //simple camera ref
     //sensitivity is NOT a field here any more. it belongs to the machine, not to a spawned player object - it has to
     //survive scene loads and be there next launch, which a prefab field isn't. see GameSettings.
@@ -204,8 +204,10 @@ public partial class Player : NetworkBehaviour
     //The INPUT is smoothed, not the resulting world direction. Smoothing the world vector would leave it pointing
     //where you used to face for a moment after you turn, so walking forward while turning would curve you off course.
     //Smoothing the 2D input keeps turning instant and only softens changes of KEY.
-    [SerializeField] private float moveAcceleration = 7f;  //how fast you reach full input. higher = snappier
-    [SerializeField] private float moveDeceleration = 10f; //how fast you come to rest. deliberately quicker than accel, or stopping feels like ice
+    [SerializeField] private float moveAcceleration = 13f; //how fast you reach full input at 1x speed. scales with movementSpeedMultiplier so faster still feels responsive
+    [SerializeField] private float moveDeceleration = 18.5f; //how fast you come to rest at 1x speed. deliberately quicker than accel, or stopping feels like ice
+    public float EffectiveMoveAcceleration => moveAcceleration * MovementSpeedMultiplier;
+    public float EffectiveMoveDeceleration => moveDeceleration * MovementSpeedMultiplier;
     private Vector2 smoothedMoveInput;
 
     //DIRECTIONAL SPEED. Every direction used to move at exactly the same rate, which is why no combination of WASD

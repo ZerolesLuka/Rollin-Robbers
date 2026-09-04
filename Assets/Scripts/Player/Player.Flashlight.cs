@@ -37,9 +37,9 @@ public partial class Player
         //how fast are we actually moving this frame - drives a bigger bob while walking
         float speed = Time.deltaTime > 0f ? (transform.position - flashlightLastPosition).magnitude / Time.deltaTime : 0f;
         flashlightLastPosition = transform.position;
-        //guarded - moveSpeed is serialized, and at 0 this is a NaN that spreads into the sway and leaves the beam
+        //guarded - speed is serialized, and at 0 this is a NaN that spreads into the sway and leaves the beam
         //pointing at nothing, which reads as the flashlight being broken rather than as a bad inspector value
-        float walkFactor = moveSpeed > 0f ? Mathf.Clamp01(speed / moveSpeed) : 0f; //0 standing still, ~1 at full walk speed
+        float walkFactor = EffectiveMoveSpeed > 0f ? Mathf.Clamp01(speed / EffectiveMoveSpeed) : 0f; //0 standing still, ~1 at full walk speed
 
         //handheld tremor: two Perlin channels drifting independently so it wanders naturally instead of looping. bigger while walking (the bob), always a little alive while still
         float swayScale = flashlightSwayAmount * (1f + walkFactor * flashlightWalkSwayMultiplier);

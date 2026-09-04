@@ -15,7 +15,7 @@ public partial class Player
     {
         //ramp toward the input rather than snapping to it. MoveTowards, not Lerp, so the rate is a real units-per-second
         //number you can reason about instead of an exponential that never quite arrives.
-        float smoothingRate = inputVector.sqrMagnitude > smoothedMoveInput.sqrMagnitude ? moveAcceleration : moveDeceleration;
+        float smoothingRate = inputVector.sqrMagnitude > smoothedMoveInput.sqrMagnitude ? EffectiveMoveAcceleration : EffectiveMoveDeceleration;
         smoothedMoveInput = Vector2.MoveTowards(smoothedMoveInput, inputVector, smoothingRate * Runner.DeltaTime);
 
         //clamped so a diagonal isn't faster than a straight line - W+D is (1,1), which is 1.41 long, and without this
@@ -61,14 +61,14 @@ public partial class Player
             }
         }
 
-        float speed = moveSpeed;
+        float speed = EffectiveMoveSpeed;
         if (isCrouching)
         {
-            speed = moveSpeed * crouchSpeedMultiplier; //crouch wins
+            speed = EffectiveMoveSpeed * crouchSpeedMultiplier; //crouch wins
         }
         else if (isSprinting)
         {
-            speed = moveSpeed * sprintSpeedMultiplier;
+            speed = EffectiveMoveSpeed * sprintSpeedMultiplier;
         }
 
         //DIRECTION. Blended off how forward you're heading rather than switched between three cases, so a diagonal
