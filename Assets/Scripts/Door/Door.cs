@@ -143,16 +143,25 @@ public class Door : MonoBehaviour
         return nearest;
     }
 
-    //Nearest shut door that's also roughly in FRONT of the walker - the one they're about to walk into, rather than
-    //one they're strolling past. Kept separate from the plain distance search because the guard needs the direction
-    //test and the dog doesn't.
+    //Nearest shut door that is actually ON the walker's route - the one they're about to walk through, rather than
+    //one they happen to be facing. Kept separate from the plain distance search because the guard needs to know where
+    //he's going and the dog doesn't.
     //
-    //minFacingDot has to be forgiving, and here's why: this script sits on the HINGE, not the middle of the doorway.
-    //Walk straight at a door and its pivot is off to one side, so the angle from your forward to the pivot is wide -
-    //nearly 90 degrees by the time you're close. A tight cone therefore rejects every door you're actually heading
-    //through, which is exactly how the guard ended up ignoring all of them.
-    public static Door FindClosedDoorAhead(Vector3 position, Vector3 facing, float range, float minFacingDot)
+    //Is a closed door actually ON his route? The old question here was angular - "is this door roughly in front of
+    //me" - and it was wrong in both directions at once. The Door sits on the HINGE, at the EDGE of a doorway, so a
+    //door he is walking straight through reads almost side-on; meanwhile a door clear across the room reads dead
+    //ahead. Widening the cone to stop missing the first made the second far worse, and he ended up flinging open
+    //every door he happened to be facing - two at once, without taking a step, on waking up suspicious.
+    //
+    //Distance to the PATH SEGMENT answers both properly. A doorway he walks through puts its hinge roughly half a
+    //metre off the line he travels; a door across the room is metres off it however squarely he faces it. Same
+    //point-to-segment maths TripwireSpan uses, for the same reason - a thing with width is not a dot.
+    public static Door FindClosedDoorOnPath(Vector3 pathStart, Vector3 pathEnd, float corridorRadius)
     {
+        Vector3 alongPath = pathEnd - pathStart;
+        alongPath.y = 0f;
+        float pathLengthSquared = alongPath.sqrMagnitude;
+
         Door best = null;
         float bestDistance = float.MaxValue;
         foreach (Door door in AllDoors)
@@ -165,20 +174,23 @@ public class Door : MonoBehaviour
                 continue;
             }
 
-            Vector3 towardDoor = door.transform.position - position;
+            Vector3 towardDoor = door.transform.position - pathStart;
             towardDoor.y = 0f;
-            float distance = towardDoor.magnitude;
-            if (distance > range)
+
+            //CLAMPED to the segment, so a door behind him or past the end of this leg is measured from the nearer
+            //END of the route rather than from an imaginary extension of the line through the wall.
+            float alongFraction = pathLengthSquared > 0.0001f
+                ? Mathf.Clamp01(Vector3.Dot(towardDoor, alongPath) / pathLengthSquared)
+                : 0f;
+            if (Vector3.Distance(towardDoor, alongPath * alongFraction) > corridorRadius)
             {
-                continue;
+                continue; //off his route - he may well be facing it, but he isn't going through it
             }
-            if (distance > 0.01f && Vector3.Dot(facing, towardDoor / distance) < minFacingDot)
+
+            float distanceFromHim = towardDoor.magnitude;
+            if (distanceFromHim < bestDistance)
             {
-                continue; //behind him, or well off to the side - not one he's walking into
-            }
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
+                bestDistance = distanceFromHim;
                 best = door;
             }
         }
