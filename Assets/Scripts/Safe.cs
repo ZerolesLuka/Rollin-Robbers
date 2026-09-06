@@ -27,12 +27,13 @@ public class Safe : NetworkBehaviour
     //materialising out of nothing.
     [Header("What's inside")]
     [SerializeField] private NetworkObject worldItemPrefab; // the SAME WorldItem prefab everything else uses
-    [SerializeField] private Transform lootAnchor;          // where the contents sit. leave empty and they stack just above the safe's own origin
     [SerializeField] private string lootName = "Jewellery";
     [SerializeField] private int lootValueMin = 1500;
     [SerializeField] private int lootValueMax = 4000;
-    [SerializeField] private int lootItemCount = 3;
-    [SerializeField] private float lootScatter = 0.12f;     // tiny - they're in a box, not thrown across a room
+
+    [SerializeField] private Transform[] lootAnchors;   // drag your 6 empties in
+    [SerializeField] private int lootCountMin = 2;
+    [SerializeField] private int lootCountMax = 6;
 
     [Networked] public int SafeId { get; set; }                 // unique per safe, assigned by the spawner. Player.CrackingSafeId points at this
     [Networked] public int Code { get; set; }                   // 4-digit combination, rolled by the spawner. networked so the note, the keypad and the safe all agree on one number
@@ -202,19 +203,38 @@ public class Safe : NetworkBehaviour
     //loot that quietly never existed.
     private void StockContents()
     {
-        if (worldItemPrefab == null || lootItemCount <= 0) return;
+        if (worldItemPrefab == null || lootAnchors == null || lootAnchors.Length == 0) return;
 
-        Vector3 anchor = lootAnchor != null ? lootAnchor.position : transform.position + Vector3.up * 0.5f;
+        //SHUFFLED, not taken in order. Filling anchors 0..count-1 every time means the last two empties are only ever
+        //used on a maximum roll, so the back of the safe reads as permanently bare and half the placement work is
+        //wasted. Fisher-Yates over a local copy - the serialized array itself is never reordered.
+        Transform[] shuffledAnchors = (Transform[])lootAnchors.Clone();
+        for (int i = shuffledAnchors.Length - 1; i > 0; i--)
+        {
+            int swapWith = Random.Range(0, i + 1);
+            Transform held = shuffledAnchors[i];
+            shuffledAnchors[i] = shuffledAnchors[swapWith];
+            shuffledAnchors[swapWith] = held;
+        }
+
+        //clamped to the anchors that actually exist, so adding empties in the inspector raises the ceiling and
+        //removing them can never ask for a slot that isn't there
+        int itemsToSpawn = Mathf.Clamp(Random.Range(lootCountMin, lootCountMax + 1), 0, shuffledAnchors.Length);
         int totalValue = 0;
 
-        for (int i = 0; i < lootItemCount; i++)
+        for (int i = 0; i < itemsToSpawn; i++)
         {
+            Transform anchor = shuffledAnchors[i];
+            if (anchor == null) continue; //an empty slot left in the inspector array - skip it rather than spawning at the world origin
+
             int value = Random.Range(lootValueMin, lootValueMax + 1); //declared in the loop so each closure captures its own
             totalValue += value;
 
-            Vector3 spawnAt = anchor + Random.insideUnitSphere * lootScatter; //barely scattered - they're in a box, not strewn across a room
+            //the empty carries the pose now. authored rotation instead of Random.rotation, because a bar lying flat on
+            //a shelf is the whole point of placing these by hand.
+            Vector3 spawnAt = anchor.position;
             int mySafeId = SafeId;
-            Runner.Spawn(worldItemPrefab, spawnAt, Random.rotation, PlayerRef.None, (runner, spawnedObject) =>
+            Runner.Spawn(worldItemPrefab, spawnAt, anchor.rotation, PlayerRef.None, (runner, spawnedObject) =>
             {
                 WorldItem item = spawnedObject.GetComponent<WorldItem>();
                 if (item == null) return;

@@ -906,6 +906,7 @@ MonoBehaviour:
   targetSceneBuildIndex: 1
   interactRange: 2
   spawnPointId: 2
+  holdSeconds: 1.5
 --- !u!64 &367732139
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -1496,6 +1497,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e2d1f1bb33b054498730552235f00e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PersistAcrossScenes
+  persistenceKey: 
 --- !u!1 &748485529
 GameObject:
   m_ObjectHideFlags: 0
@@ -2111,6 +2113,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e2d1f1bb33b054498730552235f00e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PersistAcrossScenes
+  persistenceKey: 
 --- !u!114 &1106637449
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2539,6 +2542,7 @@ MonoBehaviour:
   targetSceneBuildIndex: 1
   interactRange: 2
   spawnPointId: 1
+  holdSeconds: 1.5
 --- !u!64 &1384772424
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -3216,6 +3220,7 @@ MonoBehaviour:
   targetSceneBuildIndex: 1
   interactRange: 2
   spawnPointId: 0
+  holdSeconds: 1.5
 --- !u!64 &1682761697
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -3867,6 +3872,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e2d1f1bb33b054498730552235f00e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PersistAcrossScenes
+  persistenceKey: 
 --- !u!114 &2123028977
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -26,6 +26,14 @@ public class WorldItem : NetworkBehaviour
     //Loot that lives inside a shut safe. It EXISTS from the moment the safe does - the door is just in the way - so
     //without this you could stand next to a locked safe and pull its contents straight through the door, since pickup
     //is a proximity check and doesn't care about geometry. Cleared by Safe.Open when the door actually swings.
+    //THE ONE FLAG THAT DECIDES WHETHER THIS IS PHYSICS OR SCENERY. Loot a spawner placed - safe contents, house loot
+    //on its anchors, anything sat in the level - is a PROP: frozen, no collider, exactly where it was authored. It
+    //only becomes a loose physical object once a player has actually dropped it.
+    //
+    //Defaulting to false is deliberate and is the safe direction: an item nobody seeds stays put instead of falling
+    //through the floor. That matters because [Networked] NetworkBool defaults to false whether or not anyone meant it.
+    [Networked] public NetworkBool WasDroppedByPlayer { get; set; }
+
     [Networked] public NetworkBool LockedInSafe { get; set; }
     [Networked] public int InSafeId { get; set; } // which safe is holding it, so that safe knows what to release
 
@@ -101,12 +109,11 @@ public class WorldItem : NetworkBehaviour
         Rigidbody body = SafeToMove();
         if (body != null)
         {
-            //THAW ONLY IF IT ISN'T SHUT IN A SAFE. Releasing here unconditionally is what put safe loot on the floor
-            //outside the safe: a safe stocks three items inside a 12cm scatter, so their colliders genuinely overlap,
-            //and the tick this line made them dynamic PhysX resolved that interpenetration by firing them through the
-            //safe wall. The comment in Spawned already worked out that overlapping dynamic loot explodes - it just
-            //stopped applying the lesson one tick too early.
-            body.isKinematic = LockedInSafe;
+            //THAW ONLY WHAT A PLAYER ACTUALLY DROPPED. Releasing here unconditionally is what put safe loot on the
+            //floor outside the safe: several items share one small box, their colliders overlap by design, and the
+            //tick this line made them dynamic PhysX resolved that interpenetration by firing them through the wall.
+            //Placed loot stays scenery for good - MatchPhysicsToDropState holds the same line every frame after this.
+            body.isKinematic = !WasDroppedByPlayer;
             body.position = SpawnPoint;
             if (!body.isKinematic)
             {
@@ -127,29 +134,50 @@ public class WorldItem : NetworkBehaviour
         return cachedBody;
     }
 
-    //Contents of a shut safe must not simulate. Three items share a 12cm scatter inside one box, so they overlap by
-    //design - fine for objects sat on a shelf, catastrophic for dynamic rigidbodies, because PhysX resolves that
-    //interpenetration by shoving them apart hard enough to leave the safe entirely.
+    private Collider[] cachedColliders; //same reason as the body - Render runs every frame on every client
+
+    //PLACED LOOT IS SCENERY, NOT PHYSICS. Anything a spawner positioned stays frozen with its colliders off: it sits
+    //exactly where it was authored, and nothing can shove it. That is what stopped safe contents blasting out through
+    //the walls - several items share one small box, so their colliders overlap by design, and PhysX resolves
+    //interpenetration by throwing them apart hard enough to leave the safe.
     //
-    //DERIVED from the networked flag every frame rather than pushed when the safe opens, exactly like the glow below.
-    //One source of truth means every client reaches the same answer with nothing extra sent, and a player who joins
-    //mid-run gets it right too instead of inheriting whatever state their copy happened to spawn in.
-    private void MatchPhysicsToSafeState()
+    //Turning the colliders OFF rather than only freezing them matters: a kinematic body still pushes dynamic ones, so
+    //two overlapping frozen bars would still fight the moment either woke up. No collider, no argument. Nothing is
+    //lost by it, because picking loot up is a distance check (Player.Interaction's pickupRange), never a trigger.
+    //
+    //DERIVED from the networked flag every frame rather than pushed at the moment of the drop, exactly like the glow
+    //below. One source of truth means every client reaches the same answer with nothing extra sent, and a player who
+    //joins mid-run gets it right instead of inheriting whatever state their copy happened to spawn in.
+    private void MatchPhysicsToDropState()
     {
+        bool shouldSimulate = WasDroppedByPlayer;
+
         Rigidbody body = SafeToMove();
-        if (body == null)
+        if (body != null && body.isKinematic == shouldSimulate)
         {
-            return;
+            body.isKinematic = !shouldSimulate;
         }
-        if (body.isKinematic != LockedInSafe)
+
+        if (cachedColliders == null)
         {
-            body.isKinematic = LockedInSafe; //the safe just opened, or this item just got stocked into one
+            cachedColliders = GetComponentsInChildren<Collider>(true);
+        }
+        foreach (Collider itemCollider in cachedColliders)
+        {
+            if (itemCollider == null)
+            {
+                continue; //a collider removed by a prefab variant - skip rather than throwing every frame
+            }
+            if (itemCollider.enabled != shouldSimulate)
+            {
+                itemCollider.enabled = shouldSimulate;
+            }
         }
     }
 
     public override void Render() //every frame on all clients - keeps the glow matched to the networked Value even as it replicates in after spawn
     {
-        MatchPhysicsToSafeState(); //before the glow's early-out below, or loot on a prefab with no light would never thaw
+        MatchPhysicsToDropState(); //before the glow's early-out below, or loot on a prefab with no light would never wake
 
         if (glowLight == null)
         {
