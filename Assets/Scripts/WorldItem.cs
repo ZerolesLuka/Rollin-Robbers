@@ -98,18 +98,59 @@ public class WorldItem : NetworkBehaviour
 
         transform.position = SpawnPoint;
 
-        Rigidbody body = GetComponent<Rigidbody>();
+        Rigidbody body = SafeToMove();
         if (body != null)
         {
-            body.isKinematic = false;   //placed correctly now - release it so it falls and settles like a real object
+            //THAW ONLY IF IT ISN'T SHUT IN A SAFE. Releasing here unconditionally is what put safe loot on the floor
+            //outside the safe: a safe stocks three items inside a 12cm scatter, so their colliders genuinely overlap,
+            //and the tick this line made them dynamic PhysX resolved that interpenetration by firing them through the
+            //safe wall. The comment in Spawned already worked out that overlapping dynamic loot explodes - it just
+            //stopped applying the lesson one tick too early.
+            body.isKinematic = LockedInSafe;
             body.position = SpawnPoint;
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
+            if (!body.isKinematic)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+        }
+    }
+
+    private Rigidbody cachedBody; //looked up once - Render runs every frame on every client and GetComponent there adds up
+
+    private Rigidbody SafeToMove()
+    {
+        if (cachedBody == null)
+        {
+            cachedBody = GetComponent<Rigidbody>();
+        }
+        return cachedBody;
+    }
+
+    //Contents of a shut safe must not simulate. Three items share a 12cm scatter inside one box, so they overlap by
+    //design - fine for objects sat on a shelf, catastrophic for dynamic rigidbodies, because PhysX resolves that
+    //interpenetration by shoving them apart hard enough to leave the safe entirely.
+    //
+    //DERIVED from the networked flag every frame rather than pushed when the safe opens, exactly like the glow below.
+    //One source of truth means every client reaches the same answer with nothing extra sent, and a player who joins
+    //mid-run gets it right too instead of inheriting whatever state their copy happened to spawn in.
+    private void MatchPhysicsToSafeState()
+    {
+        Rigidbody body = SafeToMove();
+        if (body == null)
+        {
+            return;
+        }
+        if (body.isKinematic != LockedInSafe)
+        {
+            body.isKinematic = LockedInSafe; //the safe just opened, or this item just got stocked into one
         }
     }
 
     public override void Render() //every frame on all clients - keeps the glow matched to the networked Value even as it replicates in after spawn
     {
+        MatchPhysicsToSafeState(); //before the glow's early-out below, or loot on a prefab with no light would never thaw
+
         if (glowLight == null)
         {
             return;
