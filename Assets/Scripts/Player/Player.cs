@@ -139,8 +139,9 @@ public partial class Player : NetworkBehaviour
     [System.Serializable]
     public struct HeldProp
     {
-        public ToolType tool;   //None = ordinary loot / fallback
-        public GameObject prop; //a child of the player model, left DISABLED in the prefab
+        public ToolType tool;     //None = this row is about LOOT, and lootKind below says which
+        public LootKind lootKind; //only read when tool is None. Generic is the catch-all row for loot nobody has modelled
+        public GameObject prop;   //a child of the player model, left DISABLED in the prefab
     }
 
     //WHICH item is in our hand, replicated so every client's copy of us holds the same thing. -1 means empty-handed.
@@ -148,10 +149,23 @@ public partial class Player : NetworkBehaviour
     //different in someone else's view, and SelectedSlot is deliberately local-only.
     [Networked] public int HeldKind { get; private set; }
 
+    //And WHICH loot, when HeldKind says it's loot rather than a tool. Two fields rather than one packed int: a tool
+    //and a loot kind are different enums that happen to both start at 0, so squeezing them into one value would need
+    //an offset - and an offset is a magic number that eventually gets read as the wrong enum by someone in a hurry.
+    [Networked] public int HeldLootKind { get; private set; }
+
     private void PublishHeldKind()
     {
         int slot = ResolveDropSlot();
-        HeldKind = slot < 0 ? -1 : (int)inventory[slot].tool; //ToolType.None is 0, which is the ordinary-loot case
+        if (slot < 0)
+        {
+            HeldKind = -1; //empty-handed
+            HeldLootKind = (int)LootKind.Generic;
+            return;
+        }
+
+        HeldKind = (int)inventory[slot].tool;         //ToolType.None is 0, which is the ordinary-loot case
+        HeldLootKind = (int)inventory[slot].lootKind; //only read when the above is None
     }
     private bool wasHiding;
 
@@ -818,7 +832,7 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
-    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind)
+    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind, int lootKind)
     {
         if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
 
@@ -834,8 +848,10 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
+        //lootKind rides along for the same reason toolKind does, one level down: it is what makes a gold bar look like
+        //a gold bar in your hand instead of every piece of loot in the game sharing one placeholder prop.
         inventory.Add(tool == ToolType.None
-            ? new InventoryItem(itemName.ToString(), value)
+            ? new InventoryItem(itemName.ToString(), value, (LootKind)lootKind)
             : new InventoryItem(tool));
         PublishCarriedCount();
     }

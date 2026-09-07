@@ -27,12 +27,16 @@ public class Safe : NetworkBehaviour
     //materialising out of nothing.
     [Header("What's inside")]
     [SerializeField] private NetworkObject worldItemPrefab; // the SAME WorldItem prefab everything else uses
-    [SerializeField] private string lootName = "Jewellery";
+    [SerializeField] private string lootName = "Gold Bar";
+    [SerializeField] private LootKind lootKind = LootKind.GoldBar; //what the contents ARE - drives which prop appears in your hand once you take one
     [SerializeField] private int lootValueMin = 1500;
     [SerializeField] private int lootValueMax = 4000;
 
-    [SerializeField] private Transform[] lootAnchors;   // drag your 6 empties in
-    [SerializeField] private int lootCountMin = 2;
+    //WHERE each item sits, authored by hand rather than scattered. Empty children of the safe, one per shelf position -
+    //add as many as you like, the count below is clamped to however many exist. They carry ROTATION too, so a bar lies
+    //flat on a shelf instead of tumbling in at a random angle.
+    [SerializeField] private Transform[] lootAnchors;
+    [SerializeField] private int lootCountMin = 2; //how many actually spawn is rolled between these two, so no two runs stock the same safe identically
     [SerializeField] private int lootCountMax = 6;
 
     [Networked] public int SafeId { get; set; }                 // unique per safe, assigned by the spawner. Player.CrackingSafeId points at this
@@ -121,8 +125,14 @@ public class Safe : NetworkBehaviour
         float speedMultiplier = BestCrackMultiplier();
         if (speedMultiplier > 0f)
         {
+            //GUARDED, because crackSeconds is a serialized field and a zero in the inspector divides by zero here -
+            //which is Infinity, not an exception, so the meter would hit 1 on the first tick and every safe in the
+            //house would pop the instant someone leaned on it. Silent and very confusing. Same reason
+            //Player.staminaNormalized guards maxStamina.
+            float secondsToCrack = Mathf.Max(0.01f, crackSeconds * speedMultiplier);
+
             //multiplier scales the TIME, so a Crowbar's 0.6 means the meter fills in 60% of crackSeconds
-            CrackProgress = Mathf.Min(1f, CrackProgress + Runner.DeltaTime / (crackSeconds * speedMultiplier));
+            CrackProgress = Mathf.Min(1f, CrackProgress + Runner.DeltaTime / secondsToCrack);
             if (CrackProgress >= 1f)
             {
                 Open();
@@ -154,6 +164,11 @@ public class Safe : NetworkBehaviour
             float mine = player.SafeCrackMultiplier;
             if (best == 0f || mine < best) best = mine; //lower is faster
         }
+
+        //⚠️ 0 DOUBLES AS "NOBODY IS CRACKING", which only works while no tool can legitimately return a 0 multiplier.
+        //Today the field is 0.6 with a Crowbar and 1 without, so the sentinel is safe. Add an instant-open tool with a
+        //multiplier of 0 and whoever carries it reads as not cracking at all - the safe would sit still for the one
+        //player best equipped to open it. If that ever happens, return a nullable or a separate "anyone cracking" bool.
         return best;
     }
 
@@ -203,7 +218,20 @@ public class Safe : NetworkBehaviour
     //loot that quietly never existed.
     private void StockContents()
     {
-        if (worldItemPrefab == null || lootAnchors == null || lootAnchors.Length == 0) return;
+        //SAY WHICH ONE IS MISSING. A bare `return` here meant a safe with nothing in it looked identical to a safe
+        //that was never stocked, and there is no way to tell those apart from inside the game. Same lesson NoteSpawner
+        //already learned: a level-authoring mistake has to name itself, or you go hunting through the wrong system.
+        if (worldItemPrefab == null)
+        {
+            Debug.LogError($"[Safe] '{name}' has no World Item Prefab assigned, so it can't stock anything.", this);
+            return;
+        }
+        if (lootAnchors == null || lootAnchors.Length == 0)
+        {
+            Debug.LogError($"[Safe] '{name}' has no Loot Anchors, so there is nowhere to put its contents. " +
+                           "Add empty children where each item should sit and drag them into the array.", this);
+            return;
+        }
 
         //SHUFFLED, not taken in order. Filling anchors 0..count-1 every time means the last two empties are only ever
         //used on a maximum roll, so the back of the safe reads as permanently bare and half the placement work is
@@ -240,6 +268,7 @@ public class Safe : NetworkBehaviour
                 if (item == null) return;
                 item.ItemName = lootName;
                 item.Value = value;
+                item.LootKind = (int)lootKind;
                 item.LockedInSafe = true;  //behind a shut door until this safe opens
                 item.InSafeId = mySafeId;
                 item.SpawnPoint = spawnAt; //networked-position safeguard - a deferred spawn drops the position argument

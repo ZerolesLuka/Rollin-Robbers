@@ -379,8 +379,9 @@ MonoBehaviour:
   crackSeconds: 5
   crackRange: 2.2
   doorHinge: {fileID: 6030806382311869920}
-  worldItemPrefab: {fileID: 4844421574118931928, guid: ed9fc998bbdd0dd4099265037557b26d, type: 3}
-  lootName: Jewellery
+  worldItemPrefab: {fileID: 7659914683182007395, guid: f3b2f7453b6026441b569683e2616c28, type: 3}
+  lootName: Gold Bar
+  lootKind: 1
   lootValueMin: 1500
   lootValueMax: 4000
   lootAnchors:

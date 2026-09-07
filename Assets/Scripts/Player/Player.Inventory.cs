@@ -39,22 +39,55 @@ public partial class Player
 
         //Pick the winner FIRST, then do a single pass enabling it and disabling everything else. Deciding and applying
         //in one loop would let two props end up on at once if a tool were ever listed twice.
+        //
+        //TWO enums decide this, in order. A row whose tool is anything but None is a TOOL row and matches on that. A
+        //row whose tool is None is a LOOT row, and then lootKind picks which loot - that second step is what stopped
+        //every trinket in the game sharing one placeholder. LootKind.Generic is the catch-all beneath both.
         GameObject wanted = null;
+        GameObject fallback = null;
         if (held >= 0)
         {
+            bool holdingLoot = held == (int)ToolType.None;
             foreach (HeldProp mapping in heldProps)
             {
-                if (mapping.prop == null) continue;
+                if (mapping.prop == null)
+                {
+                    continue;
+                }
+
+                if (holdingLoot)
+                {
+                    if (mapping.tool != ToolType.None)
+                    {
+                        continue; //a tool row can never describe loot
+                    }
+                    if ((int)mapping.lootKind == HeldLootKind)
+                    {
+                        wanted = mapping.prop; //exact match for this loot
+                        break;
+                    }
+                    if (mapping.lootKind == LootKind.Generic)
+                    {
+                        fallback = mapping.prop; //unmodelled loot still puts something in your hand
+                    }
+                    continue;
+                }
+
                 if ((int)mapping.tool == held)
                 {
-                    wanted = mapping.prop; //exact match for this item
+                    wanted = mapping.prop; //exact match for this tool
                     break;
                 }
-                if (mapping.tool == ToolType.None && wanted == null)
+                if (mapping.tool == ToolType.None && mapping.lootKind == LootKind.Generic)
                 {
-                    wanted = mapping.prop; //remember the fallback, but keep looking for something better
+                    fallback = mapping.prop; //a tool nobody has modelled yet borrows the generic loot prop rather than showing nothing
                 }
             }
+        }
+
+        if (wanted == null)
+        {
+            wanted = fallback;
         }
 
         foreach (HeldProp mapping in heldProps)
@@ -173,6 +206,7 @@ public partial class Player
                     item.ItemName = dropped.name;
                     item.Value = dropped.value;
                     item.ToolKind = (int)dropped.tool; //a dropped crowbar has to still be a crowbar when it's picked back up
+                    item.LootKind = (int)dropped.lootKind; //and a dropped gold bar has to still be a gold bar, not a generic trinket
 
                     item.SpawnPoint = dropPosition;  //same networked-position safeguard as placed loot, in case a drop ever gets deferred too
                     item.UseSpawnPoint = true;

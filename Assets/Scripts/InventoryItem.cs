@@ -8,14 +8,20 @@ public struct InventoryItem
     public string name;
     public int value;
     public ToolType tool; //ToolType.None for ordinary loot. anything else and the item is a tool doing its job from the bag
+    public LootKind lootKind; //WHAT the loot is, so it looks right in your hand. only meaningful while tool is None - a tool is identified by its ToolType
 
     public bool IsTool => tool != ToolType.None;
 
-    public InventoryItem(string name, int value)
+    public InventoryItem(string name, int value) : this(name, value, LootKind.Generic)
+    {
+    }
+
+    public InventoryItem(string name, int value, LootKind lootKind)
     {
         this.name = name;
         this.value = value;
         this.tool = ToolType.None;
+        this.lootKind = lootKind;
     }
 
     public InventoryItem(ToolType tool)
@@ -23,5 +29,6 @@ public struct InventoryItem
         this.tool = tool;
         this.name = ToolTable.NameOf(tool);
         this.value = 0; //the fence pays nothing for your own kit - it's yours, not swag
+        this.lootKind = LootKind.Generic; //a tool is identified by its ToolType; this field says nothing about it
     }
 }

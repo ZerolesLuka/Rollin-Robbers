@@ -756,12 +756,19 @@ MonoBehaviour:
   playerVisuals: {fileID: 2020982582522420744}
   heldProps:
   - tool: 0
+    lootKind: 0
     prop: {fileID: 6257188763350753978}
   - tool: 7
+    lootKind: 0
     prop: {fileID: 4236311351347642664}
   - tool: 6
+    lootKind: 0
     prop: {fileID: 1116128342953111956}
+  - tool: 0
+    lootKind: 1
+    prop: {fileID: 7373892353514576527, guid: ed9fc998bbdd0dd4099265037557b26d, type: 3}
   _HeldKind: 0
+  _HeldLootKind: 0
   _IsFlashlightOn: 0
   flashlight: {fileID: 8160274470397713396}
   flashlightSpringStiffness: 90
