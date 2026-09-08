@@ -379,7 +379,7 @@ MonoBehaviour:
   crackSeconds: 5
   crackRange: 2.2
   doorHinge: {fileID: 6030806382311869920}
-  worldItemPrefab: {fileID: 7659914683182007395, guid: f3b2f7453b6026441b569683e2616c28, type: 3}
+  worldItemPrefab: {fileID: 4564447607944909139, guid: 1c1e5f17dea98cc4c9348fdff9112f6d, type: 3}
   lootName: Gold Bar
   lootKind: 1
   lootValueMin: 1500

@@ -4,8 +4,10 @@ using Fusion;
 using UnityEngine;
 
 // A physical pickup item. Pick up with E (into your inventory), drop with G (spawns one at your feet that falls).
-// One generic prefab for now - the name string is what distinguishes items. Networked so pickups/drops sync to
-// everyone: give the prefab a NetworkObject + NetworkRigidbody3D + Collider so a dropped one falls and replicates.
+// WHAT an item is now travels with it, as LootKind (and ToolKind for a dropped tool) - the name string is a label for
+// the HUD, not an identity. That is what lets a gold bar look like a gold bar in your hand rather than every pickup
+// in the game sharing one prop. Networked so pickups/drops sync to everyone: build a loot prefab as a VARIANT of this
+// one (NetworkObject + NetworkRigidbody3D + Collider already on it) and swap the mesh child, or it cannot be spawned.
 public class WorldItem : NetworkBehaviour
 {
     public static readonly List<WorldItem> AllItems = new List<WorldItem>();

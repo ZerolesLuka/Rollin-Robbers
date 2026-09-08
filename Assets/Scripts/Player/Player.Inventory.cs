@@ -20,8 +20,9 @@ public partial class Player
     //CarriedCount is already networked (the master reads it to vet tool purchases), so this needs no new networking:
     //carrying anything at all shows the prop, an empty bag hides it.
     //
-    //ONE generic prop for now, because there is one generic WorldItem prefab - a vase and a crowbar look identical in
-    //hand. Swapping this for a per-item mesh later means changing which object gets enabled here and nothing else.
+    //A prop PER THING, matched on what you're actually holding - a tool by its ToolType, loot by its LootKind. Every
+    //row is a child of the player model left disabled in the prefab, and this enables exactly one of them. A row whose
+    //prop points at a prefab ASSET rather than a child does nothing at all, which is silent and easy to do by accident.
     private void UpdateHeldItemVisual()
     {
         //hidden for the same reasons the body is: inside a wardrobe your arms aren't visible, and a vase floating
@@ -96,9 +97,32 @@ public partial class Player
         }
     }
 
+    //instance ids we have already complained about, so the warning below fires once instead of once per frame forever
+    private static readonly HashSet<int> alreadyWarnedAboutProp = new HashSet<int>();
+
     private static void SetPropActive(GameObject prop, bool active)
     {
         if (prop == null || prop.activeSelf == active) return; //null-tolerant so a half-filled mapping list is harmless, and no needless SetActive churn
+
+        //REFUSE PREFAB ASSETS. A prop must be a child of the player IN THE SCENE. Drag a prefab from the Project
+        //window into this list instead and SetActive writes to the asset ON DISK - Unity saves it, every future spawn
+        //of that prefab comes out disabled, and the thing silently stops existing everywhere it is used. That cost an
+        //evening: the gold bar was assigned here, got switched off the first frame the player wasn't holding one, and
+        //from then on the safe stocked five invisible bars while looking exactly like a spawn failure.
+        //A GameObject that lives in an asset rather than a loaded scene has no valid scene, which is the cheap test.
+        if (!prop.scene.IsValid())
+        {
+            //ONCE PER OBJECT, not once per frame. This runs from Update, so a plain LogError here buries the console
+            //in thousands of identical lines and hides whatever you were actually trying to read.
+            if (alreadyWarnedAboutProp.Add(prop.GetInstanceID()))
+            {
+                Debug.LogError($"[Player] heldProps is pointing at the PREFAB ASSET '{prop.name}' instead of a child " +
+                               "of the player. Refusing to touch it - disabling a prefab on disk breaks it everywhere. " +
+                               "Drag the in-hand child object into that row instead.", prop);
+            }
+            return;
+        }
+
         prop.SetActive(active);
     }
 

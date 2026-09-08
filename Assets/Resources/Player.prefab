@@ -31,6 +31,7 @@ Transform:
   m_Children:
   - {fileID: 7138851970226172560}
   - {fileID: 7723004997934540250}
+  - {fileID: 3157488931870726421}
   - {fileID: 8238307554873180503}
   m_Father: {fileID: 6299906569282450994}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -755,18 +756,15 @@ MonoBehaviour:
   safeHoldToCrackTime: 0.3
   playerVisuals: {fileID: 2020982582522420744}
   heldProps:
-  - tool: 0
-    lootKind: 0
-    prop: {fileID: 6257188763350753978}
-  - tool: 7
-    lootKind: 0
-    prop: {fileID: 4236311351347642664}
   - tool: 6
     lootKind: 0
     prop: {fileID: 1116128342953111956}
+  - tool: 7
+    lootKind: 0
+    prop: {fileID: 4236311351347642664}
   - tool: 0
     lootKind: 1
-    prop: {fileID: 7373892353514576527, guid: ed9fc998bbdd0dd4099265037557b26d, type: 3}
+    prop: {fileID: 6421438065088612687}
   _HeldKind: 0
   _HeldLootKind: 0
   _IsFlashlightOn: 0
@@ -1339,6 +1337,38 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &6421438065088612687
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3157488931870726421}
+  m_Layer: 0
+  m_Name: GoldBar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &3157488931870726421
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6421438065088612687}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 463431379087520222}
+  m_Father: {fileID: 634657168709985100}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0
@@ -1691,3 +1721,65 @@ MonoBehaviour:
   Components:
   - {fileID: 9153923266279504416}
   _guid: 205a1338-f432-409f-
+--- !u!1001 &261319549757018520
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 3157488931870726421}
+    m_Modifications:
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.75154006
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.71471
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -2.19997
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071067
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2348365667161721407, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_Name
+      value: GoldBar
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+--- !u!4 &463431379087520222 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+  m_PrefabInstance: {fileID: 261319549757018520}
+  m_PrefabAsset: {fileID: 0}
