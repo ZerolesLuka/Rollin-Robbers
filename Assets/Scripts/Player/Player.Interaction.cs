@@ -120,7 +120,7 @@ public partial class Player
     //NOTE: there's no PlaceWedge here. E already opens doors, and a second E action at the same door would either
     //steal the open or need a hold, which collides with the safe's tap-vs-hold. Wedging is on G instead - the key
     //that already means "put down what you're carrying". See HandleDrop.
-    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Shop, Keeper, Hide }
+    private enum InteractKind { None, Rescue, Disarm, TakeWedge, PullWedge, WedgeStuck, Pickup, ReadNote, SwingDoor, ExitDoor, Van, Computer, Shop, Keeper, Hide, LightSwitch }
 
     private InteractKind FindInteraction(out Component target)
     {
@@ -138,7 +138,7 @@ public partial class Player
                     return InteractKind.Hide;
                 }
             }
-            return InteractKind.None;
+            return InteractKind.None; //no interaction is made if we're hiding but the spot is gone. the prompt is blank and E does nothing, so we can't get stuck in a loop
         }
 
         //rescue takes priority: free the nearest trapped teammate. you can NEVER free yourself (locked player returns before this runs, and we skip self below)
@@ -243,6 +243,31 @@ public partial class Player
         {
             target = nearestExit;
             return InteractKind.ExitDoor;
+        }
+        //A LIGHT SWITCH IS THE LOWEST-STAKES THING E CAN HIT, so it sits below the exit door: if you're stood on the
+        //threshold with both in reach, leaving the house is the thing you meant. Keep switches ~2m clear of an exit
+        //door when you place them, or the switch there is unreachable.
+        LightSwitch nearestSwitch = null;
+        float nearestSwitchDistance = float.MaxValue;
+        foreach (LightSwitch lightSwitch in LightSwitch.AllSwitches)
+        {
+            if (lightSwitch.Zone == null)
+            {
+                continue; //no zone assigned - don't offer an interaction that couldn't do anything
+            }
+
+            float distanceToSwitch = Vector3.Distance(transform.position, lightSwitch.transform.position);
+            if (distanceToSwitch <= lightSwitch.interactRange && distanceToSwitch < nearestSwitchDistance)
+            {
+                nearestSwitch = lightSwitch;
+                nearestSwitchDistance = distanceToSwitch;
+            }
+        }
+
+        if (nearestSwitch != null)
+        {
+            target = nearestSwitch;
+            return InteractKind.LightSwitch;
         }
 
         //the getaway van (driver's seat, ends the run for everyone) and the van computer (routing) sit right next to
@@ -377,7 +402,9 @@ public partial class Player
                 //nothing on the press any more - HandleExitDoorHold owns leaving, and it needs the key HELD. The case
                 //stays so the press is still consumed here rather than falling through to something behind the door.
                 break;
-
+            case InteractKind.LightSwitch:
+                RunManager.Instance.RPC_ToggleLightZone(((LightSwitch)target).Zone.ZoneId);
+                break;
             case InteractKind.Computer:
                 if (RunManager.Instance.IsComputerFree) //networked lock - we claim it and enter once granted (see UpdateComputerClaim)
                 {
@@ -514,6 +541,19 @@ public partial class Player
                 //"hold" spelled out, because a tap now does nothing and silently doing nothing reads as a broken door
                 return ((ExitDoor)target).holdSeconds > 0f ? "E  Hold to slip out" : "E  Go through";
 
+            case InteractKind.LightSwitch:
+                //SAY WHY when it won't work. RPC_ToggleLightZone refuses silently at capacity, and a switch that does
+                //nothing when you press it reads as a bug rather than a rule you're meant to learn.
+                LightSwitch labelSwitch = (LightSwitch)target;
+                if (RunManager.Instance.IsZoneLit(labelSwitch.Zone.ZoneId))
+                {
+                    return "E  Turn the lights off";
+                }
+                if (RunManager.Instance.LitZoneCount >= RunManager.Instance.MaxLitZones)
+                {
+                    return "E  Breaker is at capacity";
+                }
+                return "E  Turn the lights on";
             case InteractKind.Van:
                 return "E  Drive off (ends the run)"; //spelled out: this one is irreversible and ends everyone's heist
 
