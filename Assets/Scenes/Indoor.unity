@@ -27792,6 +27792,18 @@ PrefabInstance:
       propertyPath: m_Convex
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6178366730424300346, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -48.924
+      objectReference: {fileID: 0}
+    - target: {fileID: 6178366730424300346, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -5.176
+      objectReference: {fileID: 0}
+    - target: {fileID: 6178366730424300346, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -40.762
+      objectReference: {fileID: 0}
     - target: {fileID: 8117661751983179940, guid: 149d388ed16e0a94795609604c0c4c84, type: 3}
       propertyPath: m_RenderingLayerMask
       value: 3
