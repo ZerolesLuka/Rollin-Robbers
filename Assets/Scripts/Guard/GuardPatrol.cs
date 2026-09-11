@@ -224,7 +224,7 @@ public class GuardPatrol : NetworkBehaviour
             {
                 wakeUpHoldTimer -= Runner.DeltaTime;
             }
-            agent.ResetPath();                     //drop whatever destination woke him; he'll re-path once he's up
+            agent.isStopped = true; //hold still but KEEP the destination that woke him. ResetPath used to wipe it, so he "arrived" beside his bed and searched there
             //push the AGENT to us, not us to the agent. it used to be the other way round, and that was the bug:
             //his bed isn't on the NavMesh, so the agent sits on the floor beside it - and dragging the transform onto
             //the agent every tick slid him off the mattress the instant he started waking.
@@ -239,7 +239,7 @@ public class GuardPatrol : NetworkBehaviour
         {
             TickAnger();
             breakingWedgeTimer -= Runner.DeltaTime;
-            agent.ResetPath();
+            agent.isStopped = true; //same as the wake-up hold: stand still, keep the route (mid-escort that route is the closet)
             agent.nextPosition = transform.position; //hold the agent to us, same as the wake-up hold
 
             if (breakingWedgeTimer <= 0f && breakingWedgeOnDoor != null)
@@ -258,6 +258,7 @@ public class GuardPatrol : NetworkBehaviour
             return;
         }
 
+        agent.isStopped = false; //no hold this tick - walk the path he kept
         TickAnger(); //rise while chasing, cool while calm
         CheckForMissingLoot(); //a new sensing mode - notices his stuff is missing even in total silence
         OpenDoorInMyWay(); //shove open any shut door he walks into, so he isn't clipping through solid doors
@@ -1007,7 +1008,7 @@ public class GuardPatrol : NetworkBehaviour
             bool sameSide = wedge != null && shutDoor.SideOf(transform.position) == wedge.WedgedSide;
             breakingWedgeOnDoor = shutDoor;
             breakingWedgeTimer = sameSide ? wedgeBreakSecondsSameSide : wedgeBreakSecondsFarSide;
-            agent.ResetPath(); //stop dead. he stands and works at it rather than jogging on the spot
+            agent.isStopped = true; //stop dead but keep the route - he stands and works at it, then carries on through
             return;
         }
 
