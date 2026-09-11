@@ -43,9 +43,10 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float voiceNoiseScale = 24f; //higher = more sensitive guard
     //Doubled with the speed halving. Sprint is an ESCAPE tool, so what matters is the ground it buys you, not the
     //seconds - 3s at the old speed covered about 31m, and 3s at the new one would only cover 16m. 6s keeps the escape
-    //the same size. Regen doubled to match so recovery takes the same wall-clock time it always did.
-    [SerializeField] private float maxStamina = 6f;        //seconds of sprint you get
-    [SerializeField] private float staminaRegenRate = 2f;  //stamina back per second when not sprinting
+    //the same size. Regen was doubled to match, but playtesting 2026-09-10 found that too generous against the guard:
+    //empty to full in 3s, and sprint unlocked again after 0.9s. Dropped to 1.5 - 4s to refill, 1.2s locked out.
+    [SerializeField] private float maxStamina = 6f;          //seconds of sprint you get
+    [SerializeField] private float staminaRegenRate = 1.5f;  //stamina back per second when not sprinting
     [SerializeField] private float jumpHeight = 1.5f; //jump
 
     [SerializeField] private float fallGravityMultiplier = 2.2f;
@@ -112,7 +113,7 @@ public partial class Player : NetworkBehaviour
     public bool IsJammerActive => JammerActiveSecondsLeft > 0f;
     private bool jammerHeldLastFrame; //rising-edge detect so holding right-click doesn't burn every charge at once
 
-    [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you press Q with a Signal Jammer in your kit. leave empty and it simply can't be deployed
+    [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you drop (G) a Signal Jammer while it's running. leave empty and dropping a running jammer does nothing
     [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
     [SerializeField] private int maxWedgesCarried = 3;
     [SerializeField] private float wedgePlaceRange = 2f;        //how close to a shut door you must be for G to wedge it instead of dropping loot

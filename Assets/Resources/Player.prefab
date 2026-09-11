@@ -723,7 +723,7 @@ MonoBehaviour:
   sprintSpeedMultiplier: 1.5
   voiceNoiseScale: 24
   maxStamina: 6
-  staminaRegenRate: 2
+  staminaRegenRate: 1.5
   jumpHeight: 1.5
   fallGravityMultiplier: 2.2
   lowJumpGravityMultiplier: 1.6
@@ -799,7 +799,9 @@ MonoBehaviour:
   strafeTiltAmount: 1.4
   strafeTiltSpeed: 6
   worldItemPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
-  toolWorldPrefabs: []
+  toolWorldPrefabs:
+  - tool: 6
+    prefab: {fileID: 4564447607944909139, guid: 0437a90c4706e3d418a707830e487e58, type: 3}
   maxInventorySlots: 4
   pickupRange: 2
   dropForwardOffset: 1
