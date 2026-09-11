@@ -86,7 +86,9 @@ public class SecurityCamera : MonoBehaviour
 
             if (distance > sightRange) continue;
             if (Vector3.Angle(transform.forward, toPlayer) > fovAngle * 0.5f) continue; // outside cone
-            if (Physics.Raycast(transform.position, toPlayer.normalized, distance, obstacleMask)) continue; // wall in the way
+            //wall in the way. the ray ends at the player's centre, inside their own collider, so hitting THEM means clear sight
+            if (Physics.Raycast(transform.position, toPlayer.normalized, out RaycastHit hit, distance, obstacleMask, QueryTriggerInteraction.Ignore)
+                && !hit.transform.IsChildOf(player.transform)) continue;
 
             return player;
         }

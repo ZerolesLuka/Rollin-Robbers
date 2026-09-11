@@ -52,7 +52,7 @@ MonoBehaviour:
   dwellTime: 1.5
   obstacleMask:
     serializedVersion: 2
-    m_Bits: 8
+    m_Bits: 1
   patrolArcDegrees: 60
   patrolSpeed: 25
   trackSpeed: 80

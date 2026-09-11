@@ -49,32 +49,10 @@ public class AudioOcclusion : MonoBehaviour
         return occluder;
     }
 
-    //THE LAYER THAT COUNTS AS A WALL. Resolved by name once, from the same layer the guard already uses to block his
-    //line of sight - if he can't see through it, you shouldn't hear cleanly through it either, and having one answer
-    //for both means sight and sound can never disagree about what's solid.
-    private static int cachedWallMask;
-    private static bool wallMaskResolved;
-
-    public static LayerMask DefaultWallMask
-    {
-        get
-        {
-            if (wallMaskResolved) return cachedWallMask;
-            wallMaskResolved = true;
-
-            int layer = LayerMask.NameToLayer("Enviorment"); //spelled as it is in the project, not as it should be
-            if (layer >= 0)
-            {
-                cachedWallMask = 1 << layer;
-            }
-            else
-            {
-                cachedWallMask = ~0; //no such layer - occlude on everything rather than silently doing nothing at all
-                Debug.LogWarning("[AudioOcclusion] No 'Enviorment' layer found, so sound is being blocked by EVERYTHING including players and loot. Point DefaultWallMask at your geometry layers.");
-            }
-            return cachedWallMask;
-        }
-    }
+    //THE LAYER THAT COUNTS AS A WALL. The same layer the guard's vision blocks on (Default - the house geometry lives
+    //there; nothing is on "Enviorment"), so sight and sound can never disagree about what's solid. Players are on
+    //Default too, which is why MeasureOcclusion skips bodies.
+    public static LayerMask DefaultWallMask => LayerMask.GetMask("Default");
 
     private void Awake()
     {
@@ -129,9 +107,14 @@ public class AudioOcclusion : MonoBehaviour
         //QueryTriggerInteraction.Ignore matters: hiding spots, interaction volumes and pickup triggers are all
         //colliders too, and none of them are walls. without this a squeaky toy inside a trigger volume sounds muffled.
         int hits = Physics.RaycastNonAlloc(transform.position, toListener.normalized, hitBuffer, distance, wallMask, QueryTriggerInteraction.Ignore);
-        if (hits <= 0) return 0f;
+        int walls = 0;
+        for (int i = 0; i < hits; i++)
+        {
+            if (hitBuffer[i].collider.GetComponentInParent<Player>() != null) continue; //bodies aren't walls - and the listener sits inside its own player's capsule, so the ray always ends in one
+            walls++;
+        }
 
-        return Mathf.Clamp01((float)hits / Mathf.Max(1, maxObstructions));
+        return Mathf.Clamp01((float)walls / Mathf.Max(1, maxObstructions));
     }
 
     //Other systems that want to muffle this same source clamp the cutoff through here instead of grabbing the filter

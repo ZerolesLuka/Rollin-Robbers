@@ -5467,7 +5467,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5823572902846452453, guid: aa9581e76ca1c6f45a63a79446be8e2a, type: 3}
       propertyPath: obstacleMask.m_Bits
-      value: 8
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
