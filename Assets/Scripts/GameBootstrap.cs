@@ -248,6 +248,8 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             Destroy(sceneManager); //each connect attempt AddComponents a fresh one - don't let dead ones pile up across retries
         }
         if (lobbyCamera != null) lobbyCamera.gameObject.SetActive(true); //bring the menu camera back so the player isn't staring at a void
+        Cursor.lockState = CursorLockMode.None; //gameplay left the cursor locked (LeaveSession even re-locks it on the way out) - free it so the menu is clickable
+        Cursor.visible = true;
     }
 
     public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message)
