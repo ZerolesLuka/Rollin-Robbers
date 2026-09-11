@@ -24,13 +24,7 @@ public partial class Player
 
         Vector3 moveDir = transform.right * movement.x + transform.forward * movement.y; //move direction stays relative to where player is looking, so forward is always forward for the player, not the world
 
-        TickJammer(); //active/cooldown timers, on the tick so the duration is the same length for everyone
-
-        //tangled in a wire: no sprinting out of it, and the timer runs on the tick so it's the same length for everyone
-        if (TangledSecondsLeft > 0f)
-        {
-            TangledSecondsLeft = Mathf.Max(0f, TangledSecondsLeft - Runner.DeltaTime);
-        }
+        //the jammer and tripwire timers tick in FixedUpdateNetwork now, ahead of the hiding/jailed early returns - see there
 
         //You have to actually be MOVING to be sprinting. Without this, holding shift while stood still drained the
         //whole bar and left you unable to run at the moment you needed to - and there was no feedback explaining why.

@@ -178,7 +178,12 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         //on an authority handover, so a migrated guard would just be a broken statue anyway.
         //compared against sessionHost, NOT RunManager.Instance.Host: RunManager belongs to the host, so it can be
         //despawned before this callback runs, and then the check never fired and the crew sat in a dead session.
-        if (player == sessionHost)
+        //the live RunManager is still checked as a FALLBACK. sessionHost is copied in RunManager.Spawned, and on a joining
+        //client that copy is only as good as Host's value on its first frame - if it read None there, the cached check
+        //alone would never match and we'd be back to the crew sitting in a dead session.
+        bool runManagerSaysHost = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
+            && player == RunManager.Instance.Host;
+        if (player == sessionHost || runManagerSaysHost)
         {
             connectError = "Host left the game.";
             if (networkRunner != null) networkRunner.Shutdown(false); //false = keep this GameObject alive, it IS the menu. OnShutdown does the teardown + drops us back on the menu

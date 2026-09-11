@@ -97,8 +97,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GuardPatrol
   _State: 0
-  wakeThresholdMin: 3
-  wakeThresholdMax: 6
+  wakeThresholdMin: 2.5
+  wakeThresholdMax: 5
   catchRange: 2
   chaseSenseRange: 5
   wedgeBreakSecondsSameSide: 2

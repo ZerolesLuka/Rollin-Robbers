@@ -220,6 +220,7 @@ public partial class Player
         inventory.RemoveAt(slot);
         PublishCarriedCount();
 
+        int chargesOnDrop = dropped.tool == ToolType.SignalJammer ? JammerChargesLeft : 0; //read now, not in the deferred callback - the charges belong to the unit going on the floor
         Vector3 dropPosition = transform.position + transform.forward * dropForwardOffset + Vector3.up; //spawn it a bit ahead and up so it falls to the floor
         Runner.Spawn(prefabToDrop, dropPosition, UnityEngine.Random.rotation, Object.InputAuthority, //random tilt so it tumbles and lands on a face, not balanced on a point
             (runner, spawnedObject) =>
@@ -231,6 +232,7 @@ public partial class Player
                     item.Value = dropped.value;
                     item.ToolKind = (int)dropped.tool; //a dropped crowbar has to still be a crowbar when it's picked back up
                     item.LootKind = (int)dropped.lootKind; //and a dropped gold bar has to still be a gold bar, not a generic trinket
+                    item.ToolCharges = chargesOnDrop;      //and a dropped jammer keeps the charges it had
 
                     item.SpawnPoint = dropPosition;  //same networked-position safeguard as placed loot, in case a drop ever gets deferred too
                     item.UseSpawnPoint = true;

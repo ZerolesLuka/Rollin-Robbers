@@ -50,7 +50,8 @@ public partial class Player
     }
 
     //Ticked on the network tick rather than the render frame so the duration is the same length for everyone
-    //regardless of framerate. Called from HandleMovement, which already runs once per tick for the owning client.
+    //regardless of framerate. Called from FixedUpdateNetwork BEFORE the hiding/jailed early returns, so a burst keeps
+    //running down while you're tucked in a wardrobe instead of freezing there.
     private void TickJammer()
     {
         if (JammerActiveSecondsLeft > 0f)

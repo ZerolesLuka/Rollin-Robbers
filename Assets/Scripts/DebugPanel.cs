@@ -118,7 +118,7 @@ public class DebugPanel : MonoBehaviour
         Header("Carry");
         //no separate wedge button - a wedge is an ordinary purchasable item now, so the "grant DoorWedge" button in
         //the tool list above does it, and two buttons for one thing is how the kit confusion started
-        if (GUILayout.Button("+1 loot (1200)")) me.RPC_GrantPickup("Debug Loot", 1200, (int)ToolType.None, (int)LootKind.Generic); //None = ordinary loot rather than a tool, Generic = no particular model
+        if (GUILayout.Button("+1 loot (1200)")) me.RPC_GrantPickup("Debug Loot", 1200, (int)ToolType.None, (int)LootKind.Generic, 0); //None = ordinary loot rather than a tool, Generic = no particular model
 
         Header("Camera");
         //DEV TUNING ONLY - this is not a player setting, and this panel compiles out of a release build. Drag it while

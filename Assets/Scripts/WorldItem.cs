@@ -19,6 +19,7 @@ public class WorldItem : NetworkBehaviour
     [Networked] public int Value { get; set; }              // what it sells for at the pawn shop
     [Networked] public int ToolKind { get; set; }           // 0 = ordinary loot. anything else is a dropped TOOL (a ToolType cast to int) and picking it up puts the tool back in your kit rather than a worthless trinket
     [Networked] public int LootKind { get; set; }           // WHICH loot this is (a LootKind cast to int), so the thing in your hand looks like what you actually picked up. 0 = Generic, and only meaningful while ToolKind is 0
+    [Networked] public int ToolCharges { get; set; }        // charges left on a dropped tool that has them (the Signal Jammer). they belong to the UNIT, so they travel with it - they used to stay on whoever dropped it and a teammate picked up an empty jammer
     [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
     [Networked] public Vector3 SpawnPoint { get; set; }       // where this item should be. sent as networked data because a deferred spawn (prefab still loading) silently drops the position argument and dumps the item at origin
     [Networked] public NetworkBool UseSpawnPoint { get; set; } // true = runtime-spawned loot, re-apply SpawnPoint in Spawned. false = an item placed directly in the scene, which keeps its own transform
@@ -252,7 +253,7 @@ public class WorldItem : NetworkBehaviour
         {
             if (player != null && player.Object != null && player.Object.InputAuthority == requester)
             {
-                player.RPC_GrantPickup(ItemName, Value, ToolKind, LootKind);
+                player.RPC_GrantPickup(ItemName, Value, ToolKind, LootKind, ToolCharges);
                 break;
             }
         }

@@ -11,15 +11,14 @@ public class GuardPatrol : NetworkBehaviour
     [Networked] public GuardState State { get; private set; } //the guard's current state
 
     private float noiseThreshold; //runtime working value - rolled in Spawned between wakeThresholdMin/Max, then sharpened by loot theft. tune the RANGE below, not this
-    [SerializeField] private float wakeThresholdMin = 3f; //accumulated noise needed to wake him, randomized in this range so it cant be memorized. lower = twitchier
-    [SerializeField] private float wakeThresholdMax = 6f;
+    [SerializeField] private float wakeThresholdMin = 2.5f; //accumulated noise needed to wake him, randomized in this range so it cant be memorized. lower = twitchier. lowered from 3-6 on 2026-09-10, he was too easy to walk past
+    [SerializeField] private float wakeThresholdMax = 5f;
     [SerializeField] private float catchRange = 2f; //how close he has to get to grab you
     [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
     [SerializeField] private float wedgeBreakSecondsSameSide = 2f; //he can reach the wedge and kick it out
     [SerializeField] private float wedgeBreakSecondsFarSide = 5f;  //it's on the other side, so he has to force the door itself
     private Door breakingWedgeOnDoor;                              //the door he's currently working on, null when he isn't
     private float breakingWedgeTimer;                              //seconds left on it
-
     //TRAPS ONLY FOLLOW A REAL SIGHTING. lastKnownPosition is written by noise, squeaky toys, cameras and missing loot
     //as well as by eyes, so keying traps off it meant a creaky floorboard in an empty room got the place wired. these
     //two are set ONLY when he actually looks at a player, so a hunt he never saw anyone during ends with nothing.
@@ -31,8 +30,7 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
     [SerializeField] private float wakeUpHoldTime = 3f;         //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
-    private float wakeUpHoldTimer;                              //counts down while he's climbing to his feet
-    [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
+    private float wakeUpHoldTimer;                              //counts down while he's climbing to his feet    [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
     [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe
     private bool sawTargetEnterHiding;                          //did we have eyes on the chase target the moment they dove into a spot? if so we know which one
     private int myRunGeneration;                                //which heist this guard instance belongs to - captured at spawn, stamped onto his saved mood at despawn
@@ -119,11 +117,11 @@ public class GuardPatrol : NetworkBehaviour
     private Vector3 lastFloorboardCreakPosition;
 
     [Header("Movement speeds")]
-    //All three halved alongside the player (2026-08-16). RATIOS are what make a chase feel the way it does, not
-    //absolute speeds - keeping them means every chase plays out exactly as it did before, over twice the time.
-    [SerializeField] private float relaxSpeed = 0.75f;   //strolling on patrol
-    [SerializeField] private float searchSpeed = 1.75f;  //investigating a noise
-    [SerializeField] private float chaseSpeed = 3.25f;   //player walks 3.5, so a sprintless player only just outruns him - THE main chase-feel lever
+    //Halved alongside the player on 2026-08-16, then raised back up once the player went to 6.5 and tuned in play
+    //until he felt right (signed off 2026-09-10). These defaults match the prefab so the two can't drift apart again.
+    [SerializeField] private float relaxSpeed = 1.4f;    //strolling on patrol
+    [SerializeField] private float searchSpeed = 3.25f;  //investigating a noise
+    [SerializeField] private float chaseSpeed = 6.05f;   //just under the player's 6.5 walk, well under the 9.75 sprint - walking away he closes slowly, sprinting you lose him. THE main chase-feel lever
     [SerializeField] private float escortSpeed = 2.5f;  //walk pace while hauling someone to the closet
 
     private float angerMax = 100f;
@@ -224,6 +222,7 @@ public class GuardPatrol : NetworkBehaviour
             {
                 wakeUpHoldTimer -= Runner.DeltaTime;
             }
+            ListenWhileGettingUp();
             agent.isStopped = true; //hold still but KEEP the destination that woke him. ResetPath used to wipe it, so he "arrived" beside his bed and searched there
             //push the AGENT to us, not us to the agent. it used to be the other way round, and that was the bug:
             //his bed isn't on the NavMesh, so the agent sits on the floor beside it - and dragging the transform onto
@@ -315,30 +314,32 @@ public class GuardPatrol : NetworkBehaviour
                 if (HearsNoise())
                 {
                     suspicionTimer += Runner.DeltaTime;
-                    if(suspicionTimer > alertConfirmTime)
-                    {
-                        ChangeState(GuardState.Searching);
-                    }
                 }
                 else
                 {
                     suspicionTimer -= Runner.DeltaTime;
-                    if(suspicionTimer <= 0f)
+                }
+
+                //checked OUTSIDE the hearing branch now. suspicion banked while he was getting up (ListenWhileGettingUp)
+                //has to be able to send him searching on his first tick standing, even if the noise has since stopped -
+                //the runner who woke him is usually gone by then, and that's exactly who this is meant to catch.
+                if (suspicionTimer > alertConfirmTime)
+                {
+                    ChangeState(GuardState.Searching);
+                }
+                else if (suspicionTimer <= 0f)
+                {
+                    asleepChances++;
+                    if (asleepChances < asleepChancesMax)
                     {
-                        asleepChances++;
-                        if (asleepChances < asleepChancesMax)
-                        {
-
-                            ChangeState(GuardState.Asleep);
-                        }
-                        else
-                        {
-
-                            ChangeState(GuardState.Relaxed);
-                        }
+                        ChangeState(GuardState.Asleep);
+                    }
+                    else
+                    {
+                        ChangeState(GuardState.Relaxed);
                     }
                 }
-                    break;  
+                break;
             case GuardState.Searching:
                 Player loudestVisiblePlayer = null;
                 float loudestNoiseHeard = -1f; //start below zero so a silent player can still be seen
@@ -361,6 +362,13 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     chaseTarget = loudestVisiblePlayer;
                     ChangeState(GuardState.Chasing);
+
+                    //STOP HERE. Falling through ran the rest of the SEARCH tick on a guard who is now chasing - and the
+                    //common case is spotting you while stood at a search point, where the arrival block below sets
+                    //isSweepingSearchPoint straight back to true. Nothing in Chasing clears it, so FaceMovementDirection
+                    //stayed switched off for the whole chase: he ran without turning, and since his view cone is built
+                    //from transform.forward, he lost sight of you almost immediately.
+                    break;
                 }
                 if (perceivedNoise >= searchNoiseReactThreshold && searchNoiseReactionTimer <= 0f)
                 {
@@ -1079,6 +1087,26 @@ public class GuardPatrol : NetworkBehaviour
     private bool HearsNoise() //is there any audible noise right now (reuses the same perception as Asleep)
     {
         return hearing.LoudestNoise().loudness > 0f;
+    }
+
+    //STILL LISTENING WHILE HE STANDS UP. The get-up hold used to be deaf: the noise that woke him only counted if it was
+    //still going AFTER the whole standing-up animation, so anyone who sprinted past his door was long gone by then and he
+    //simply lay back down. Now what he hears on the way up banks suspicion, and where it came from is where he goes.
+    private void ListenWhileGettingUp()
+    {
+        if (State != GuardState.Suspicious)
+        {
+            return; //Searching already has its destination; nothing else is reachable straight out of Asleep
+        }
+
+        GuardHearing.Heard heard = hearing.LoudestNoise();
+        if (heard.loudness <= 0f)
+        {
+            return;
+        }
+
+        lastKnownPosition = heard.position;
+        suspicionTimer += Runner.DeltaTime;
     }
     private bool IsAtSpawn()
     {

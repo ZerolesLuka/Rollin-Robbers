@@ -22,6 +22,21 @@ public class FloorboardScatterer : MonoBehaviour
             yield return null;
         }
 
+        //AND wait for the seed itself. Object.IsValid can be true a tick before FloorboardSeed replicates, and a client that
+        //read that unreplicated 0 scattered its boards somewhere else entirely - it heard creaks where the host had no
+        //board, and none where the host did. The master never rolls 0, so 0 always means "not here yet". Capped so a
+        //stuck replication can't stall this forever.
+        int framesWaitedForSeed = 0;
+        while (RunManager.Instance != null && RunManager.Instance.FloorboardSeed == 0 && framesWaitedForSeed < 300)
+        {
+            framesWaitedForSeed++;
+            yield return null;
+        }
+        if (RunManager.Instance == null)
+        {
+            yield break; //session ended while we waited
+        }
+
         //seeded RNG - identical sequence on every client, so identical board positions
         System.Random random = new System.Random(RunManager.Instance.FloorboardSeed);
 

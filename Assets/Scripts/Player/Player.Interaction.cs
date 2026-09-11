@@ -179,6 +179,15 @@ public partial class Player
             {
                 if (item.pendingRemoval) continue; //already grabbed locally, waiting on the despawn
                 if (item.LockedInSafe) continue;   //sat behind a shut safe door. pickup is a proximity check, so without this you'd reach straight through it
+
+                //A DROPPED TOOL WE ALREADY CARRY. RPC_GrantPickup refuses the duplicate, but only once it lands on our
+                //machine - by then the item's owner has already despawned it. So offering this pickup quietly DESTROYED
+                //the tool on the floor: walk past a teammate's dropped jammer holding your own, press E, and it's gone.
+                ToolType toolOnFloor = (ToolType)item.ToolKind;
+                if (toolOnFloor != ToolType.None && HasTool(toolOnFloor) && !ToolTable.Stacks(toolOnFloor))
+                {
+                    continue;
+                }
                 if (Vector3.Distance(transform.position, item.transform.position) <= pickupRange)
                 {
                     target = item;

@@ -51,7 +51,7 @@ public class RunManager : NetworkBehaviour
     [Networked] public NetworkBool HasSavedDogState { get; set; }
     [Networked] public int SavedDogDisturbances { get; set; }
 
-    [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map
+    [Networked] public int FloorboardSeed { get; private set; } // shared RNG seed so every client scatters the squeaky floorboards in the SAME spots; re-rolled each run for a fresh noise map. NEVER 0 - FloorboardScatterer reads 0 as "hasn't replicated yet"
 
     [Networked] public NetworkBool VanBackClosed { get; private set; } // true while a run is over and everyone's pooled in the van - a scene barrier seals the van's back so nobody wanders off before picking a destination. any route button reopens it. networked so every client's barrier agrees
 
@@ -76,7 +76,7 @@ public class RunManager : NetworkBehaviour
         {
             State = RunState.InProgress; //only the authority may write networked state. a joining client used to run this too, which is an unauthorized write Fusion just discards
             Host = Runner.LocalPlayer; //we spawned this, so we're the room's creator - remember it for everyone
-            FloorboardSeed = new System.Random().Next(); //master rolls the first run's layout
+            FloorboardSeed = new System.Random().Next(1, int.MaxValue); //master rolls the first run's layout
 
             //START SEALED. A NetworkBool defaults to FALSE, so the van's back was open from the moment the session
             //began and only ever closed once a run had ENDED - which meant on a fresh session you could walk straight
@@ -467,7 +467,8 @@ public class RunManager : NetworkBehaviour
         HasSavedDogState = false;   //and the dog goes back to sleeping through anything
         RunGeneration++;            //and stamp a new generation, so a mood saved by the OLD guard (whose Despawned fires after this) can't be mistaken for this run's
         RunTime = 0f; //fresh clock for the new heist
-        FloorboardSeed = new System.Random().Next(); //fresh squeaky-floorboard layout so the noise map changes every run
+        FloorboardSeed = new System.Random().Next(1, int.MaxValue); //fresh squeaky-floorboard layout so the noise map changes every run
+        LitZoneMask = 0; //the house starts DARK every heist. this lives on RunManager, which survives scene loads, so lights left on last run were still on at the start of the next one
     }
 
     private void ChangeState(RunState newState)

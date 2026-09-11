@@ -76,7 +76,7 @@ public static class ToolTable
         new ToolDefinition { type = ToolType.WireCutters, name = "Wire Cutters", cost = 500,  description = "Disarm his traps quietly. Without them it can be done, but he'll hear it." },
         new ToolDefinition { type = ToolType.DuffelBag,   name = "Duffel Bag",   cost = 750,  description = "Two more slots for loot. Nothing else." },
         new ToolDefinition { type = ToolType.DoorWedge,   name = "Door Wedge",   cost = 150,  description = "Jams one door shut from the side you kicked it in. Buy as many as you'll carry - each one takes a slot." },
-        new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 550,  description = "Press Q to set it down. Blinds every camera around it for about a minute, then the battery dies and it's gone." },
+        new ToolDefinition { type = ToolType.SignalJammer,name = "Signal Jammer",cost = 550,  description = "Right-click to blind cameras around you for 15s. 3 charges. Drop it with G while it's on to leave it covering a spot." },
     };
 
     public static ToolDefinition[] All => all;

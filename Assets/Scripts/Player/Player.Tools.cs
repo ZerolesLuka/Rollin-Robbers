@@ -176,6 +176,7 @@ public partial class Player
 
         Vector3 dropAt = transform.position + transform.forward * 0.6f + Vector3.up * 0.1f;
         float secondsStillRunning = JammerActiveSecondsLeft;
+        int chargesStillLeft = JammerChargesLeft; //the device hands these on when it turns back into a pickup
 
         //spend it FIRST. spawning is deferred, so waiting for the callback to remove it leaves a window where a second
         //press would place a second unit off one tool.
@@ -188,6 +189,7 @@ public partial class Player
             JammerDevice device = spawnedObject.GetComponent<JammerDevice>();
             if (device == null) return;
             device.SecondsLeft = secondsStillRunning; //0 if it was off - an inert box on the floor, which is allowed
+            device.ChargesLeft = chargesStillLeft;
             device.SpawnPoint = dropAt;   //networked-position safeguard - a deferred spawn drops the position argument
             device.UseSpawnPoint = true;
         });

@@ -103,7 +103,7 @@ public partial class Player : NetworkBehaviour
 
     [Networked] public int WedgesCarried { get; private set; } //door wedges in your pockets. networked so teammates' prompts and the HUD can see what you're holding
     //SIGNAL JAMMER, carried. Right-click while it's in your bag to burn a charge and blind cameras around YOU for a
-    //few seconds; put it down with Q and it covers a fixed spot instead so you can walk away from it.
+    //few seconds; drop it with G while it's running and it covers a fixed spot instead so you can walk away from it.
     //
     //All three are [Networked] because the jamming has to be true for everyone - a camera is evaluated on the master,
     //not on the machine of whoever pressed the button.
@@ -601,6 +601,18 @@ public partial class Player : NetworkBehaviour
             }
         }
 
+        //TIMERS TICK WHATEVER STATE YOU'RE IN. They used to live in HandleMovement, which never runs while you're hiding,
+        //jailed or pinned - so a jammer switched on and then carried into a wardrobe froze mid-burst, keeping every camera
+        //near that wardrobe blind for as long as you stayed inside, and a tripwire tangle simply waited out the closet.
+        if (HasStateAuthority)
+        {
+            TickJammer();
+            if (TangledSecondsLeft > 0f)
+            {
+                TangledSecondsLeft = Mathf.Max(0f, TangledSecondsLeft - Runner.DeltaTime);
+            }
+        }
+
         if (IsEliminated) return; //eliminated players don't move, fall, or make noise anymore - stays true until the run ends and the van ride resets it (above)
 
         if (isBeingDragged) //the guard is hauling us to the closet - no control, trail behind him on his path
@@ -836,7 +848,7 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
-    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind, int lootKind)
+    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind, int lootKind, int toolCharges)
     {
         if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
 
@@ -850,6 +862,13 @@ public partial class Player : NetworkBehaviour
         if (tool != ToolType.None && HasTool(tool) && !ToolTable.Stacks(tool))
         {
             return;
+        }
+
+        //the jammer's charges live on the PLAYER while it's carried, so they have to be written back here or picking up
+        //someone else's jammer handed you whatever count your own last one ended on - usually zero
+        if (tool == ToolType.SignalJammer)
+        {
+            JammerChargesLeft = toolCharges;
         }
 
         //lootKind rides along for the same reason toolKind does, one level down: it is what makes a gold bar look like
