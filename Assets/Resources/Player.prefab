@@ -31,6 +31,7 @@ Transform:
   m_Children:
   - {fileID: 7138851970226172560}
   - {fileID: 7723004997934540250}
+  - {fileID: 3157488931870726421}
   - {fileID: 8238307554873180503}
   m_Father: {fileID: 6299906569282450994}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -709,7 +710,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Player
   _NoiseLevel: 0
-  moveSpeed: 7
+  moveSpeed: 6.5
+  movementSpeedMultiplier: 1
   playerCamera: {fileID: 1528983954450414190}
   characterController: {fileID: 3332511634651341915}
   standCamHeight: 0.559
@@ -720,14 +722,15 @@ MonoBehaviour:
   crouchSpeedMultiplier: 0.5
   sprintSpeedMultiplier: 1.5
   voiceNoiseScale: 24
-  maxStamina: 3
-  staminaRegenRate: 1
+  maxStamina: 6
+  staminaRegenRate: 1.5
   jumpHeight: 1.5
   fallGravityMultiplier: 2.2
   lowJumpGravityMultiplier: 1.6
   landNoiseAmount: 30
   landNoiseDecayRate: 60
-  minLandingFallSpeed: 4
+  minLandingFallDistance: 0.5
+  fullLandingFallDistance: 3.5
   crackNoiseAmount: 14
   verticalVelocity: 0
   _IsEliminated: 0
@@ -753,13 +756,17 @@ MonoBehaviour:
   safeHoldToCrackTime: 0.3
   playerVisuals: {fileID: 2020982582522420744}
   heldProps:
-  - tool: 0
-    prop: {fileID: 6257188763350753978}
-  - tool: 5
-    prop: {fileID: 4236311351347642664}
   - tool: 6
+    lootKind: 0
     prop: {fileID: 1116128342953111956}
+  - tool: 7
+    lootKind: 0
+    prop: {fileID: 4236311351347642664}
+  - tool: 0
+    lootKind: 1
+    prop: {fileID: 6421438065088612687}
   _HeldKind: 0
+  _HeldLootKind: 0
   _IsFlashlightOn: 0
   flashlight: {fileID: 8160274470397713396}
   flashlightSpringStiffness: 90
@@ -770,8 +777,10 @@ MonoBehaviour:
   tangledSpeedMultiplier: 0.45
   _TangledSecondsLeft: 0
   cameraMotionScale: 1
-  stairSmoothMaxDrop: 0.35
-  stairSmoothRecoverSpeed: 2.5
+  moveAcceleration: 13
+  moveDeceleration: 18.5
+  strafeSpeedMultiplier: 0.78
+  backwardSpeedMultiplier: 0.6
   movingPitchDegrees: 1.2
   sprintExtraPitchDegrees: 1.6
   movementEaseSpeed: 3.5
@@ -780,7 +789,6 @@ MonoBehaviour:
   lookLagRecoverSpeed: 9
   landingDipAmount: 0.22
   landingRollDegrees: 2.4
-  landingDipFullSpeed: 14
   landingDipStiffness: 130
   landingDipDamping: 16
   breathSwayAmount: 0.35
@@ -791,7 +799,9 @@ MonoBehaviour:
   strafeTiltAmount: 1.4
   strafeTiltSpeed: 6
   worldItemPrefab: {fileID: 4564447607944909139, guid: 55ec33bfe99fb2446b4865acef19b479, type: 3}
-  toolWorldPrefabs: []
+  toolWorldPrefabs:
+  - tool: 6
+    prefab: {fileID: 4564447607944909139, guid: 0437a90c4706e3d418a707830e487e58, type: 3}
   maxInventorySlots: 4
   pickupRange: 2
   dropForwardOffset: 1
@@ -996,7 +1006,7 @@ MonoBehaviour:
   landingClip: {fileID: 8300000, guid: f68cbe2b0f8074e42a6628fa2c33dd20, type: 3}
   landingVolume: 1
   characterController: {fileID: 3332511634651341915}
-  strideLength: 2
+  strideLength: 1.85
   maxStepDistance: 1
 --- !u!114 &7836639216215506259
 MonoBehaviour:
@@ -1329,6 +1339,38 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &6421438065088612687
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3157488931870726421}
+  m_Layer: 0
+  m_Name: GoldBar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &3157488931870726421
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6421438065088612687}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 463431379087520222}
+  m_Father: {fileID: 634657168709985100}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &7948479894421210052
 GameObject:
   m_ObjectHideFlags: 0
@@ -1681,3 +1723,65 @@ MonoBehaviour:
   Components:
   - {fileID: 9153923266279504416}
   _guid: 205a1338-f432-409f-
+--- !u!1001 &261319549757018520
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 3157488931870726421}
+    m_Modifications:
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.75154006
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -0.71471
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -2.19997
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.7071067
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0.7071068
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2348365667161721407, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+      propertyPath: m_Name
+      value: GoldBar
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+--- !u!4 &463431379087520222 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 418294753476878406, guid: ebfe8202469eb7642a13ba8a16156718, type: 3}
+  m_PrefabInstance: {fileID: 261319549757018520}
+  m_PrefabAsset: {fileID: 0}

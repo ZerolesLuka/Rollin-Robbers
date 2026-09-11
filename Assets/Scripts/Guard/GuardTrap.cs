@@ -50,7 +50,7 @@ public class GuardTrap : NetworkBehaviour
 
     [Header("Tripwire tangle")]
     [SerializeField] private float tangleSeconds = 3.5f;        //how long a wire hobbles you. deliberately NOT a full stop - see RPC_TangledInTripwire on Player
-    [SerializeField] private float wireTriggerRadius = 0.75f;   //how close to the LINE, measured HORIZONTALLY, counts as walking into it
+    [SerializeField] private float wireTriggerRadius = 0.55f;   //how close to the LINE, measured HORIZONTALLY, counts as walking into it
     [SerializeField] private float wireHeightTolerance = 1.6f;  //how far above/below the wire still counts. generous on purpose - see PlayerIsOnTheTrap
 
     [Networked] public Vector3 SpawnPoint { get; set; }      //same deferred-spawn safeguard as Safe/SafeNote/WorldItem - a deferred spawn silently drops the position argument

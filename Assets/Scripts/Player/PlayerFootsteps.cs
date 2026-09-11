@@ -8,21 +8,26 @@ public class PlayerFootsteps : NetworkBehaviour
     [SerializeField] private AudioClip landingClip; // loud thud played when the player hits the ground after a jump/fall
     [SerializeField, Range(0f, 1f)] private float landingVolume = 0.6f; // how loud the thud SOUNDS - separate from how loud it is to the guard
     [SerializeField] private CharacterController characterController;
-    [SerializeField] private float strideLength = 1f;   //distance walked per step. halved with the player's speed so the footstep cadence stays the same rhythm it always had
+    [SerializeField] private float strideLength = 1.85f; //distance walked per step at 1x movement speed
     [SerializeField] private float maxStepDistance = 1f; //any per-tick move larger than this is a teleport, not a step - ignore it so we don't spam footsteps
 
+    private Player player;
     private Vector3 lastPosition; // To track the player's last position
     private float stepAccumulator; // Accumulates distance walked to determine when to play the next footstep sound
 
     public override void Spawned()
     {
         AudioOcclusion.Attach(audioSource); //a teammate's footsteps through a wall shouldn't sound like they're stood next to you
+        player = GetComponentInParent<Player>(); //the body owns the speed slider; footsteps only need its scale
 
         lastPosition = transform.position; // Initialize last position when the player spawns
     }
     public override void FixedUpdateNetwork()
     {
-        if(!HasInputAuthority) return; // Only run for the local player
+        if(!HasInputAuthority)
+        {
+            return; // Only run for the local player
+        }
 
         Vector3 delta = transform.position - lastPosition; // Calculate the distance moved since the last update
 
@@ -35,9 +40,10 @@ public class PlayerFootsteps : NetworkBehaviour
         {
             stepAccumulator += distance;
         }
-        if(stepAccumulator >= strideLength)
+        float effectiveStrideLength = strideLength * (player != null ? player.MovementSpeedMultiplier : 1f);
+        if(stepAccumulator >= effectiveStrideLength)
         {
-            stepAccumulator -= strideLength; // Reset the accumulator after playing a footstep sound
+            stepAccumulator -= effectiveStrideLength; // Reset the accumulator after playing a footstep sound
             RPC_PlayFootstep();
         }
     }

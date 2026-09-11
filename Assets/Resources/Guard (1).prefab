@@ -104,17 +104,20 @@ MonoBehaviour:
   wedgeBreakSecondsSameSide: 2
   wedgeBreakSecondsFarSide: 5
   doorOpenRange: 1.8
+  doorCorridorRadius: 1.1
   patrolRadius: 25
   minPatrolStepDistance: 4
   wakeUpHoldTime: 3
   hidingSearchRange: 3.5
   hidingNoiseTolerance: 5
   alertConfirmTime: 1.5
+  edgeClearance: 0.55
+  edgeAvoidSmoothing: 6
   maximumSearchSweepPoints: 3
   turnSpeed: 540
-  relaxSpeed: 1.5
-  searchSpeed: 3.5
-  chaseSpeed: 6.5
+  relaxSpeed: 1.4
+  searchSpeed: 3.25
+  chaseSpeed: 6.05
   escortSpeed: 2.5
   angerEliminateThreshold: 60
   tripwirePrefab: {fileID: 152258593786380468, guid: 10637365c3aff594bb3d6a4d6c9aece2, type: 3}
@@ -264,6 +267,7 @@ MonoBehaviour:
   obstacleMask:
     serializedVersion: 2
     m_Bits: 1
+  flashlightSightBonus: 6
 --- !u!114 &7008704312940971623
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// A squeaky floorboard. When a player MOVES within its small footprint, it creaks and pings the guard.
+// A squeaky floorboard. When a player MOVES across the patch of floor it covers, it creaks and pings the guard.
 // Distance-based (like SqueakyToy), NOT trigger-based - trigger events are unreliable with a CharacterController
 // and don't fire at all for remote players (who move via NetworkTransform, not CharacterController.Move). Reading
 // replicated positions works for everyone on the host. No collider needed for this to work.
 public class SqueakyFloorboard : MonoBehaviour
 {
-    [SerializeField] private float triggerRange = 1f; // small footprint - the size of a plank you'd step on
+    [SerializeField] private float triggerRange = 2f; // a creaky PATCH of floor, not one board. It's a radius from a single point measured against the player's feet, so a plank-width value would only fire when you crossed almost exactly over the pivot - the board would feel broken far more often than it worked
     [SerializeField] private float cooldown = 2f;
     [SerializeField] private AudioSource squeakSource;
 

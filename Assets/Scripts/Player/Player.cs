@@ -25,12 +25,12 @@ public partial class Player : NetworkBehaviour
     public Camera ViewCamera { get; private set; } //the rendering camera for this player - world-space UI needs it to raycast clicks
     public static readonly List<Player> ActivePlayers = new List<Player>(); //everyone currently in the session, AIs read this instead of scanning the scene once and going stale
     [Networked] public float NoiseLevel { get; private set; }
-    //HALVED from 7 (2026-08-16). 7 m/s is faster than most people can SPRINT, and the house is built to real-house
-    //scale - so the house wasn't small, you were crossing it at five times human speed. Everything that has to stay in
-    //proportion was halved with it: the guard's three speeds, the dog's, and the footstep stride. Movement noise was
-    //DOUBLED at its source to compensate, since noise is speed x multiplier and halving speed would otherwise have
-    //made the guard deaf. Chases play out identically; the house just takes twice as long to cross.
-    [SerializeField] private float moveSpeed = 3.5f;
+    //Authored for feel, then scaled by one tuning slider. Keep dependent systems reading the properties below instead
+    //of this raw field, or changing speed silently breaks cadence, input weight, and guard hearing again.
+    [SerializeField] private float moveSpeed = 6.5f;
+    [SerializeField, Range(0.5f, 1.6f)] private float movementSpeedMultiplier = 1f;
+    public float EffectiveMoveSpeed => moveSpeed * MovementSpeedMultiplier;
+    public float MovementSpeedMultiplier => Mathf.Max(0.01f, movementSpeedMultiplier);
     [SerializeField] private Transform playerCamera; //simple camera ref
     //sensitivity is NOT a field here any more. it belongs to the machine, not to a spawned player object - it has to
     //survive scene loads and be there next launch, which a prefab field isn't. see GameSettings.
@@ -40,12 +40,13 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private LayerMask ceilingMask; //set in inspector to everything EXCEPT the player
     [SerializeField] private float crouchSpeedMultiplier = 0.5f;
     [SerializeField] private float sprintSpeedMultiplier = 1.5f;
-    [SerializeField] private float voiceNoiseScale = 16f; //higher = more sensitive guard
+    [SerializeField] private float voiceNoiseScale = 24f; //higher = more sensitive guard
     //Doubled with the speed halving. Sprint is an ESCAPE tool, so what matters is the ground it buys you, not the
     //seconds - 3s at the old speed covered about 31m, and 3s at the new one would only cover 16m. 6s keeps the escape
-    //the same size. Regen doubled to match so recovery takes the same wall-clock time it always did.
-    [SerializeField] private float maxStamina = 6f;        //seconds of sprint you get
-    [SerializeField] private float staminaRegenRate = 2f;  //stamina back per second when not sprinting
+    //the same size. Regen was doubled to match, but playtesting 2026-09-10 found that too generous against the guard:
+    //empty to full in 3s, and sprint unlocked again after 0.9s. Dropped to 1.5 - 4s to refill, 1.2s locked out.
+    [SerializeField] private float maxStamina = 6f;          //seconds of sprint you get
+    [SerializeField] private float staminaRegenRate = 1.5f;  //stamina back per second when not sprinting
     [SerializeField] private float jumpHeight = 1.5f; //jump
 
     [SerializeField] private float fallGravityMultiplier = 2.2f;
@@ -112,13 +113,19 @@ public partial class Player : NetworkBehaviour
     public bool IsJammerActive => JammerActiveSecondsLeft > 0f;
     private bool jammerHeldLastFrame; //rising-edge detect so holding right-click doesn't burn every charge at once
 
-    [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you press Q with a Signal Jammer in your kit. leave empty and it simply can't be deployed
+    [SerializeField] private NetworkObject jammerDevicePrefab; //spawned when you drop (G) a Signal Jammer while it's running. leave empty and dropping a running jammer does nothing
     [SerializeField] private NetworkObject doorWedgePrefab;     //spawned when you kick one under a door. leave empty and wedges simply can't be placed
     [SerializeField] private int maxWedgesCarried = 3;
     [SerializeField] private float wedgePlaceRange = 2f;        //how close to a shut door you must be for G to wedge it instead of dropping loot
 
     [Networked] public int CrackingSafeId { get; private set; } //WHICH safe we're holding interact on (Safe.SafeId), or Safe.NoSafe. the safe reads this off every player to know someone's working on it - same one-source-of-truth trick as HidingSpotId
     [SerializeField] private float safeHoldToCrackTime = 0.3f;  //hold E longer than this at a safe and you start brute-forcing the dial; let go sooner and it counts as a tap, which opens the keypad instead
+
+    //LEAVING THROUGH AN EXIT DOOR, held rather than tapped. Deliberately LOCAL and not [Networked]: once indoor and
+    //outdoor are one scene the crew comes and goes on their own errands, so your progress through a door is nobody
+    //else's business. Replicating it would buy no gameplay and cost a float per player per tick.
+    private float exitDoorHoldSeconds;                       //counts up on our own machine; reset by anything that interrupts
+    public float ExitDoorHoldProgress { get; private set; }  //0..1 for the HUD ring. 0 whenever we aren't actively holding a door
     private float safeInteractHoldTime;                         //how long E has been held at a safe this press
     [SerializeField] private GameObject playerVisuals; // parent of all mesh renderers; assign in inspector
     //PROPS THAT APPEAR IN YOUR HAND. Park them all as CHILDREN of the player model roughly where a hand would be,
@@ -133,8 +140,9 @@ public partial class Player : NetworkBehaviour
     [System.Serializable]
     public struct HeldProp
     {
-        public ToolType tool;   //None = ordinary loot / fallback
-        public GameObject prop; //a child of the player model, left DISABLED in the prefab
+        public ToolType tool;     //None = this row is about LOOT, and lootKind below says which
+        public LootKind lootKind; //only read when tool is None. Generic is the catch-all row for loot nobody has modelled
+        public GameObject prop;   //a child of the player model, left DISABLED in the prefab
     }
 
     //WHICH item is in our hand, replicated so every client's copy of us holds the same thing. -1 means empty-handed.
@@ -142,10 +150,23 @@ public partial class Player : NetworkBehaviour
     //different in someone else's view, and SelectedSlot is deliberately local-only.
     [Networked] public int HeldKind { get; private set; }
 
+    //And WHICH loot, when HeldKind says it's loot rather than a tool. Two fields rather than one packed int: a tool
+    //and a loot kind are different enums that happen to both start at 0, so squeezing them into one value would need
+    //an offset - and an offset is a magic number that eventually gets read as the wrong enum by someone in a hurry.
+    [Networked] public int HeldLootKind { get; private set; }
+
     private void PublishHeldKind()
     {
         int slot = ResolveDropSlot();
-        HeldKind = slot < 0 ? -1 : (int)inventory[slot].tool; //ToolType.None is 0, which is the ordinary-loot case
+        if (slot < 0)
+        {
+            HeldKind = -1; //empty-handed
+            HeldLootKind = (int)LootKind.Generic;
+            return;
+        }
+
+        HeldKind = (int)inventory[slot].tool;         //ToolType.None is 0, which is the ordinary-loot case
+        HeldLootKind = (int)inventory[slot].lootKind; //only read when the above is None
     }
     private bool wasHiding;
 
@@ -157,7 +178,7 @@ public partial class Player : NetworkBehaviour
     //back, and that settle is the whole tell. Stiffness is how hard it's pulled toward your aim, damping is how fast
     //the wobble dies: low damping = a loose wrist, high damping = a clamp.
     [SerializeField] private float flashlightSpringStiffness = 90f;
-    [SerializeField] private float flashlightSpringDamping = 9f;
+    [SerializeField] private float flashlightSpringDamping = 13f;
     [SerializeField] private float flashlightSwayAmount = 1.5f; //idle handheld tremor, in degrees - keeps the beam alive when you're still
     [SerializeField] private float flashlightSwayFrequency = 1.1f; //how fast that tremor drifts
     [SerializeField] private float flashlightWalkSwayMultiplier = 3f; //how much bigger the sway gets while walking - the bob that sells "handheld"
@@ -198,8 +219,10 @@ public partial class Player : NetworkBehaviour
     //The INPUT is smoothed, not the resulting world direction. Smoothing the world vector would leave it pointing
     //where you used to face for a moment after you turn, so walking forward while turning would curve you off course.
     //Smoothing the 2D input keeps turning instant and only softens changes of KEY.
-    [SerializeField] private float moveAcceleration = 7f;  //how fast you reach full input. higher = snappier
-    [SerializeField] private float moveDeceleration = 10f; //how fast you come to rest. deliberately quicker than accel, or stopping feels like ice
+    [SerializeField] private float moveAcceleration = 13f; //how fast you reach full input at 1x speed. scales with movementSpeedMultiplier so faster still feels responsive
+    [SerializeField] private float moveDeceleration = 18.5f; //how fast you come to rest at 1x speed. deliberately quicker than accel, or stopping feels like ice
+    public float EffectiveMoveAcceleration => moveAcceleration * MovementSpeedMultiplier;
+    public float EffectiveMoveDeceleration => moveDeceleration * MovementSpeedMultiplier;
     private Vector2 smoothedMoveInput;
 
     //DIRECTIONAL SPEED. Every direction used to move at exactly the same rate, which is why no combination of WASD
@@ -354,7 +377,7 @@ public partial class Player : NetworkBehaviour
     private readonly Queue<Vector3> dragTrail = new Queue<Vector3>(); //the guard's recent positions - a dragged player rides a point on this trail, following his REAL path (behind him, through doors, never clipping walls or sitting inside him)
     [SerializeField] private int dragTrailLag = 12; //how many ticks back on the guard's path the player trails (bigger = further behind)
     [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
-    [SerializeField] private float suffocateDuration = 45f; //taped mouth - seconds of air before you die if no teammate frees you
+    [SerializeField] private float suffocateDuration = 20f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
     public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
 
@@ -697,6 +720,7 @@ public partial class Player : NetworkBehaviour
             HandleCrouch(networkInputData.crouchInput); //hands off the crouch input data when the function is called
             HandleInteract(networkInputData.interactInput); //E to free a trapped teammate (tap)
             HandleCracking(networkInputData.interactInput); //E HELD next to a safe cracks it (hold) - separate from the tap above
+            HandleExitDoorHold(networkInputData.interactInput, networkInputData.movementInput); //E HELD at an exit door leaves through it. takes the movement input too, because stepping away has to cancel it
             HandleFlashlight(networkInputData.flashlightInput); //F to toggle the flashlight
             HandleDrop(networkInputData.dropInput); //G to drop an item on the floor
         }
@@ -812,7 +836,7 @@ public partial class Player : NetworkBehaviour
     }
 
     [Rpc(RpcSources.All, RpcTargets.InputAuthority)] //sent by the item's owner to the ONE player who won it - see WorldItem.RPC_RequestPickUp
-    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind)
+    public void RPC_GrantPickup(NetworkString<_32> itemName, int value, int toolKind, int lootKind)
     {
         if (inventory.Count >= MaxInventorySlots) return; //bag filled while the request was in flight
 
@@ -828,8 +852,10 @@ public partial class Player : NetworkBehaviour
             return;
         }
 
+        //lootKind rides along for the same reason toolKind does, one level down: it is what makes a gold bar look like
+        //a gold bar in your hand instead of every piece of loot in the game sharing one placeholder prop.
         inventory.Add(tool == ToolType.None
-            ? new InventoryItem(itemName.ToString(), value)
+            ? new InventoryItem(itemName.ToString(), value, (LootKind)lootKind)
             : new InventoryItem(tool));
         PublishCarriedCount();
     }

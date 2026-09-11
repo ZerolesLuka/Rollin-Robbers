@@ -130,12 +130,17 @@ public partial class Player
 
     //EFFECTS. Each of these is read by a system that already existed, so a tool never needs its own update loop.
 
-    //Base is 2, not 1, since the player's speed was halved (2026-08-16). Noise is speed x this, so without doubling
-    //the multiplier every footstep would have got half as loud and the guard would have gone quietly deaf - and every
-    //hearing threshold tuned against the old numbers would have been wrong. Padded Boots still multiplies on top, so
-    //the tool's discount is unchanged.
-    private const float BaseMovementNoiseMultiplier = 2f;
-    public float MovementNoiseMultiplier => BaseMovementNoiseMultiplier * (HasTool(ToolType.PaddedBoots) ? ToolTable.PaddedBootsNoiseMultiplier : 1f);
+    //Movement noise is speed x this. Keep normal walking near the old 7-ish guard-heard loudness while the movement
+    //slider changes how far the body travels. Padded Boots still multiplies on top, so the tool's discount is unchanged.
+    private const float TargetWalkingNoise = 7f;
+    public float MovementNoiseMultiplier
+    {
+        get
+        {
+            float speedCompensation = EffectiveMoveSpeed > 0f ? TargetWalkingNoise / EffectiveMoveSpeed : 0f;
+            return speedCompensation * (HasTool(ToolType.PaddedBoots) ? ToolTable.PaddedBootsNoiseMultiplier : 1f);
+        }
+    }
 
     public float SafeCrackMultiplier => HasTool(ToolType.Crowbar) ? ToolTable.CrowbarCrackMultiplier : 1f;
 

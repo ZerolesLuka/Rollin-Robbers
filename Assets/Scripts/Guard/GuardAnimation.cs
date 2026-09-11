@@ -26,7 +26,7 @@ public class GuardAnimation : MonoBehaviour
     [SerializeField] private Transform modelRoot;                  // the model child to offset. empty = the Animator's own transform
     [SerializeField] private Vector3 sleepPositionOffset = new Vector3(0f, 0.5f, 0.6f); // up onto the mattress and back into the bed
     [SerializeField] private Vector3 sleepRotationOffset = Vector3.zero;                // set Y to 90 so he lies ALONG the bed and turns upright as he stands
-    [SerializeField] private float sleepOffsetBlendSpeed = 1.5f;   // how fast he slides ONTO the bed. the slide OFF is driven by the get-up clip itself, so this doesn't affect waking
+    [SerializeField] private float sleepOffsetBlendSpeed = 0.33f;  // how fast he slides ONTO the bed. the slide OFF is driven by the get-up clip itself, so this doesn't affect waking
 
     [Header("Getting up")]
     [SerializeField] private string wakingStateName = "WakingUp";  // must match the state's name in the Animator Controller, spelled exactly

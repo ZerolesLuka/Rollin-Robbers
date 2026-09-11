@@ -4,8 +4,10 @@ using Fusion;
 using UnityEngine;
 
 // A physical pickup item. Pick up with E (into your inventory), drop with G (spawns one at your feet that falls).
-// One generic prefab for now - the name string is what distinguishes items. Networked so pickups/drops sync to
-// everyone: give the prefab a NetworkObject + NetworkRigidbody3D + Collider so a dropped one falls and replicates.
+// WHAT an item is now travels with it, as LootKind (and ToolKind for a dropped tool) - the name string is a label for
+// the HUD, not an identity. That is what lets a gold bar look like a gold bar in your hand rather than every pickup
+// in the game sharing one prop. Networked so pickups/drops sync to everyone: build a loot prefab as a VARIANT of this
+// one (NetworkObject + NetworkRigidbody3D + Collider already on it) and swap the mesh child, or it cannot be spawned.
 public class WorldItem : NetworkBehaviour
 {
     public static readonly List<WorldItem> AllItems = new List<WorldItem>();
@@ -16,6 +18,7 @@ public class WorldItem : NetworkBehaviour
     [Networked] public NetworkString<_32> ItemName { get; set; }
     [Networked] public int Value { get; set; }              // what it sells for at the pawn shop
     [Networked] public int ToolKind { get; set; }           // 0 = ordinary loot. anything else is a dropped TOOL (a ToolType cast to int) and picking it up puts the tool back in your kit rather than a worthless trinket
+    [Networked] public int LootKind { get; set; }           // WHICH loot this is (a LootKind cast to int), so the thing in your hand looks like what you actually picked up. 0 = Generic, and only meaningful while ToolKind is 0
     [Networked] private NetworkBool claimed { get; set; }   // stops two players grabbing the same item on the same tick
     [Networked] public Vector3 SpawnPoint { get; set; }       // where this item should be. sent as networked data because a deferred spawn (prefab still loading) silently drops the position argument and dumps the item at origin
     [Networked] public NetworkBool UseSpawnPoint { get; set; } // true = runtime-spawned loot, re-apply SpawnPoint in Spawned. false = an item placed directly in the scene, which keeps its own transform
@@ -26,6 +29,14 @@ public class WorldItem : NetworkBehaviour
     //Loot that lives inside a shut safe. It EXISTS from the moment the safe does - the door is just in the way - so
     //without this you could stand next to a locked safe and pull its contents straight through the door, since pickup
     //is a proximity check and doesn't care about geometry. Cleared by Safe.Open when the door actually swings.
+    //THE ONE FLAG THAT DECIDES WHETHER THIS IS PHYSICS OR SCENERY. Loot a spawner placed - safe contents, house loot
+    //on its anchors, anything sat in the level - is a PROP: frozen, no collider, exactly where it was authored. It
+    //only becomes a loose physical object once a player has actually dropped it.
+    //
+    //Defaulting to false is deliberate and is the safe direction: an item nobody seeds stays put instead of falling
+    //through the floor. That matters because [Networked] NetworkBool defaults to false whether or not anyone meant it.
+    [Networked] public NetworkBool WasDroppedByPlayer { get; set; }
+
     [Networked] public NetworkBool LockedInSafe { get; set; }
     [Networked] public int InSafeId { get; set; } // which safe is holding it, so that safe knows what to release
 
@@ -98,18 +109,79 @@ public class WorldItem : NetworkBehaviour
 
         transform.position = SpawnPoint;
 
-        Rigidbody body = GetComponent<Rigidbody>();
+        Rigidbody body = SafeToMove();
         if (body != null)
         {
-            body.isKinematic = false;   //placed correctly now - release it so it falls and settles like a real object
+            //THAW ONLY WHAT A PLAYER ACTUALLY DROPPED. Releasing here unconditionally is what put safe loot on the
+            //floor outside the safe: several items share one small box, their colliders overlap by design, and the
+            //tick this line made them dynamic PhysX resolved that interpenetration by firing them through the wall.
+            //Placed loot stays scenery for good - MatchPhysicsToDropState holds the same line every frame after this.
+            body.isKinematic = !WasDroppedByPlayer;
             body.position = SpawnPoint;
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
+            if (!body.isKinematic)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+        }
+    }
+
+    private Rigidbody cachedBody; //looked up once - Render runs every frame on every client and GetComponent there adds up
+
+    private Rigidbody SafeToMove()
+    {
+        if (cachedBody == null)
+        {
+            cachedBody = GetComponent<Rigidbody>();
+        }
+        return cachedBody;
+    }
+
+    private Collider[] cachedColliders; //same reason as the body - Render runs every frame on every client
+
+    //PLACED LOOT IS SCENERY, NOT PHYSICS. Anything a spawner positioned stays frozen with its colliders off: it sits
+    //exactly where it was authored, and nothing can shove it. That is what stopped safe contents blasting out through
+    //the walls - several items share one small box, so their colliders overlap by design, and PhysX resolves
+    //interpenetration by throwing them apart hard enough to leave the safe.
+    //
+    //Turning the colliders OFF rather than only freezing them matters: a kinematic body still pushes dynamic ones, so
+    //two overlapping frozen bars would still fight the moment either woke up. No collider, no argument. Nothing is
+    //lost by it, because picking loot up is a distance check (Player.Interaction's pickupRange), never a trigger.
+    //
+    //DERIVED from the networked flag every frame rather than pushed at the moment of the drop, exactly like the glow
+    //below. One source of truth means every client reaches the same answer with nothing extra sent, and a player who
+    //joins mid-run gets it right instead of inheriting whatever state their copy happened to spawn in.
+    private void MatchPhysicsToDropState()
+    {
+        bool shouldSimulate = WasDroppedByPlayer;
+
+        Rigidbody body = SafeToMove();
+        if (body != null && body.isKinematic == shouldSimulate)
+        {
+            body.isKinematic = !shouldSimulate;
+        }
+
+        if (cachedColliders == null)
+        {
+            cachedColliders = GetComponentsInChildren<Collider>(true);
+        }
+        foreach (Collider itemCollider in cachedColliders)
+        {
+            if (itemCollider == null)
+            {
+                continue; //a collider removed by a prefab variant - skip rather than throwing every frame
+            }
+            if (itemCollider.enabled != shouldSimulate)
+            {
+                itemCollider.enabled = shouldSimulate;
+            }
         }
     }
 
     public override void Render() //every frame on all clients - keeps the glow matched to the networked Value even as it replicates in after spawn
     {
+        MatchPhysicsToDropState(); //before the glow's early-out below, or loot on a prefab with no light would never wake
+
         if (glowLight == null)
         {
             return;
@@ -180,7 +252,7 @@ public class WorldItem : NetworkBehaviour
         {
             if (player != null && player.Object != null && player.Object.InputAuthority == requester)
             {
-                player.RPC_GrantPickup(ItemName, Value, ToolKind);
+                player.RPC_GrantPickup(ItemName, Value, ToolKind, LootKind);
                 break;
             }
         }

@@ -19,9 +19,13 @@ public partial class Player
     [SerializeField] private float doorMaxSwingSpeed = 2.5f;  //cap on coast speed, in full-opens per second - stops a violent flick launching a door round its hinge
     [SerializeField] private float doorVelocitySmoothing = 12f; //how much the tracked hand speed is averaged. without this, one stuttery frame at the moment of release decides the whole throw
 
-    //Dragging means MOUSE LOOK IS OFF, and that has to stay true while the door is still coasting to a stop, or the
-    //camera would snap back mid-swing. Coasting counts as still holding it as far as the rest of the game is concerned.
+    //Dragging includes the COAST after you let go - we keep streaming the angle until the door settles, so as far as the
+    //crosshair and the network are concerned the door is still ours.
     public bool IsDraggingDoor => draggedHinge != null;
+
+    //MOUSE LOOK is only off while your hand is actually on the door. Locking the camera through the coast as well made
+    //letting go feel like nothing happened - you had released the button but still couldn't look around.
+    public bool IsHoldingDoor => draggedHinge != null && !draggedHandOff;
 
     private SwingingHinge draggedHinge;
     private float draggedAmount;   //our own live copy, so the value can't be lost to a network round trip mid-drag

@@ -96,9 +96,9 @@ public partial class Player
         //Jumping forward doesn't mean you stopped moving. The horizontal speed is the honest measure either way.
         float targetSpeedFactor = 0f;
         //a scene change or rescue teleport covers metres in one frame - that isn't running, so don't read it as such
-        if (moveSpeed > 0f && Time.deltaTime > 0f && delta.magnitude < 1f)
+        if (EffectiveMoveSpeed > 0f && Time.deltaTime > 0f && delta.magnitude < 1f)
         {
-            targetSpeedFactor = Mathf.Clamp01((delta.magnitude / Time.deltaTime) / moveSpeed);
+            targetSpeedFactor = Mathf.Clamp01((delta.magnitude / Time.deltaTime) / EffectiveMoveSpeed);
         }
 
         //eased hard, so setting off and stopping arrive as a slow lean rather than a switch

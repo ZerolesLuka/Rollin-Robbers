@@ -48,7 +48,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SecurityCamera
   fovAngle: 60
-  sightRange: 15
+  sightRange: 10
   dwellTime: 1.5
   obstacleMask:
     serializedVersion: 2

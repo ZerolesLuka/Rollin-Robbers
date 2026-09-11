@@ -20,8 +20,9 @@ public partial class Player
     //CarriedCount is already networked (the master reads it to vet tool purchases), so this needs no new networking:
     //carrying anything at all shows the prop, an empty bag hides it.
     //
-    //ONE generic prop for now, because there is one generic WorldItem prefab - a vase and a crowbar look identical in
-    //hand. Swapping this for a per-item mesh later means changing which object gets enabled here and nothing else.
+    //A prop PER THING, matched on what you're actually holding - a tool by its ToolType, loot by its LootKind. Every
+    //row is a child of the player model left disabled in the prefab, and this enables exactly one of them. A row whose
+    //prop points at a prefab ASSET rather than a child does nothing at all, which is silent and easy to do by accident.
     private void UpdateHeldItemVisual()
     {
         //hidden for the same reasons the body is: inside a wardrobe your arms aren't visible, and a vase floating
@@ -39,22 +40,55 @@ public partial class Player
 
         //Pick the winner FIRST, then do a single pass enabling it and disabling everything else. Deciding and applying
         //in one loop would let two props end up on at once if a tool were ever listed twice.
+        //
+        //TWO enums decide this, in order. A row whose tool is anything but None is a TOOL row and matches on that. A
+        //row whose tool is None is a LOOT row, and then lootKind picks which loot - that second step is what stopped
+        //every trinket in the game sharing one placeholder. LootKind.Generic is the catch-all beneath both.
         GameObject wanted = null;
+        GameObject fallback = null;
         if (held >= 0)
         {
+            bool holdingLoot = held == (int)ToolType.None;
             foreach (HeldProp mapping in heldProps)
             {
-                if (mapping.prop == null) continue;
+                if (mapping.prop == null)
+                {
+                    continue;
+                }
+
+                if (holdingLoot)
+                {
+                    if (mapping.tool != ToolType.None)
+                    {
+                        continue; //a tool row can never describe loot
+                    }
+                    if ((int)mapping.lootKind == HeldLootKind)
+                    {
+                        wanted = mapping.prop; //exact match for this loot
+                        break;
+                    }
+                    if (mapping.lootKind == LootKind.Generic)
+                    {
+                        fallback = mapping.prop; //unmodelled loot still puts something in your hand
+                    }
+                    continue;
+                }
+
                 if ((int)mapping.tool == held)
                 {
-                    wanted = mapping.prop; //exact match for this item
+                    wanted = mapping.prop; //exact match for this tool
                     break;
                 }
-                if (mapping.tool == ToolType.None && wanted == null)
+                if (mapping.tool == ToolType.None && mapping.lootKind == LootKind.Generic)
                 {
-                    wanted = mapping.prop; //remember the fallback, but keep looking for something better
+                    fallback = mapping.prop; //a tool nobody has modelled yet borrows the generic loot prop rather than showing nothing
                 }
             }
+        }
+
+        if (wanted == null)
+        {
+            wanted = fallback;
         }
 
         foreach (HeldProp mapping in heldProps)
@@ -63,9 +97,32 @@ public partial class Player
         }
     }
 
+    //instance ids we have already complained about, so the warning below fires once instead of once per frame forever
+    private static readonly HashSet<int> alreadyWarnedAboutProp = new HashSet<int>();
+
     private static void SetPropActive(GameObject prop, bool active)
     {
         if (prop == null || prop.activeSelf == active) return; //null-tolerant so a half-filled mapping list is harmless, and no needless SetActive churn
+
+        //REFUSE PREFAB ASSETS. A prop must be a child of the player IN THE SCENE. Drag a prefab from the Project
+        //window into this list instead and SetActive writes to the asset ON DISK - Unity saves it, every future spawn
+        //of that prefab comes out disabled, and the thing silently stops existing everywhere it is used. That cost an
+        //evening: the gold bar was assigned here, got switched off the first frame the player wasn't holding one, and
+        //from then on the safe stocked five invisible bars while looking exactly like a spawn failure.
+        //A GameObject that lives in an asset rather than a loaded scene has no valid scene, which is the cheap test.
+        if (!prop.scene.IsValid())
+        {
+            //ONCE PER OBJECT, not once per frame. This runs from Update, so a plain LogError here buries the console
+            //in thousands of identical lines and hides whatever you were actually trying to read.
+            if (alreadyWarnedAboutProp.Add(prop.GetInstanceID()))
+            {
+                Debug.LogError($"[Player] heldProps is pointing at the PREFAB ASSET '{prop.name}' instead of a child " +
+                               "of the player. Refusing to touch it - disabling a prefab on disk breaks it everywhere. " +
+                               "Drag the in-hand child object into that row instead.", prop);
+            }
+            return;
+        }
+
         prop.SetActive(active);
     }
 
@@ -173,10 +230,12 @@ public partial class Player
                     item.ItemName = dropped.name;
                     item.Value = dropped.value;
                     item.ToolKind = (int)dropped.tool; //a dropped crowbar has to still be a crowbar when it's picked back up
+                    item.LootKind = (int)dropped.lootKind; //and a dropped gold bar has to still be a gold bar, not a generic trinket
 
                     item.SpawnPoint = dropPosition;  //same networked-position safeguard as placed loot, in case a drop ever gets deferred too
                     item.UseSpawnPoint = true;
                     item.CountedAsStolen = true;     //this loot was already counted against the house when it was FIRST lifted - picking it back up must not count it again
+                    item.WasDroppedByPlayer = true;  //the ONLY place this is ever set - a dropped item is the one kind that gets real physics, everything a spawner placed stays scenery
                 }
             });
     }

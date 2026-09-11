@@ -4,10 +4,11 @@ using UnityEngine.InputSystem;
 
 // Player - the carried Signal Jammer.
 //
-// It used to be a one-shot: press Q, it goes on the floor, the battery drains, it's gone for good. Now it's a
-// re-usable unit with a fixed number of charges. Right-click with it in your bag to burn one and blind every camera
-// around YOU for a few seconds; the bubble follows you while it's running. Press Q and it goes on the floor instead,
-// covering a fixed spot so the crew can leave it watching a corridor and walk off.
+// It used to be a one-shot: it went on the floor, the battery drained, it was gone for good. Now it's a re-usable unit
+// with a fixed number of charges. Scroll to it and right-click to burn one and blind every camera around YOU for a few
+// seconds; the bubble follows you while it's running. Drop it with G WHILE IT'S RUNNING and it goes down as a live
+// device instead, covering a fixed spot so the crew can leave it watching a corridor and walk off. Dropped while off,
+// it's just an item on the floor.
 //
 // WHY CHARGES AND A COOLDOWN, rather than one or the other: charges keep every activation a decision - there are only
 // ever three - and the cooldown stops it being kept permanently on by re-triggering the instant the last one lapses.

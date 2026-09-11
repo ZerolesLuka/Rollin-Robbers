@@ -27,9 +27,10 @@ public class GuardPatrol : NetworkBehaviour
     private Vector3 lastSightingPosition;
 
     [SerializeField] private float doorOpenRange = 1.8f; //how close he gets before shoving a shut door open. roughly arm's reach - too big and doors fly open before he's there
+    [SerializeField] private float doorCorridorRadius = 1.1f; //how far off his ROUTE a door's hinge can sit and still count as in his way. a hinge sits at the edge of its doorway, so this has to clear half a doorway - but much wider and doors beside the route start opening again
     [SerializeField] private float patrolRadius = 25f;          //how far from his bed he'll wander while Relaxed. make this comfortably cover the house or he'll never visit the far rooms
     [SerializeField] private float minPatrolStepDistance = 4f;  //a wander spot closer than this is rejected, so he takes real walks instead of shuffling on the spot
-    [SerializeField] private float wakeUpHoldTime = 1.5f;       //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
+    [SerializeField] private float wakeUpHoldTime = 3f;         //how long he's pinned in place after waking, so the standing-up animation can finish. set this to the LENGTH OF THAT CLIP - too short and he sprints off while still on the floor, too long and he's a sitting duck
     private float wakeUpHoldTimer;                              //counts down while he's climbing to his feet
     [SerializeField] private float hidingSearchRange = 3.5f;    //how close he has to be to hear someone talking inside a hiding spot and yank the door open
     [SerializeField] private float hidingNoiseTolerance = 5f;   //how loud you can be in there before he notices. keep it near GuardHearing's own threshold so whispering stays safe
@@ -969,17 +970,30 @@ public class GuardPatrol : NetworkBehaviour
         if (RunManager.Instance == null) return;
         if (State == GuardState.Asleep) return; //dead asleep at his post - doors drifting open on their own would look haunted
 
+        //HE HAS TO ACTUALLY BE GOING SOMEWHERE. Without this he opens doors stood perfectly still: he woke up
+        //suspicious at his bed, happened to be facing two doors, and swung both without taking a single step.
+        //"A door in my way" means nothing when there is no route to be in the way of.
+        if (!agent.hasPath || agent.pathPending)
+        {
+            return;
+        }
+
         //reach further ahead the faster he's moving. a fixed 1.8m is fine at a stroll, but at chase speed he covers
         //that in under a third of a second - about how long the door takes to swing - so he'd reach the doorway
         //while it was still opening and clip straight through it. giving him roughly half a second of lead fixes it.
         float lookAhead = Mathf.Max(doorOpenRange, agent.speed * 0.5f);
 
-        //only shove open a door he's actually walking INTO, so he doesn't fling open every door in a hallway and hand
-        //the players a lit-up trail of where he's been. that direction test used to live here with a 0.5 dot (a 60
-        //degree cone) and it rejected essentially every door in the house - the Door script sits on the HINGE, which
-        //is off at the EDGE of the doorway, so walking straight through one puts its pivot almost side-on to him.
-        //0.1 is "anything not actually behind me", which is the honest version of the question we're asking.
-        Door shutDoor = Door.FindClosedDoorAhead(transform.position, transform.forward, lookAhead, 0.1f);
+        //Aim down the ACTUAL route - the next corner the agent is steering for - rather than wherever his body
+        //happens to be pointing. A guard mid-turn faces nothing useful, and a stationary one faces whatever he last
+        //looked at, which is exactly how two innocent doors got flung open at once.
+        Vector3 pathAhead = agent.steeringTarget - transform.position;
+        pathAhead.y = 0f;
+        if (pathAhead.sqrMagnitude > lookAhead * lookAhead)
+        {
+            pathAhead = pathAhead.normalized * lookAhead; //only the next few metres of it - he shoves doors at arm's reach, not down the corridor
+        }
+
+        Door shutDoor = Door.FindClosedDoorOnPath(transform.position, transform.position + pathAhead, doorCorridorRadius);
         if (shutDoor == null) return;
 
         //WEDGED. he can't just push through it - he has to stand there and force it, which is the whole point of

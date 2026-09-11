@@ -11,7 +11,7 @@ public class ComputerTerminal : MonoBehaviour
 
     [SerializeField] private CinemachineVirtualCamera screenCamera; // positioned looking at the screen; give it a higher Priority than the player's vcam
     [SerializeField] private GameObject screenUI; // the canvas/panel with the House + Pawn Shop buttons; shown only while sat down
-    [SerializeField] public float interactRange = 2f;
+    [SerializeField] public float interactRange = 3f;
 
     private void OnEnable() => AllTerminals.Add(this);
     private void OnDisable() => AllTerminals.Remove(this);

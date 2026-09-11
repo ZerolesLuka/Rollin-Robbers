@@ -16,8 +16,8 @@ public class AmbientSound : MonoBehaviour
     [Header("Random one-shots (optional) - creaks, ticks, distant thumps")]
     [SerializeField] private AudioClip[] oneShotClips;
     [SerializeField, Range(0f, 1f)] private float oneShotVolume = 0.5f;
-    [SerializeField] private float minSecondsBetweenOneShots = 6f;  // shortest wait before the next random sound
-    [SerializeField] private float maxSecondsBetweenOneShots = 18f; // longest wait - the gap is randomized in this range so it never feels like a metronome
+    [SerializeField] private float minSecondsBetweenOneShots = 10f; // shortest wait before the next random sound
+    [SerializeField] private float maxSecondsBetweenOneShots = 30f; // longest wait - the gap is randomized in this range so it never feels like a metronome
 
     private AudioSource bedSource;     // plays the looping tone
     private AudioSource oneShotSource; // a SEPARATE source, so a one-shot can never duck or cut off the bed

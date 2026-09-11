@@ -29,6 +29,11 @@ public class RunManager : NetworkBehaviour
 
     [Networked] public int Money { get; private set; } // the team's banked cash - persists across runs, grows when they sell loot at the pawn shop
 
+    //THE WHOLE LIGHT SYSTEM'S STATE IS THIS ONE INT. Bit N set = light zone N is on. One value means every client agrees
+    //with no extra syncing, counting how many are lit is counting bits, and the guard's sweep later is just clearing some.
+    [Networked] public int LitZoneMask { get; private set; }
+    [SerializeField] private int maxLitZones = 3; //the breaker's capacity. serialized so the F1 panel can raise it
+
     //the guard is despawned and respawned on EVERY scene load (he can't navigate the outdoor NavMesh), so without
     //this, stepping out an exit door and back in handed you a brand-new guard: anger wiped, ears reset, fast asleep.
     //that made a door a panic button that deleted all the tension you'd built. he now carries his mood across the
@@ -55,6 +60,8 @@ public class RunManager : NetworkBehaviour
     //door tallies the house on top of itself and the guard ends up half as suspicious as he should be.
     private int sceneLoadCounter;
     private int lastTalliedSceneLoad = -1;
+
+    public int MaxLitZones => maxLitZones; //so the interaction prompt can say when the breaker is full
 
     //master-only: who's already been counted out of the alive tally (caught or suffocated). a disconnect
     //decrements playersAlive too, so without this an eliminated player who then leaves gets counted out
@@ -162,6 +169,36 @@ public class RunManager : NetworkBehaviour
         if (!HasStateAuthority || State != RunState.InProgress) return;
         ChangeState(RunState.Success);
     }
+    public bool IsZoneLit(int zoneId) //32 bits designed to shift by one per zone, so only 0-31 are valid. anything outside that can't be stored in an int and is always off
+    {
+        if (zoneId < 0 || zoneId > 31)
+        {
+            return false; //an int has 32 bits, so anything outside that can't be stored
+        }
+        return (LitZoneMask & (1 << zoneId)) != 0;
+    }
+
+    //COUNTED, never stored. A separate counter drifts the moment anything clears a bit by another route - the guard's
+    //sweep, a scene reload, an early return - and then no light will ever turn on again with nothing visibly causing it.
+    public int LitZoneCount
+    {
+        get
+        {
+            int count = 0;
+            int remaining = LitZoneMask;
+            while (remaining != 0)
+            {
+                count++;
+                remaining &= remaining - 1; //clears the lowest set bit, so this loops once per lit zone
+            }
+            return count;
+        }
+    }
+
+    public void RaiseLightCapacity(int extraZones)
+    {
+        maxLitZones += extraZones; //the basement breaker, until that exists the F1 panel calls this
+    }
 
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_StartGetaway() //any player can start the van; the authority flips the run to Success and it replicates to everyone
@@ -259,6 +296,43 @@ public class RunManager : NetworkBehaviour
             }
         }
         return nearest;
+    }
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_ToggleLightZone(int zoneId) //any player flips a switch; the authority decides whether it's allowed
+    {
+        if (zoneId < 0 || zoneId > 31)
+        {
+            return; //came over the network, so don't trust it - an int only has 32 bits to store zones in
+        }
+
+        if (IsZoneLit(zoneId))
+        {
+            SetZoneLit(zoneId, false); //switching a light OFF is always allowed, whatever the breaker says
+            return;
+        }
+
+        if (LitZoneCount >= maxLitZones)
+        {
+            return; //breaker's full. refusing silently here is why the PROMPT has to say so - see LabelFor
+        }
+
+        SetZoneLit(zoneId, true);
+    }
+
+    //The ONLY place in the project that writes a bit of LitZoneMask. Every caller says what it wants in English and
+    //this does the fiddly half, exactly like Player.HasTool hides the same maths for ToolMask.
+    private void SetZoneLit(int zoneId, bool lit)
+    {
+        int zoneBit = 1 << zoneId; //shifts everything by one meaning this zone id is the opposite of what it was before
+        if (lit)
+        {
+            LitZoneMask |= zoneBit;
+        }
+        else
+        {
+            LitZoneMask &= ~zoneBit;
+        }
     }
 
     [Rpc(RpcSources.All, RpcTargets.All)]
