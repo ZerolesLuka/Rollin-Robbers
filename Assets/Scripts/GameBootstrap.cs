@@ -21,6 +21,10 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         if (instance == this) instance = null;
     }
 
+    private static PlayerRef sessionHost; //who created the room. RunManager hands it over in Spawned, since RunManager itself can be gone by the time the host's OnPlayerLeft arrives
+
+    public static void RememberHost(PlayerRef host) => sessionHost = host;
+
     private NetworkRunner networkRunner;
     [SerializeField] private NetworkObject playerPrefab;
     [SerializeField] private Transform lobbyCamera; //camera where room code happens for now
@@ -168,19 +172,20 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
     {
-        bool runManagerLive = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid;
-
         //the room's creator left - the session dies for EVERYONE rather than migrating to a new master.
         //Fusion's default is to promote a replacement, which we explicitly don't want: the guard/dog were
         //spawned with their NavMeshAgent disabled on every non-master client and Spawned() never runs again
         //on an authority handover, so a migrated guard would just be a broken statue anyway.
-        if (runManagerLive && player == RunManager.Instance.Host)
+        //compared against sessionHost, NOT RunManager.Instance.Host: RunManager belongs to the host, so it can be
+        //despawned before this callback runs, and then the check never fired and the crew sat in a dead session.
+        if (player == sessionHost)
         {
             connectError = "Host left the game.";
             if (networkRunner != null) networkRunner.Shutdown(false); //false = keep this GameObject alive, it IS the menu. OnShutdown does the teardown + drops us back on the menu
             return;
         }
 
+        bool runManagerLive = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid;
         if (runManagerLive) RunManager.Instance.OnPlayerLeft(player); //keep the alive count honest when someone disconnects, and free the computer if they were on it
     }
 
@@ -248,6 +253,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
             Destroy(sceneManager); //each connect attempt AddComponents a fresh one - don't let dead ones pile up across retries
         }
         if (lobbyCamera != null) lobbyCamera.gameObject.SetActive(true); //bring the menu camera back so the player isn't staring at a void
+        sessionHost = PlayerRef.None; //that session's over - don't let its host ref match someone in the next one
         Cursor.lockState = CursorLockMode.None; //gameplay left the cursor locked (LeaveSession even re-locks it on the way out) - free it so the menu is clickable
         Cursor.visible = true;
     }

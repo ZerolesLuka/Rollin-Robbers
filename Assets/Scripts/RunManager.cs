@@ -85,6 +85,7 @@ public class RunManager : NetworkBehaviour
             //reason the barrier exists. RPC_Route clears it the moment a destination is picked.
             VanBackClosed = true;
         }
+        GameBootstrap.RememberHost(Host); //kept outside RunManager, because when the host leaves this object despawns too - possibly before OnPlayerLeft asks who the host was
     }
 
     //GuardPatrol and DogAI both null their static Instance on the way out; this one never did, so on shutdown it was
