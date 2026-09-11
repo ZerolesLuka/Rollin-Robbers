@@ -11,8 +11,14 @@ public class MicLoudnessProbe : MonoBehaviour
 
     private void Awake()
     {
+        if (Instance != null && Instance != this) return; //the extra NetworkManager copy from a scene reload - PersistAcrossScenes is about to destroy it, so don't point Instance at it
         Instance = this;
         recorder = GetComponent<Recorder>();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
     }
 
     private void Update()
