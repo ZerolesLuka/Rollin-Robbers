@@ -72,7 +72,7 @@ public partial class Player
         SetPaused(false);
         if (Runner != null)
         {
-            Runner.Shutdown(); //GameBootstrap.OnShutdown does the teardown and reloads the menu scene
+            Runner.Shutdown(false); //false = don't destroy the runner's GameObject - it's the NetworkManager, which also draws the menu. GameBootstrap.OnShutdown does the teardown
         }
     }
 }

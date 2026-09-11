@@ -177,7 +177,7 @@ public class GameBootstrap : MonoBehaviour, INetworkRunnerCallbacks
         if (runManagerLive && player == RunManager.Instance.Host)
         {
             connectError = "Host left the game.";
-            if (networkRunner != null) networkRunner.Shutdown(); //OnShutdown does the teardown + drops us back on the menu
+            if (networkRunner != null) networkRunner.Shutdown(false); //false = keep this GameObject alive, it IS the menu. OnShutdown does the teardown + drops us back on the menu
             return;
         }
 
