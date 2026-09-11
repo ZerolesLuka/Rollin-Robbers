@@ -397,7 +397,10 @@ public class GuardPatrol : NetworkBehaviour
                             {
                                 TryPlaceTrapNear(lastSightingPosition);
                             }
-                            ChangeState(GuardState.Relaxed);
+                            if (State == GuardState.Searching) //TryPlaceTrapNear may have just sent him Planting - don't cancel it on the same tick
+                            {
+                                ChangeState(GuardState.Relaxed);
+                            }
                         }
                         else
                         {
