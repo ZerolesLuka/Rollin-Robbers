@@ -41,14 +41,24 @@ public class FloorboardScatterer : MonoBehaviour
         System.Random random = new System.Random(RunManager.Instance.FloorboardSeed);
 
         //a known floor point to path-check reachability against - rejects navmesh islands on tabletops/roofs that you can't actually walk to
-        if (!NavMesh.SamplePosition(transform.position, out NavMeshHit floorHit, 5f, NavMesh.AllAreas)) yield break; //scatterer isn't near the floor
+        if (!NavMesh.SamplePosition(transform.position, out NavMeshHit floorHit, 5f, NavMesh.AllAreas))
+        {
+            //LOUD, because this is exactly how the boards silently vanished for weeks: the house was rebuilt somewhere
+            //else and this object was left floating where the old one stood, so every run placed nothing and said nothing
+            Debug.LogError($"[FloorboardScatterer] '{name}' at {transform.position} is more than 5m from any NavMesh, so NO floorboards were placed. Move it onto a floor inside the house.", this);
+            yield break; //scatterer isn't near the floor
+        }
         Vector3 floorReference = floorHit.position;
         NavMeshPath reachabilityPath = new NavMeshPath();
 
         //the actual walkable surface - scatter directly onto its triangles so coverage matches the house's real shape
         NavMeshTriangulation triangulation = NavMesh.CalculateTriangulation();
         int triangleCount = triangulation.indices.Length / 3;
-        if (triangleCount == 0) yield break; //no baked NavMesh in this scene
+        if (triangleCount == 0)
+        {
+            Debug.LogError("[FloorboardScatterer] The NavMesh has no triangles, so no floorboards were placed. Rebake the NavMesh.", this);
+            yield break; //no baked NavMesh in this scene
+        }
 
         //cumulative triangle areas, so we can pick a triangle weighted by size (even density across big and small rooms)
         float[] cumulativeAreas = new float[triangleCount];
@@ -86,14 +96,20 @@ public class FloorboardScatterer : MonoBehaviour
             Vector3 point = vertexA + r1 * (vertexB - vertexA) + r2 * (vertexC - vertexA);
 
             //reject unreachable islands (tabletops, roof) - if you can't walk to it from the floor, no board there
-            if (!NavMesh.CalculatePath(floorReference, point, NavMesh.AllAreas, reachabilityPath) || reachabilityPath.status != NavMeshPathStatus.PathComplete) continue;
+            if (!NavMesh.CalculatePath(floorReference, point, NavMesh.AllAreas, reachabilityPath) || reachabilityPath.status != NavMeshPathStatus.PathComplete)
+            {
+                continue;
+            }
 
             bool tooClose = false;
             foreach (Vector3 placed in placedPositions)
             {
                 if (Vector3.Distance(placed, point) < minSpacing) { tooClose = true; break; }
             }
-            if (tooClose) continue;
+            if (tooClose)
+            {
+                continue;
+            }
 
             placedPositions.Add(point);
             Instantiate(floorboardPrefab, point + Vector3.up * verticalOffset, Quaternion.identity, transform);
