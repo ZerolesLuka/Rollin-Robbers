@@ -379,7 +379,7 @@ public partial class Player : NetworkBehaviour
     [SerializeField] private float rescueRange = 2.5f; //how close a free teammate must be to spring you from the closet
     [SerializeField] private float suffocateDuration = 20f; //taped mouth - seconds of air before you die if no teammate frees you
     private float suffocateTimer; //counts down while locked; hits 0 = you suffocate
-    public float ScreenFade => IsEliminated ? 1f : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating, 1 = dead/blacked out. HUD reads this for the fullscreen fade
+    public float ScreenFade => IsEliminated ? (spectatorActive ? 0f : 1f) : ((IsLockedUp && suffocateDuration > 0f) ? Mathf.Clamp01(1f - suffocateTimer / suffocateDuration) : 0f); //0 = normal, ramps while suffocating. dead = black only until the spectator camera takes over - it used to stay black on top of the spectator view for the rest of the run, which read as the game freezing. HUD reads this for the fullscreen fade
 
     public bool IsBeingDragged => isBeingDragged; //the HUD says so, because otherwise being hauled across the house with no control reads as the game hanging
     public float AirSecondsLeft => IsLockedUp ? Mathf.Max(0f, suffocateTimer) : 0f; //shown while jailed. the clock IS the threat there, so it belongs on screen

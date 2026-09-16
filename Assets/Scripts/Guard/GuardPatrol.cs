@@ -375,6 +375,10 @@ public class GuardPatrol : NetworkBehaviour
                 {
                     agent.SetDestination(lastKnownPosition);
                     searchNoiseReactionTimer = searchNoiseReactionCooldown;
+                    //a new noise mid-sweep sends him walking again, so hand his head back to FaceMovementDirection. left set, he
+                    //walked to the new spot still facing wherever the look-around had pointed him, and his cone missed players in front of him
+                    isSweepingSearchPoint = false;
+                    searchSweepWaitTimer = 0f; //and the next spot gets a full sweep, not the leftovers of this one
                 }
 
                 if (!agent.pathPending && agent.remainingDistance <= reachDistance)

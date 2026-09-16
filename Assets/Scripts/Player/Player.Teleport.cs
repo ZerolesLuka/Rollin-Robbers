@@ -131,10 +131,10 @@ public partial class Player
 
     private System.Collections.IEnumerator TeleportAfterLoad()
     {
-        //if the run already ended, the van ride is handled in FixedUpdateNetwork - don't also do a normal door-spawn teleport here
+        //the run ended and the ride home has NOT fired yet: FixedUpdateNetwork is about to seat us in the van, so do not also teleport here. once it HAS fired (driving to the pawn shop after a run) this is an ordinary trip and needs the normal placement below - skipping it then is what left you standing outside the van
         bool runEnded = RunManager.Instance != null && RunManager.Instance.Object != null && RunManager.Instance.Object.IsValid
             && RunManager.Instance.State != RunManager.RunState.InProgress;
-        if (runEnded)
+        if (runEnded && !hasRiddenVanForRunEnd)
         {
             yield break;
         }
