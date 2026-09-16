@@ -25014,9 +25014,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FloorboardScatterer
   floorboardPrefab: {fileID: 4654167051876982036, guid: 35b35c63aab46ec44aa87d728f857738, type: 3}
-  floorboardCount: 20
-  minSpacing: 2.5
-  verticalOffset: 0.05
+  floorboardCount: 16
+  minSpacing: 4
+  verticalOffset: 0.04
 --- !u!4 &1544252787
 Transform:
   m_ObjectHideFlags: 0
