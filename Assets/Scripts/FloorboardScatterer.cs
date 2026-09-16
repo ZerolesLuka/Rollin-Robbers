@@ -94,7 +94,10 @@ public class FloorboardScatterer : MonoBehaviour
             float r2 = (float)random.NextDouble();
             if (r1 + r2 > 1f) { r1 = 1f - r1; r2 = 1f - r2; }
             Vector3 point = vertexA + r1 * (vertexB - vertexA) + r2 * (vertexC - vertexA);
-
+            if (NoCreakZone.IsInsideAnyZone(point)) //if a point is inside
+            {
+                continue; //restart the loop and try again
+            }
             //reject unreachable islands (tabletops, roof) - if you can't walk to it from the floor, no board there
             if (!NavMesh.CalculatePath(floorReference, point, NavMesh.AllAreas, reachabilityPath) || reachabilityPath.status != NavMeshPathStatus.PathComplete)
             {
@@ -113,6 +116,11 @@ public class FloorboardScatterer : MonoBehaviour
 
             placedPositions.Add(point);
             Instantiate(floorboardPrefab, point + Vector3.up * verticalOffset, Quaternion.identity, transform);
+            if (placedPositions.Count < floorboardCount)
+            {
+                Debug.LogWarning($"[FloorboardScatterer] Only placed {placedPositions.Count} of {floorboardCount} boards in {attempts} attempts. No-creak zones may be covering too much floor.", this);
+            }
         }
+
     }
 }
