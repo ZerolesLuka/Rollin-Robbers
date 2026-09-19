@@ -17,6 +17,21 @@ public class GuardPatrol : NetworkBehaviour
     [SerializeField] private float chaseSenseRange = 5f; //how close the target must be for him to keep sensing them WITHOUT line of sight - chase "stickiness". bigger = harder to lose him
     [SerializeField] private float wedgeBreakSecondsSameSide = 2f; //he can reach the wedge and kick it out
     [SerializeField] private float wedgeBreakSecondsFarSide = 5f;  //it's on the other side, so he has to force the door itself
+   
+    [SerializeField] private float trespassRadius = 4f; //Sorta like the players aura guard can kinda sense if you're too close
+    [SerializeField] private float trespassFillWalk = 0.4f; //how fast the trespass meter fills while walking in the radius. lower = more forgiving
+    [SerializeField] private float trespassFillRun = 1.0f; //how fast the trespass meter fills while sprinting in the radius. lower = more forgiving
+    [SerializeField] private float trespassFillCrouch = 0.15f; //how fast the trespass meter fills while crouching in the radius. lower = more forgiving 
+    [SerializeField] private float trespassDrainRate = 0.5f; //how fast the trespass meter drains when you're outside the radius
+    [SerializeField] private float trespassStirAt = 0.5f; //how full the trespass meter has to be before he starts getting suspicious
+    [SerializeField] private float trespassWakeAt = 1.0f; //how full the meter has to be before he wakes up
+    //NoiseLevel readings that separate the three movement styles. measured 2026-09-19 off the current speeds:
+    //crouch ~3.25, walk ~6.5, sprint ~9.75. retune if moveSpeed or either speed multiplier on Player changes.
+    [SerializeField] private float trespassSprintReading = 8f;
+    [SerializeField] private float trespassWalkReading = 5f;
+    private float trespassMeter; //runtime value
+    private bool hasStirredThisSleep; //the stir is one warning per trip to bed, not a mutter every tick
+
     private Door breakingWedgeOnDoor;                              //the door he's currently working on, null when he isn't
     private float breakingWedgeTimer;                              //seconds left on it
     //TRAPS ONLY FOLLOW A REAL SIGHTING. lastKnownPosition is written by noise, squeaky toys, cameras and missing loot
@@ -275,6 +290,8 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Asleep:
                 ListenForNoise();
                 if (State != GuardState.Asleep) break; //that woke him - don't also run the sleeping behaviour this tick
+                UpdateTrespass();
+                if (State != GuardState.Asleep) break; //someone stood over his bed long enough - same deal
                 ReturnToSleep();
                 if (State != GuardState.Asleep) break; //couldn't reach his bed and went Relaxed; let that state drive
 
@@ -727,6 +744,8 @@ public class GuardPatrol : NetworkBehaviour
             case GuardState.Asleep:
                 noiseAccumulator = 0f; //empty the bucket on every trip to sleep so he needs FRESH noise to wake
                 quietTimer = 0f; //reset the quiet clock too
+                trespassMeter = 0f; //same for the trespass meter - every trip to bed starts him unbothered
+                hasStirredThisSleep = false; //so the next intruder gets their own warning
                 agent.ResetPath();   //stop walking the stale search path instead of wandering around while "asleep"
                 sawPlayerThisHunt = false; //hunt's over. the next one starts having seen nobody
                 PlayStateSound(newState); //bark whenever he changes state
@@ -1040,6 +1059,81 @@ public class GuardPatrol : NetworkBehaviour
         }
         //deliberately never closed behind him - a door left open is a free tell to the players that he came through here
     }
+    //BEING IN HIS ROOM COSTS SOMETHING. Noise alone never punished it: GuardHearing subtracts a flat floor of 5 from
+    //NoiseLevel, so walking and crouching read as an exact zero no matter how close to his pillow you are - measured
+    //2026-09-19, sprinting past the bed peaked at 4.80 against a threshold of 4.86 and still didn't wake him. This is
+    //a second, separate pressure: proximity to the bed itself, weighted by how carelessly you move. It warns (a stir)
+    //before it punishes (a wake), and standing still is always safe, so the room is survivable if you respect it.
+    private void UpdateTrespass()
+    {
+        float strongestFill = 0f;                      //the worst single offender this tick - never the sum of them
+        Vector3 offenderPosition = transform.position; //where that offender is, so waking sends him somewhere real
+
+        foreach (Player player in Player.ActivePlayers) //live list, so players who joined after the guard spawned still count
+        {
+            if (player.IsEliminated)
+            {
+                continue; //eliminated players aren't in the house to trespass
+            }
+
+            float distanceToBed = Vector3.Distance(spawnPosition, player.transform.position);
+            if (distanceToBed > trespassRadius)
+            {
+                continue; //outside the bubble, doesn't count
+            }
+
+            //NoiseLevel is the player's own move speed while they're moving and 0 when they stand still, so it
+            //doubles as a movement-style reading without asking the player controller anything.
+            float fillRate = 0f;
+            if (player.NoiseLevel >= trespassSprintReading)
+            {
+                fillRate = trespassFillRun;
+            }
+            else if (player.NoiseLevel >= trespassWalkReading)
+            {
+                fillRate = trespassFillWalk;
+            }
+            else if (player.NoiseLevel > 0.1f)
+            {
+                fillRate = trespassFillCrouch;
+            }
+
+            //MAX, not sum: he's one man sensing one disturbance. Adding every player together would mean three
+            //crouching robbers pressure him harder than one sprinting one, which is backwards.
+            if (fillRate > strongestFill)
+            {
+                strongestFill = fillRate;
+                offenderPosition = player.transform.position;
+            }
+        }
+
+        //ONE fill or ONE drain per tick, never both. If it drained while someone stood there the real fill rate
+        //would quietly become (fill - drain), and crouching at 0.15 against a drain of 0.5 could never climb at all.
+        if (strongestFill > 0f)
+        {
+            trespassMeter += strongestFill * Runner.DeltaTime;
+        }
+        else
+        {
+            trespassMeter -= trespassDrainRate * Runner.DeltaTime;
+        }
+        trespassMeter = Mathf.Clamp01(trespassMeter); //uncapped, loitering banks minutes of meter he'd wake up to long after you left
+
+        //strongestFill is re-checked here so he can only wake to someone who is actually still there: without it, a
+        //meter sitting just above the line could fire a tick after they left, sending him to his own position.
+        if (strongestFill > 0f && trespassMeter >= trespassWakeAt)
+        {
+            lastKnownPosition = offenderPosition; //only written on the wake - filling must not stomp what his ears put there
+            ChangeState(GuardState.Suspicious);
+            return;
+        }
+
+        if (trespassMeter >= trespassStirAt && !hasStirredThisSleep)
+        {
+            hasStirredThisSleep = true;
+            guardAudio.Bark(GuardAudio.BarkType.Stir); //"...hnnh? ...mm." - back off now and nothing happens
+        }
+    }
 
     private void CheckNoisyHidingSpots() //a hiding spot only hides you if you SHUT UP in it
     {
@@ -1153,7 +1247,6 @@ public class GuardPatrol : NetworkBehaviour
     {
         GuardHearing.Heard heard = hearing.LoudestNoise();
         float perceivedNoise = heard.loudness;
-
         //ONE LOUD NOISE IS ENOUGH. The bucket below integrates loudness over time, which is right for a creak you're
         //not sure you heard - but it means a scream that stops after half a second contributes almost nothing, so
         //the loudest thing a player can possibly do was quieter to him than someone jogging past for four seconds.

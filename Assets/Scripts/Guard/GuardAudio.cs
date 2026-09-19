@@ -6,7 +6,7 @@ using Fusion;
 // this with its own clips. It's a NetworkBehaviour because RPCs must live on one.
 public class GuardAudio : NetworkBehaviour
 {
-    public enum BarkType { Alert, Search, Chase, Caught, GiveUp } //generic categories any guard maps its own states onto
+    public enum BarkType { Alert, Search, Chase, Caught, GiveUp, Stir } //generic categories any guard maps its own states onto
 
     [SerializeField] private AudioSource voiceSource;   //3D source on the guard
     [SerializeField] private AudioClip[] alertSounds;   //"huh? who's there?"
@@ -14,6 +14,7 @@ public class GuardAudio : NetworkBehaviour
     [SerializeField] private AudioClip[] chaseSounds;   //"HEY! GET OUT!"
     [SerializeField] private AudioClip[] caughtSounds;  //"GOTCHA!"
     [SerializeField] private AudioClip[] giveUpSounds;  //"musta been nothin'"
+    [SerializeField] private AudioClip[] stirSounds;    //"...hnnh? ...mm." - disturbed but still asleep
 
     [SerializeField] private float barkCooldown = 1.5f; //min seconds between barks
     private float barkCooldownTimer;
@@ -34,6 +35,7 @@ public class GuardAudio : NetworkBehaviour
             case BarkType.Chase:  return chaseSounds;
             case BarkType.Caught: return caughtSounds;
             case BarkType.GiveUp: return giveUpSounds;
+            case BarkType.Stir:   return stirSounds;
             default: return null;
         }
     }
